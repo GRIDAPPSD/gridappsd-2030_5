@@ -1,56 +1,56 @@
-from typing import Optional
 
-from fastapi import FastAPI, Response
+import argparse
+import json
+import pprint
+import Queries
+import logging
+import time
 
-from IEEE2030_5 import IEEE2030_5_ENDPOINTS, XML_HEADERS
-import uvicorn
+# from lxml import etree
+from gridappsd import GridAPPSD
+from gridappsd import topics as t
 
-from IEEE2030_5.endpoints import dcap
-
-app = FastAPI()
-
-# Map name to function for loose coupling.
-endpoint_mapping = dict(
-    dcap=dcap
-)
+conn = GridAPPSD()
 
 
-def mycallback():
-    return {"woot": "there it is!"}
+def get_DERM_devices(feeder_id):
+    # payload = conn._build_query_payload('QUERY', queryString=Queries.querySynchronousMachine)
+    # request_topic = '.'.join((t.REQUEST_DATA, "powergridmodel"))
+    # results = conn.get_response(request_topic, json.dumps(payload), timeout=30)
+    # pprint.pprint(results)
+    #
+    # payload = conn._build_query_payload('QUERY', queryString=Queries.querySolar )
+    # request_topic = '.'.join((t.REQUEST_DATA, "powergridmodel"))
+    # results = conn.get_response(request_topic, json.dumps(payload), timeout=30)
+    # pprint.pprint(results)
+    #
+    # payload = conn._build_query_payload('QUERY', queryString=Queries.queryBattery )
+    # request_topic = '.'.join((t.REQUEST_DATA, "powergridmodel"))
+    # results = conn.get_response(request_topic, json.dumps(payload), timeout=30)
+    # pprint.pprint(results)
+
+    # results = conn.query_data(Queries.querySynchronousMachine(feeder_id))
+    # pprint.pprint(results)
+    # results = Queries.QuerySolar(feeder_id)
+    results = Queries.QuerySynchronousMachine(feeder_id)
+    pprint.pprint(results)
+    # results = conn.query_data(Queries.queryBattery(feeder_id)
+    # pprint.pprint(results)
 
 
-# Testing how to get the headers and a callback to work properly with glue
-def fn_wrapper(callback):
-    return Response(media_type="application/xml",
-                    content=callback())
+def _main():
 
+    print("Service starting!!!-------------------------------------------------------")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("simulation_id",
+                        help="Simulation id to use for responses on the message bus.")
+    parser.add_argument("request",
+                        help="Query Request")
+    opts = parser.parse_args()
+    sim_request = json.loads(opts.request.replace("\'", ""))
+    feeder_id = sim_request["power_system_config"]["Line_name"]
+    get_DERM_devices(feeder_id)
 
-def load_endpoints(app):
-    for d, endpoint in IEEE2030_5_ENDPOINTS.items():
-
-        callback = endpoint_mapping.get(endpoint.callback)
-        if callback is None:
-            callback = mycallback
-        else:
-            callback = fn_wrapper(callback)
-        # TODO modify endpoint.callback to be an actual function
-        # This is probably not done here but in the IEEE2030_5_ENDPOINTS module.
-        app.add_api_route(endpoint.url, callback)
-
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Optional[str] = None):
-    return {"item_id": item_id, "q": q}
-
-
-# https://www.geeksforgeeks.org/python-xml-to-json/
 
 if __name__ == "__main__":
-    load_endpoints(app)
-    app.openapi()
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    _main()

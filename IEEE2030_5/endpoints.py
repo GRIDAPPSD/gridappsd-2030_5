@@ -22,3 +22,8 @@ def dcap():
 
     return IEEE2030_5Renderer.render({"result": dcap})
     #IEEE2030_5Agent.prep_200_response({"result": dcap})
+
+
+# def sdev_log():
+#     sep_log_event_list = xsd_models.LogEventList()
+#     return IEEE2030_5Renderer.render({"result": sep_log_event_list})
