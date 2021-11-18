@@ -1,5 +1,7 @@
+PyYaml
 pytz
 six
 fastapi
 uvicorn
 xmltodict
+gridappsd-python

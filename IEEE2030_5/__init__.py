@@ -1,4 +1,12 @@
 from collections import namedtuple
+from pathlib import Path
+from typing import Union
+
+PathStr = Union[Path, str]
+
+from config import *
+from certs import *
+
 
 STOR_UNKNOWN = -1
 STOR_DISCONNECTED = 1
@@ -85,3 +93,5 @@ RESOURCE_MAPPING = {
     "DERAvailability": "der_availability",
     "PowerStatus": "power_status",
 }
+
+PathStr = Union[Path, str]
