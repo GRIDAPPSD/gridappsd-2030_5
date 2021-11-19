@@ -93,5 +93,3 @@ RESOURCE_MAPPING = {
     "DERAvailability": "der_availability",
     "PowerStatus": "power_status",
 }
-
-PathStr = Union[Path, str]

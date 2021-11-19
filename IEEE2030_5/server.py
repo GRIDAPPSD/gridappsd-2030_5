@@ -1,4 +1,5 @@
 import logging
+import typing
 
 from typing import Optional
 
@@ -11,10 +12,16 @@ from IEEE2030_5 import ConfigObj, TLSRepository
 from IEEE2030_5.endpoints import dcap
 
 
+class IEEE2030_5Response(Response):
+    media_type = "application/xml"  # "application/sep+xml"
+
+    def render(self, content: str) -> bytes:
+        return content.encode("utf-8")
+
+
 def run_server(config: ConfigObj, tlsrepo: TLSRepository):
-    pass
-    #_log.
-    # app = FastAPI()
+
+    app = FastAPI()
     #
     # # Map name to function for loose coupling.
     # endpoint_mapping = dict(
@@ -25,11 +32,11 @@ def run_server(config: ConfigObj, tlsrepo: TLSRepository):
     # def mycallback():
     #     return {"woot": "there it is!"}
     #
-    #
+
     # # Testing how to get the headers and a callback to work properly with glue
-    # def fn_wrapper(callback):
-    #     return Response(media_type="application/xml",
-    #                     content=callback())
+    def fn_wrapper(callback):
+        return Response(media_type="application/xml",
+                        content=callback())
     #
     #
     # def load_endpoints(app):
@@ -57,7 +64,11 @@ def run_server(config: ConfigObj, tlsrepo: TLSRepository):
     #
     # # https://www.geeksforgeeks.org/python-xml-to-json/
     #
-    # if __name__ == "__main__":
-    #     load_endpoints(app)
-    #     app.openapi()
-    #     uvicorn.run(app, host="0.0.0.0", port=8000)
+    cb = fn_wrapper(dcap)
+    app.add_api_route("/dcap", dcap, response_class=IEEE2030_5Response)
+    # @app.get("/dcap")
+
+    #if __name__ == "__main__":
+    #    load_endpoints(app)
+    app.openapi()
+    uvicorn.run(app, host="0.0.0.0", port=8000) # , reload=True)

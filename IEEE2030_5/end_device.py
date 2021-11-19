@@ -1,6 +1,8 @@
 # }}}
 
 from datetime import datetime, timedelta
+from typing import Optional
+
 import IEEE2030_5
 import calendar
 import logging
@@ -369,23 +371,18 @@ class IEEE2030_5Renderer:
         return buff.getvalue()
 
     @staticmethod
-    def render(data) -> str:
+    def render(data, make_pretty: Optional[bool] = False) -> str:
         """ Wrapper function around the export method.
 
         :param data: XSD object to render. Empty string if data does not come in correctly.
-        :return: Formatted XML string.
+        :return: Formatted XML string or empty string if
         """
         if data is None:
             return ''
 
-        if 'rendered_result' not in data:
-            if 'result' not in data:
-                data['rendered_result'] = ''
-            else:
-                make_pretty = True
-                data['rendered_result'] = IEEE2030_5Renderer.export(data['result'], make_pretty)
+        data = IEEE2030_5Renderer.export(data, make_pretty)
 
-        return data['rendered_result']
+        return data
 
 
 class IEEE2030_5Parser:
