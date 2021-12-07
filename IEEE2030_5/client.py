@@ -20,15 +20,18 @@ class IEEE2030_5_Client:
     clients: "IEEE2030_5_Client" = set()
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, cafile: PathLike, server_hostname: str, key_file: PathLike,
-                 cert_file: PathLike, ssl_port: Optional[int] = None):
+    def __init__(self, cafile: Path, server_hostname: str, keyfile: Path,
+                 certfile: Path, ssl_port: Optional[int] = None):
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
         self._ssl_context.verify_mode = ssl.CERT_REQUIRED
         self._ssl_context.load_verify_locations(cafile=cafile)
+        ic(certfile, keyfile)
+        # Loads client information from the passed cert and key files. For
+        # client side validation.
+        self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+
         self._http_conn = HTTPSConnection(host=server_hostname,
                                           port=ssl_port,
-                                          # key_file=str(key_file),
-                                          # cert_file=str(cert_file),
                                           context=self._ssl_context)
         self._device_cap: Optional[DeviceCapability] = None
         IEEE2030_5_Client.clients.add(self)
@@ -86,8 +89,10 @@ atexit.register(__release_clients__)
 
 
 if __name__ == '__main__':
-    h = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000, key_file=KEY_FILE, cert_file=KEY_FILE)
-    h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000, key_file=KEY_FILE, cert_file=KEY_FILE)
+    h = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com",
+                          ssl_port=8000, keyfile=KEY_FILE, certfile=CERT_FILE)
+    # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
+    #                        keyfile=KEY_FILE, certfile=KEY_FILE)
     dcap = h.request_device_capability()
     tl = h.request_timelink()
     print(dcap.pollRate)
