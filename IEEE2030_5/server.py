@@ -71,4 +71,9 @@ def run_server(config: ConfigObj, tlsrepo: TLSRepository):
     #if __name__ == "__main__":
     #    load_endpoints(app)
     app.openapi()
-    uvicorn.run(app, host="0.0.0.0", port=8000) # , reload=True)
+    uvicorn.run(app,
+                host="0.0.0.0",
+                port=8000,
+                # reload=True,
+                ssl_certfile=tlsrepo.ca_cert_file,
+                ssl_keyfile=tlsrepo.ca_key_file) # , reload=True)

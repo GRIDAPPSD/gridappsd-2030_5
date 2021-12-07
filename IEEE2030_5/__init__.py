@@ -4,8 +4,8 @@ from typing import Union
 
 PathStr = Union[Path, str]
 
-from config import *
-from certs import *
+from IEEE2030_5.config import *
+from IEEE2030_5.certs import *
 
 
 STOR_UNKNOWN = -1

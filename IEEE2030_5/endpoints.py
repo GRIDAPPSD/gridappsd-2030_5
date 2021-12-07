@@ -19,7 +19,7 @@ def dcap():
 
     dcap_model.MirrorUsagePointListLink.set_href(IEEE2030_5.IEEE2030_5_ENDPOINTS["mup-list"].url)
 
-    return IEEE2030_5Renderer.export(dcap_model)  # .render(dcap_model)  # IEEE2030_5Renderer.render({"result": dcap})
+    return IEEE2030_5Renderer.export(dcap_model).strip()  # .render(dcap_model)  # IEEE2030_5Renderer.render({"result": dcap})
     #IEEE2030_5Agent.prep_200_response({"result": dcap})
 
 

@@ -57,11 +57,11 @@ class TLSRepository:
         self._ca_cert = self._certs_dir.joinpath("ca.crt")
         self._serverhost = serverhost
 
-        self.create_ca()
+        self.__create_ca__()
         _openssl_create_private_key(self.__get_key_file__(self._serverhost))
         self.create_cert(self._serverhost, True)
 
-    def create_ca(self):
+    def __create_ca__(self):
         _openssl_create_private_key(self._ca_key)
         _openssl_create_ca_certificate("ca", self._openssl_cnf_file, self._ca_key, self._ca_cert)
 
@@ -71,6 +71,14 @@ class TLSRepository:
         _openssl_create_signed_certificate(hostname, self._openssl_cnf_file, self._ca_key, self._ca_cert,
                                            self.__get_key_file__(hostname), self.__get_cert_file__(hostname),
                                            as_server)
+
+    @property
+    def ca_key_file(self) -> Path:
+        return self.__get_key_file__(self._serverhost)
+
+    @property
+    def ca_cert_file(self) -> Path:
+        return self.__get_cert_file__(self._serverhost)
 
     def __get_cert_file__(self, hostname: str) -> Path:
         return self._certs_dir.joinpath(f"{hostname}.crt")
