@@ -1,0 +1,32 @@
+---
+# Device names available for control
+devices:
+  - hostname: dev1.me.com
+  - hostname: dev2.me.com
+  - hostname: dev3.me.com
+  - hostname: dev4.me.com
+
+server: me.com
+tls_repository: "~/tls"
+openssl_cnf: "openssl.cnf"
+
+#{
+#    "devices": [
+#                    {
+#                        "sfdi": "097935300833",
+#                        "lfdi": "247bd68e3378fe57ba604e3c8bdf9e3f78a3d743",
+#                        "load_shed_device_category": "0200",
+#                        "pin_code": "130178"
+#                    },
+#                    {
+#                        "sfdi": "111576577659",
+#                        "lfdi": "2990c58a59935a7d5838c952b1a453c967341a07",
+#                        "load_shed_device_category": "0200",
+#                        "pin_code": "130178"
+#                    }
+#               ],
+#    "IEEE2030_5_server_sfdi": "413707194130",
+#    "IEEE2030_5_server_lfdi": "29834592834729384728374562039847629",
+#    "load_shed_device_category": "0020",
+#    "timezone": "America/Los_Angeles"
+#}
