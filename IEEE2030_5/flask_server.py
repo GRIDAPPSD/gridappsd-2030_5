@@ -101,8 +101,8 @@ def run_server(config: ConfigObj, tlsrepo: TLSRepository):
 
     @app.route("/admin/clients")
     def admin_clients():
-        clients = tlsrepo.client_list()
-        return render_template("admin/clients.html", clients=clients)
+        clients = tlsrepo.client_list
+        return render_template("admin/clients.html", registered=clients, connected=[])
 
     @app.route("/dcap", methods=['GET'])
     def route_dcap():
