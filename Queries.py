@@ -266,6 +266,7 @@ def QueryEndDevices(feeder_id):
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
     SELECT ?name ?mrid ?issmart ?upoint #?upoint
     WHERE {
+      VALUES ?fdrid {"%s"}.
       ?s a c:EndDevice .
       ?s c:IdentifiedObject.name ?name .
       ?s c:IdentifiedObject.mRID ?rawmrid .

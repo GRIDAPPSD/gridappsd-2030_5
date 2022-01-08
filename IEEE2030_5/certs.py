@@ -1,5 +1,7 @@
 import logging
+from collections import namedtuple
 from pathlib import Path
+from typing import List
 
 from IEEE2030_5 import PathStr
 from IEEE2030_5.execute import execute_command
@@ -23,8 +25,10 @@ class TLSRepository:
         self._certs_dir = repo_dir.joinpath("certs")
         self._private_dir = repo_dir.joinpath("private")
         self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile.name)
+        self._hostnames = {serverhost: serverhost}
 
-        if not self._repo_dir.exists():
+        if not self._repo_dir.exists() or not self._certs_dir.exists() or \
+                not self._private_dir.exists():
             self._certs_dir.mkdir(parents=True)
             self._private_dir.mkdir(parents=True)
 
@@ -52,14 +56,18 @@ class TLSRepository:
         if not serial.exists():
             serial.write_text("01")
 
-        self._openssl_cnf_file.write_text(openssl_cnffile.read_text())
+        new_contents = openssl_cnffile.read_text().replace("dir             = /home/gridappsd/tls",
+                                                           f"dir = {repo_dir}")
+        self._openssl_cnf_file.write_text(new_contents)
         self._ca_key = self._private_dir.joinpath("ca.pem")
         self._ca_cert = self._certs_dir.joinpath("ca.crt")
         self._serverhost = serverhost
 
-        self.__create_ca__()
-        __openssl_create_private_key__(self.__get_key_file__(self._serverhost))
-        self.create_cert(self._serverhost, True)
+        # Create a new ca key if not exists.
+        if not Path(self._ca_key).exists():
+            self.__create_ca__()
+            __openssl_create_private_key__(self.__get_key_file__(self._serverhost))
+            self.create_cert(self._serverhost, True)
 
     def __create_ca__(self):
         __openssl_create_private_key__(self._ca_key)
@@ -71,6 +79,7 @@ class TLSRepository:
         __openssl_create_signed_certificate__(hostname, self._openssl_cnf_file, self._ca_key, self._ca_cert,
                                               self.__get_key_file__(hostname), self.__get_cert_file__(hostname),
                                               as_server)
+        self._hostnames[hostname] = hostname
 
     def fingerprint(self, hostname: str, without_colan: bool = True):
         value = __openssl_fingerprint__(self.__get_cert_file__(hostname))
@@ -79,11 +88,23 @@ class TLSRepository:
         return value
 
     @property
+    def client_list(self) -> List[str]:
+        return list(self._hostnames.keys())
+
+    @property
     def ca_key_file(self) -> Path:
-        return self.__get_key_file__(self._serverhost)
+        return self._ca_key
 
     @property
     def ca_cert_file(self) -> Path:
+        return self._ca_cert
+
+    @property
+    def server_key_file(self) -> Path:
+        return self.__get_key_file__(self._serverhost)
+
+    @property
+    def server_cert_file(self) -> Path:
         return self.__get_cert_file__(self._serverhost)
 
     def __get_cert_file__(self, hostname: str) -> Path:
@@ -154,9 +175,10 @@ def __openssl_fingerprint__(cert_file: Path, algorithm: str = "sha1"):
         raise NotImplementedError()
 
     cmd = ["openssl",
+           "x509",
            "-in", str(cert_file),
            "-noout",
-           "fingerprint",
+           "-fingerprint",
            algorithm]
     ret_value = execute_command(cmd)
     return ret_value

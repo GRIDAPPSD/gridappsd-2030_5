@@ -8,12 +8,15 @@ pyyaml = "*"
 pytz = "*"
 six = "*"
 fastapi = "*"
-uvicorn = "*"
 xmltodict = "*"
 gridappsd-python = "*"
 pbr = "*"
 lxml = "*"
 icecream = "*"
+jinja2 = "*"
+gunicorn = "*"
+flask = "*"
+pyopenssl = "*"
 
 [dev-packages]
 pre-commit = "*"
@@ -21,3 +24,6 @@ pytest = "*"
 
 [requires]
 python_version = "3.8"
+
+[packages.uvicorn]
+extras = [ "standard",]

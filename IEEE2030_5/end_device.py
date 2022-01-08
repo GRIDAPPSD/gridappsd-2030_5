@@ -15,6 +15,10 @@ from . import xsd_models
 _log = logging.getLogger(__name__)
 
 
+class RegisteredEndDevices:
+    pass
+
+
 class EndDevice:
     """ Object representing an End Device in IEEE 2030.5
 

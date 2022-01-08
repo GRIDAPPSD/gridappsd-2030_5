@@ -41,10 +41,24 @@ class IEEE2030_5_Client:
         self._device_cap = self.__get_request__(url)
         return self._device_cap
 
+    def request_edev_list(self, length: int = 1,
+                          start: Optional[int] = None,
+                          after: Optional[int] = None):
+        """
+
+        """
+        self.__connect__()
+        edev = self.__get_request__(self._device_cap.EndDeviceListLink.href)
+        return edev
+
     def request_timelink(self):
         if self._device_cap is None:
             raise ValueError("Request device capability first")
         return self.__get_request__(url=self._device_cap.TimeLink.href)
+
+    def request(self, endpoint: str, body: dict = None, method: str = "GET"):
+        if method.upper() == 'GET':
+            return self.__get_request__(endpoint, body)
 
     def __connect__(self):
         self._http_conn.connect()
