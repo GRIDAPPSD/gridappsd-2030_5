@@ -1,6 +1,7 @@
 devices:
 - bus: m2001-ess1
   hostname: 6F33B5DD-50CD-4599-8559-3299BC22D9F0
+  device_category_type: 3
   id: 6F33B5DD-50CD-4599-8559-3299BC22D9F0
   ip: 127.0.0.2
   ipu: '1.1111111'
@@ -15,6 +16,7 @@ devices:
   storedE: 500000.0
 - bus: m2001-ess1
   hostname: 51811233-4450-4E22-9CDC-811BE1AD66E0
+  device_category_type: 3
   id: 51811233-4450-4E22-9CDC-811BE1AD66E0
   ip: 127.0.0.2
   ipu: '1.1111111'
@@ -29,6 +31,7 @@ devices:
   storedE: 500000.0
 - bus: m2001-ess2
   hostname: C5A1CA43-3D39-4B11-8A31-2F952129B6EB
+  device_category_type: 3
   id: C5A1CA43-3D39-4B11-8A31-2F952129B6EB
   ip: 127.0.0.2
   ipu: '1.1111111'
@@ -43,6 +46,7 @@ devices:
   storedE: 500000.0
 - bus: m2001-ess2
   hostname: 59D6FFE3-CC3D-4E62-817F-83E39547B5FF
+  device_category_type: 3
   id: 59D6FFE3-CC3D-4E62-817F-83E39547B5FF
   ip: 127.0.0.2
   ipu: '1.1111111'
@@ -57,6 +61,7 @@ devices:
   storedE: 500000.0
 - bus: house
   hostname: D26D2D54-A267-4FC0-B86F-5FC93983784C
+  device_category_type: 3
   id: D26D2D54-A267-4FC0-B86F-5FC93983784C
   ip: 127.0.0.2
   ipu: '1.1111111'
@@ -73,6 +78,7 @@ devices:
   storedE: 5000.0
 - bus: battinv
   hostname: 870B7D12-960D-4FDE-BBE3-103D17F06954
+  device_category_type: 3
   id: 870B7D12-960D-4FDE-BBE3-103D17F06954
   ip: 127.0.0.2
   ipu: '1.1111111'
@@ -87,6 +93,7 @@ devices:
   storedE: 135000.0
 - bus: '634'
   hostname: 9E931F3B-0D9D-4CBE-B771-9400202B20E8
+  device_category_type: 3
   id: 9E931F3B-0D9D-4CBE-B771-9400202B20E8
   ip: 127.0.0.2
   ipu: '1.1111111'
