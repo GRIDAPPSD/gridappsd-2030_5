@@ -7,12 +7,14 @@ from pathlib import Path
 
 from icecream import ic
 
-from IEEE2030_5 import TLSRepository, ConfigObj
 
 __all__ = ["run_server"]
 
 # templates = Jinja2Templates(directory="templates")
-from IEEE2030_5.endpoints import dcap, IEEE2030_5Renderer
+# from IEEE2030_5.endpoints import dcap, IEEE2030_5Renderer
+from ieee_2030_5 import ServerConfiguration
+from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.models.end_devices import EndDevices
 
 
 class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
@@ -45,20 +47,22 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
         try:
             x509_binary = self.connection.getpeercert(True)
 
-            x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary )
+            x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
             environ['peercert'] = x509
+            ic(x509.digest("sha1"))
+            ic(x509.get_subject())
+            ic(x509.get_serial_number())
+            ic()
         except OpenSSL.crypto.Error:
             environ['peercert'] = None
 
         return environ
 
 
-def run_server(config: ConfigObj, tlsrepo: TLSRepository):
+def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices):
 
     app = Flask(__name__,
                 template_folder="/repos/gridappsd-2030_5/templates")
-
-
 
     # to establish an SSL socket we need the private key and certificate that
     # we want to serve to users.
