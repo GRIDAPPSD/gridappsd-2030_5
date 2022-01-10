@@ -3,8 +3,8 @@ from collections import namedtuple
 from pathlib import Path
 from typing import List
 
-from IEEE2030_5 import PathStr
-from IEEE2030_5.execute import execute_command
+from ieee_2030_5 import PathStr
+from ieee_2030_5.execute import execute_command
 
 
 __all__ = ['TLSRepository']

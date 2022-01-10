@@ -1,9 +1,9 @@
 from config import ServerConfiguration
 # from collections import namedtuple
-# from pathlib import Path
-# from typing import Union
-#
-# PathStr = Union[Path, str]
+from pathlib import Path
+from typing import Union
+
+PathStr = Union[Path, str]
 #
 # from IEEE2030_5.config import *
 # from IEEE2030_5.certs import *
