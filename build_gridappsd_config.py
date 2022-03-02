@@ -2,12 +2,14 @@ import argparse
 import socket
 
 from dataclasses import dataclass
+from pprint import pprint
 from typing import List
 
 import yaml
 
-
 IEEE_9500_FINAL = "_EE71F6C9-56F0-4167-A14E-7F4C71F10EAA"
+#IEEE_9500_FINAL = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"
+
 
 @dataclass
 class DERDevice:
@@ -37,7 +39,7 @@ def build_config(output_file: str, modelid: str):
     This function builds a configuration file for the server
     based upon the passed model and output file.   The model
     will quiery the Batteries available in the model and write
-    a configuration file that the service can use.  The servcie
+    a configuration file that the service can use.  The service
     will generate a pki for each of the devices and the service
     itself.
 
@@ -45,14 +47,19 @@ def build_config(output_file: str, modelid: str):
     """
     # Use query from gridappsd to get information that
     # we want for the system.
-    from Queries import QueryAllDERGroups, QueryBattery
+    from Queries import QueryAllDERGroups, QueryBattery, QuerySolar, QuerySynchronousMachine, QueryInverter
 
     a = QueryBattery(modelid)
+    b = QuerySynchronousMachine(modelid)
+    c = QuerySolar(modelid)
+    d = QueryInverter(modelid)
 
     with open(output_file, "w") as fp:
-        results: List[DERDevice] = []
+        results = []
+        # results: List[DERDevice] = []
+
         for data in a["data"]["results"]["bindings"]:
-            der = DERDevice(
+            der = dict(
                 name=data["name"]["value"],
                 bus=data["bus"]["value"],
                 p=float(data["p"]["value"]),
@@ -66,6 +73,52 @@ def build_config(output_file: str, modelid: str):
                 phases=data["phases"]["value"],
                 ipu=data["ipu"]["value"]
             )
+
+            results.append(der)
+
+        for data in b["data"]["results"]["bindings"]:
+            der = dict(
+                name=data["name"]["value"],
+                bus=data["bus"]["value"],
+                p=float(data["p"]["value"]),
+                q=float(data["q"]["value"]),
+                id=data["id"]["value"],
+                ratedS=float(data["ratedS"]["value"]),
+                ratedU=float(data["ratedU"]["value"]),
+                phases=data["phases"]["value"],
+
+            )
+            results.append(der)
+
+        for data in c["data"]["results"]["bindings"]:
+            #pprint(data)
+            der = dict(
+                name=data["name"]["value"],
+                bus=data["bus"]["value"],
+                p=float(data["p"]["value"]),
+                q=float(data["q"]["value"]),
+                id=data["id"]["value"],
+                ratedS=float(data["ratedS"]["value"]),
+                ratedU=float(data["ratedU"]["value"]),
+                phases=data["phases"]["value"],
+                ipu=data["ipu"]["value"]
+            )
+            results.append(der)
+
+        for data in d["data"]["results"]["bindings"]:
+            pprint(data)
+            der = dict(
+                name=data["name"]["value"],
+                bus=data["bus"]["value"],
+                p=float(data["p"]["value"]),
+                q=float(data["q"]["value"]),
+                id=data["id"]["value"],
+                pecid=data["pecid"]["value"],
+                ratedS=float(data["ratedS"]["value"]),
+                ratedU=float(data["ratedU"]["value"]),
+                phases=data["phases"]["value"],
+                ipu=data["ipu"]["value"]
+            )
             results.append(der)
 
         # Build the devices list with information
@@ -74,8 +127,8 @@ def build_config(output_file: str, modelid: str):
         count = 2
         iproot = "127.0.0."
         for r in results:
-            dev = {'hostname': r.id, "ip": f"{iproot}{count}"}
-            dev.update(r.config_dict())
+            dev = {'hostname': r["id"], "ip": f"{iproot}{count}"}
+            dev.update(r)
             devices.append(dev)
 
         output = {
@@ -85,7 +138,45 @@ def build_config(output_file: str, modelid: str):
             "openssl_cnf": "openssl.cnf"
         }
         yaml.dump(output, fp, indent=2)
-        print([x for x in results])
+        # print([x for x in results])
+
+    # with open(output_file, "w") as fp:
+    #     results: List[DERDevice] = []
+    #     for data in b["data"]["results"]["bindings"]:
+    #         der = DERDevice(
+    #             name=data["name"]["value"],
+    #             bus=data["bus"]["value"],
+    #             p=float(data["p"]["value"]),
+    #             q=float(data["q"]["value"]),
+    #             state=data["state"]["value"],
+    #             id=data["id"]["value"],
+    #             ratedE=float(data["ratedE"]["value"]),
+    #             storedE=float(data["storedE"]["value"]),
+    #             ratedS=float(data["ratedS"]["value"]),
+    #             ratedU=float(data["ratedU"]["value"]),
+    #             phases=data["phases"]["value"],
+    #             ipu=c["ipu"]["value"]
+    #         )
+    #         results.append(der)
+    #
+    #     # Build the devices list with information
+    #     # to build the system with.
+    #     devices = []
+    #     count = 2
+    #     iproot = "127.0.0."
+    #     for r in results:
+    #         dev = {'hostname': r.id, "ip": f"{iproot}{count}"}
+    #         dev.update(r.config_dict())
+    #         devices.append(dev)
+    #
+    #     output = {
+    #         "devices": devices,
+    #         "tls_repository": "~/tls",
+    #         "server": socket.gethostname(),
+    #         "openssl_cnf": "openssl.cnf"
+    #     }
+    #     yaml.dump(output, fp, indent=2)
+    #     print([x for x in results])
 
 
 if __name__ == '__main__':
