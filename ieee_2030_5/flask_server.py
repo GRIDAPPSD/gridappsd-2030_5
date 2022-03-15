@@ -1,11 +1,9 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, Response
 import werkzeug.serving
 import werkzeug.exceptions
 import ssl
 import OpenSSL
 from pathlib import Path
-
-from icecream import ic
 
 
 __all__ = ["run_server"]
@@ -15,6 +13,11 @@ __all__ = ["run_server"]
 from ieee_2030_5 import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models.end_devices import EndDevices
+from ieee_2030_5.models.hrefs import EndpointHrefs
+from ieee_2030_5.models.serializer import serialize_xml
+from ieee_2030_5.server_endpoints import ServerEndpoints
+
+hrefs = EndpointHrefs()
 
 
 class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
@@ -39,8 +42,9 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
         the request variable that Flask provides
         """
         environ = super(PeerCertWSGIRequestHandler, self).make_environ()
-        ic(environ)
-        # Assume browser is being hit with things that start with /admin
+
+        # Assume browser is being hit with things that start with /admin allow
+        # a pass through from web (should be protected via auth but not right now)
         if environ['PATH_INFO'].startswith("/admin"):
             return environ
 
@@ -48,11 +52,10 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             x509_binary = self.connection.getpeercert(True)
 
             x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
-            environ['peercert'] = x509
-            ic(x509.digest("sha1"))
-            ic(x509.get_subject())
-            ic(x509.get_serial_number())
-            ic()
+            environ['ieee_2030_5_peercert'] = x509
+            environ['ieee_2030_5_subject'] = x509.get_subject()
+            environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
+
         except OpenSSL.crypto.Error:
             environ['peercert'] = None
 
@@ -66,8 +69,8 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
 
     # to establish an SSL socket we need the private key and certificate that
     # we want to serve to users.
-    SERVER_KEY_FILE = str(tlsrepo.server_key_file)
-    SERVER_CERT_FILE = str(tlsrepo.server_cert_file)
+    server_key_file = str(tlsrepo.server_key_file)
+    server_cert_file = str(tlsrepo.server_cert_file)
 
     # in order to verify client certificates we need the certificate of the
     # CA that issued the client's certificate. In this example I have a
@@ -83,11 +86,14 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
 
     # load in the certificate and private key for our server to provide to clients.
     # force the client to provide a certificate.
-    ssl_context.load_cert_chain(certfile=SERVER_CERT_FILE,
-                                keyfile=SERVER_KEY_FILE,
+    ssl_context.load_cert_chain(certfile=server_cert_file,
+                                keyfile=server_key_file,
                                 # password=app_key_password
                                 )
+    # change this to ssl.CERT_REQUIRED during deployment.
     ssl_context.verify_mode = ssl.CERT_OPTIONAL #  ssl.CERT_REQUIRED
+
+    ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo)
 
     # now we get into the regular Flask details, except we're passing in the peer certificate
     # as a variable to the template.
@@ -108,15 +114,25 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
         clients = tlsrepo.client_list
         return render_template("admin/clients.html", registered=clients, connected=[])
 
-    @app.route("/dcap", methods=['GET'])
-    def route_dcap():
-
-        # all routes for 2030.5 should have a peercert so they
-        # can be authenticated by the server.
-        if not request.environ['peercert']:
-            raise werkzeug.exceptions.Forbidden()
-
-        return dcap()
+    # @app.route("/admin" + hrefs.dcap)
+    # def admin_dcap():
+    #     return Response(serialize_xml(enddevices.get_list(0, enddevices.num_devices)),
+    #                     mimetype="text/xml")
+    #
+    #
+    # @app.route(hrefs.dcap)
+    # def dcap():
+    #     return Response(serialize_xml(enddevices.get_list(0, enddevices.num_devices))
+    #
+    # @app.route("/dcap", methods=['GET'])
+    # def route_dcap():
+    #
+    #     # all routes for 2030.5 should have a peercert so they
+    #     # can be authenticated by the server.
+    #     if not request.environ['peercert']:
+    #         raise werkzeug.exceptions.Forbidden()
+    #
+    #     return dcap()
 
     @app.route("/dcap/edev", defaults={'index': None, 'part': None})
     @app.route("/dcap/edev/<index>", defaults={'part': None})
@@ -131,17 +147,17 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
         }
 
     try:
-        host, port = config.server.split(":")
+        host, port = config.server_hostname.split(":")
     except ValueError:
         # host and port not available
-        host = config.server
+        host = config.server_hostname
         port = 8443
 
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=PeerCertWSGIRequestHandler,
-            port=port,
-            debug=True)
+            port=port)
+            #debug=True)
             #,
             #debug=True)
 #

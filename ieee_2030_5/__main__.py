@@ -6,11 +6,11 @@ import socket
 import sys
 
 import yaml
-from icecream import ic
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import run_server
+from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
 
 logging.basicConfig(level=logging.DEBUG)
@@ -68,23 +68,29 @@ if __name__ == '__main__':
     tls_repo = TLSRepository(config.tls_repository, config.openssl_cnf, config.server_hostname,
                              clear=create_certs)
     if create_certs:
-        # registers the devices, but doesn't create the end devices here.
-        for k in config.devices:
-            tls_repo.create_cert(k.hostname)
+        already_represented = set()
 
+        # registers the devices, but doesn't register the end devices here.
+        for k in config.devices:
+            if k in already_represented:
+                _log.error(f"Already have {k.hostname} represented by {k.device_category_type}")
+            else:
+                already_represented.add(k)
+                print(f"adding k: {k}")
+                tls_repo.create_cert(k.hostname)
+
+    end_devices = EndDevices()
     # Create the enddevice on the server on startup.
     #
     # The other option is enddevices_register_access_only which in effect
     # becomes a noop as the certificates should already be created for the system
     # or added through the web interface.
     if config.server_mode == "enddevices_create_on_start":
-        # TODO Make the .yml file include a device type from the accepted list in DeviceCategoryType
-        pass
+        for k in config.devices:
+            end_devices.register(DeviceCategoryType[k.device_category_type], tls_repo.lfdi(k.hostname))
         #for k in config.devices:
 
-
-
     try:
-        run_server(config, tls_repo)
-    except Exception as ex:
-        print(ex)
+        run_server(config, tls_repo, enddevices=end_devices)
+    except KeyboardInterrupt as ex:
+        print("Shutting down server.")
