@@ -6861,7 +6861,7 @@ class CustomerAccount(IdentifiedObject):
     payment.
 
     It contains common information from the various types of
-    CustomerAgreements to create billings (invoices) for a Customer and
+    CustomerAgreements to register billings (invoices) for a Customer and
     receive payment.
 
     :ivar currency: The ISO 4217 code indicating the currency applicable
