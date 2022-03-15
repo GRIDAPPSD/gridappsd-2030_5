@@ -1,33 +1,29 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
-
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.3.0
-    hooks:
-      - id: check-yaml
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-  #-   repo: https://github.com/psf/black
-  #    rev: 19.3b0
-  #    hooks:
-  #    -   id: black
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.812
-    hooks:
-      - id: mypy
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.1.0
+  hooks:
+  - id: check-yaml
+  - id: check-json
+  - id: check-toml
+  - id: check-xml
+  - id: forbid-new-submodules
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+  - id: check-merge-conflict
+  - id: no-commit-to-branch  # blocks main commits.  To bypass do git commit --allow-empty
+  - id: pretty-format-json
 
-  - repo: https://github.com/odwyersoftware/brunette
-    rev: 0.2.2 # 57fa9359790fe42164df9c42d4806999e3dca61d   #  b8fc75f460885f986a01842664e0571769b2cc12
-    hooks:
-      - id: brunette
-  # Drop-in replacement for black with brunette
-  # - repo: https://github.com/psf/black
-  #   rev: stable
-  #   hooks:
-  #     - id: black
-  #       language_version: python3.6
-  - repo: https://gitlab.com/pycqa/flake8
-    rev: 3.8.1
-    hooks:
-      - id: flake8
+#- repo: https://github.com/pre-commit/mirrors-autopep8
+#  rev: v1.6.0
+#  hooks:
+#    - id: autopep8
+
+- repo: https://github.com/craig8/mirrors-yapf
+  rev: b84f670025671a341d0afd2b06b877b195d65c0f  # Use the sha / tag you want to point at
+  hooks:
+  - id: yapf
+    name: yapf
+    description: "A formatter for Python files."
+    entry: yapf
+    language: python
+    types: [ python ]
