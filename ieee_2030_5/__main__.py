@@ -15,9 +15,6 @@ from ieee_2030_5.models.end_devices import EndDevices
 
 logging.basicConfig(level=logging.DEBUG)
 
-# from ieee_2030_5 import ConfigObj, TLSRepository
-#from IEEE2030_5.server import run_server
-# from ieee_2030_5.flask_server import run_server
 
 _log = logging.getLogger(__name__)
 
@@ -25,13 +22,17 @@ if __name__ == '__main__':
     parser = ArgumentParser()
 
     parser.add_argument(dest="config", help="Configuration file for the server.")
-    parser.add_argument("--no-validate", action="store_true",
+    parser.add_argument("--no-validate",
+                        action="store_true",
                         help="Allows faster startup since the resolving of addresses is not done!")
-    parser.add_argument("--no-create-certs", action="store_true",
-                        help="If specified certificates for for client and server will not be created.")
+    parser.add_argument(
+        "--no-create-certs",
+        action="store_true",
+        help="If specified certificates for for client and server will not be created.")
     opts = parser.parse_args()
 
-    os.environ["IEEE_2030_5_CONFIG_FILE"] = str(Path(opts.config).expanduser().resolve(strict=True))
+    os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
+        Path(opts.config).expanduser().resolve(strict=True))
     #
     cfg = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
 
@@ -65,7 +66,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     create_certs = not opts.no_create_certs
-    tls_repo = TLSRepository(config.tls_repository, config.openssl_cnf, config.server_hostname,
+    tls_repo = TLSRepository(config.tls_repository,
+                             config.openssl_cnf,
+                             config.server_hostname,
                              clear=create_certs)
     if create_certs:
         already_represented = set()
@@ -87,7 +90,8 @@ if __name__ == '__main__':
     # or added through the web interface.
     if config.server_mode == "enddevices_create_on_start":
         for k in config.devices:
-            end_devices.register(DeviceCategoryType[k.device_category_type], tls_repo.lfdi(k.hostname))
+            end_devices.register(DeviceCategoryType[k.device_category_type],
+                                 tls_repo.lfdi(k.hostname))
         #for k in config.devices:
 
     try:
