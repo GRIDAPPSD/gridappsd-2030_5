@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 DEFAULT_DCAP_ROOT = "/dcap"
 DEFAULT_EDEV_ROOT = f"{DEFAULT_DCAP_ROOT}/edev"
 

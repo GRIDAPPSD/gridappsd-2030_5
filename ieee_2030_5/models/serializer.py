@@ -6,10 +6,7 @@ from xsdata.formats.dataclass.serializers.config import SerializerConfig
 
 __config__ = SerializerConfig(xml_declaration=True, )
 __serializer__ = XmlSerializer(config=__config__)
-__ns_map__ = {
-    "xmlns": "http://zigbee.org/sep",
-    "xsi": "http://www.w3.org/2001/XMLSchema-instance"
-}
+__ns_map__ = {"xmlns": "http://zigbee.org/sep", "xsi": "http://www.w3.org/2001/XMLSchema-instance"}
 
 
 def serialize_xml(obj: dataclass) -> str:

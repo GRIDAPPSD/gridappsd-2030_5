@@ -1,5 +1,4 @@
 import enum
-
 """ Metering
 """
 
@@ -172,14 +171,14 @@ class KindType(enum.IntEnum):
 
 class PhaseCode(enum.IntEnum):
     Not_applicable = 0
-    Phase_C = 32  # and S2
-    Phase_CN = 33  # and S2N
+    Phase_C = 32    # and S2
+    Phase_CN = 33    # and S2N
     Phase_CA = 40
     Phase_B = 64
     Phase_BN = 65
     Phase_BC = 66
-    Phase_A = 128  # and S1
-    Phase_AN = 129  # and S1N
+    Phase_A = 128    # and S1
+    Phase_AN = 129    # and S1N
     Phase_AB = 132
     Phase_ABC = 224
 

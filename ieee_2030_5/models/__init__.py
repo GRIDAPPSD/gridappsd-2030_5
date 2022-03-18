@@ -1,4 +1,5 @@
 from ieee_2030_5.models.device_category import DeviceCategoryType
+from ieee_2030_5.models.timetype import TimeType
 from ieee_2030_5.models.sep import (
     AbstractDevice,
     AccountBalance,
@@ -295,7 +296,6 @@ __all__ = [
     "ActiveDercontrolListLink",
     "ActiveEndDeviceControlListLink",
     "ActiveFlowReservationListLink",
-    "ActivePower",
     "ActiveProjectionReadingListLink",
     "ActiveSupplyInterruptionOverrideListLink",
     "ActiveTargetReadingListLink",
@@ -557,6 +557,7 @@ __all__ = [
     "Time",
     "TimeConfiguration",
     "TimeLink",
+    "TimeType",
     "TimeTariffInterval",
     "TimeTariffIntervalList",
     "TimeTariffIntervalListLink",
