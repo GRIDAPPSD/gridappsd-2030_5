@@ -84,10 +84,8 @@ class TLSRepository:
                                               self._ca_cert, self.__get_key_file__(hostname),
                                               self.__get_cert_file__(hostname), as_server)
 
-        with open(self.__get_combined_file__(hostname), 'w') as fp:
-            fp.write(self.__get_key_file__(hostname).read_text())
-            fp.write(self.__get_cert_file__(hostname).read_text())
-            fp.write(self.ca_cert_file.read_text())
+        __openssl_create_pkcs23_pem_and_cert__(self.__get_key_file__(hostname), self.__get_cert_file__(hostname),
+                                               self.__get_combined_file__(hostname))
 
         self._hostnames[hostname] = hostname
 
@@ -141,6 +139,33 @@ class TLSRepository:
 
     def __get_combined_file__(self, hostname: str) -> Path:
         return self._combined_dir.joinpath(f"{hostname}-combined.pem")
+
+
+def __openssl_create_pkcs23_pem_and_cert__(private_key_file: Path, cert_file: Path, combined_file: Path):
+    # openssl pkcs12 -export -in certificate.pem -inkey privatekey.pem -out cert-and-key.pfx
+    tmpfile = Path("/tmp/tmp.p12")
+    tmpfile2 = Path("/tmp/all.pem")
+    tmpfile.unlink(missing_ok=True)
+    cmd = ["openssl", "pkcs12", "-export", "-in", str(cert_file), "-inkey", str(private_key_file), "-out", str(tmpfile), "-passout", "pass:"]
+    execute_command(cmd)
+
+    # openssl pkcs12 -in path.p12 -out newfile.pem -nodes
+    cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(tmpfile2), "-nodes", "-passin", "pass:"]
+    #cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(combined_file), "-clcerts", "-nokeys", "-passin", "pass:"]
+    # -clcerts -nokeys
+    execute_command(cmd)
+
+    with open(combined_file, "w") as fp:
+        in_between = False
+        for line in tmpfile2.read_text().split("\n"):
+            if not in_between:
+                if "BEGIN" in line:
+                    fp.write(f"{line}\n")
+                    in_between = True
+            else:
+                fp.write(f"{line}\n")
+                if "END" in line:
+                    in_between = False
 
 
 def __openssl_create_private_key__(file_path: Path):
