@@ -6,7 +6,6 @@ from typing import List
 from ieee_2030_5 import PathStr
 from ieee_2030_5.execute import execute_command
 
-
 __all__ = ['TLSRepository']
 
 _log = logging.getLogger(__name__)
@@ -24,13 +23,15 @@ class TLSRepository:
         self._repo_dir = repo_dir
         self._certs_dir = repo_dir.joinpath("certs")
         self._private_dir = repo_dir.joinpath("private")
+        self._combined_dir = repo_dir.joinpath("combined")
         self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile.name)
         self._hostnames = {serverhost: serverhost}
 
         if not self._repo_dir.exists() or not self._certs_dir.exists() or \
-                not self._private_dir.exists():
+                not self._private_dir.exists() or not self._combined_dir.exists():
             self._certs_dir.mkdir(parents=True)
             self._private_dir.mkdir(parents=True)
+            self._combined_dir.mkdir(parents=True)
 
         index_txt = self._repo_dir.joinpath("index.txt")
         serial = self._repo_dir.joinpath("serial")
@@ -38,6 +39,8 @@ class TLSRepository:
             for x in self._private_dir.iterdir():
                 x.unlink()
             for x in self._certs_dir.iterdir():
+                x.unlink()
+            for x in self._combined_dir.iterdir():
                 x.unlink()
             for x in self._repo_dir.iterdir():
                 if x.is_file():
@@ -71,20 +74,43 @@ class TLSRepository:
 
     def __create_ca__(self):
         __openssl_create_private_key__(self._ca_key)
-        __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key, self._ca_cert)
+        __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key,
+                                          self._ca_cert)
 
     def create_cert(self, hostname: str, as_server: bool = False):
         if not self.__get_key_file__(hostname).exists():
             __openssl_create_private_key__(self.__get_key_file__(hostname))
-        __openssl_create_signed_certificate__(hostname, self._openssl_cnf_file, self._ca_key, self._ca_cert,
-                                              self.__get_key_file__(hostname), self.__get_cert_file__(hostname),
-                                              as_server)
+        __openssl_create_signed_certificate__(hostname, self._openssl_cnf_file, self._ca_key,
+                                              self._ca_cert, self.__get_key_file__(hostname),
+                                              self.__get_cert_file__(hostname), as_server)
+
+        with open(self.__get_combined_file__(hostname), 'w') as fp:
+            fp.write(self.__get_key_file__(hostname).read_text())
+            fp.write(self.__get_cert_file__(hostname).read_text())
+            fp.write(self.ca_cert_file.read_text())
+
         self._hostnames[hostname] = hostname
 
-    def fingerprint(self, hostname: str, without_colan: bool = True):
+    def lfdi(self, hostname: str) -> int:
+        fp = self.fingerprint(hostname, True)
+        return int(fp[:16], 16)
+
+    def sfdi(self, hostname: str):
+        lfdi_: int = self.lfdi(hostname)
+        bit_left_truncation_len = 36
+        # truncate the lFDI
+        sfdi_no_sod_checksum = lfdi_ >> (lfdi_.bit_length() - bit_left_truncation_len)
+        # calculate sum-of-digits checksum digit
+        sod_checksum = 10 - sum([int(digit) for digit in str(sfdi_no_sod_checksum)]) % 10
+        # right concatenate the checksum digit and return
+        return str(sfdi_no_sod_checksum) + str(sod_checksum)
+
+    def fingerprint(self, hostname: str, without_colan: bool = True) -> str:
         value = __openssl_fingerprint__(self.__get_cert_file__(hostname))
         if without_colan:
             value = value.replace(":", "")
+        if "=" in value:
+            value = value.split("=")[1]
         return value
 
     @property
@@ -113,6 +139,9 @@ class TLSRepository:
     def __get_key_file__(self, hostname: str) -> Path:
         return self._private_dir.joinpath(f"{hostname}.pem")
 
+    def __get_combined_file__(self, hostname: str) -> Path:
+        return self._combined_dir.joinpath(f"{hostname}-combined.pem")
+
 
 def __openssl_create_private_key__(file_path: Path):
     # openssl ecparam -out private/ec-cakey.pem -name prime256v1 -genkey
@@ -120,45 +149,61 @@ def __openssl_create_private_key__(file_path: Path):
     return execute_command(cmd)
 
 
-def __openssl_create_ca_certificate__(common_name: str, opensslcnf: Path, private_key_file: Path, ca_cert_file: Path):
+def __openssl_create_ca_certificate__(common_name: str, opensslcnf: Path, private_key_file: Path,
+                                      ca_cert_file: Path):
     # openssl req -new -x509 -days 3650 -config openssl.cnf \
     #   -extensions v3_ca -key private/ec-cakey.pem -out certs/ec-cacert.pem
-    cmd = ["openssl", "req", "-new", "-x509",
-           "-days", "3650",
-           "-subj", f"/C=US/CN={common_name}",
-           "-config", str(opensslcnf),
-           "-extensions", "v3_ca",
-           "-key", str(private_key_file),
-           "-out", str(ca_cert_file)]
+    cmd = [
+        "openssl", "req", "-new", "-x509", "-days", "3650", "-subj", f"/C=US/CN={common_name}",
+        "-config",
+        str(opensslcnf), "-extensions", "v3_ca", "-key",
+        str(private_key_file), "-out",
+        str(ca_cert_file)
+    ]
     return execute_command(cmd)
 
 
-def __openssl_create_csr__(common_name: str, opensslcnf:Path, private_key_file: Path, server_csr_file: Path):
+def __openssl_create_csr__(common_name: str, opensslcnf: Path, private_key_file: Path,
+                           server_csr_file: Path):
     # openssl req -new -key server.key -out server.csr -sha256
-    cmd = ["openssl", "req", "-new",
-           "-config", str(opensslcnf),
-           "-subj", f"/C=US/CN={common_name}",
-           "-key", str(private_key_file),
-           "-out", str(server_csr_file),
-           "-sha256"]
+    cmd = [
+        "openssl", "req", "-new", "-config",
+        str(opensslcnf), "-subj", f"/C=US/CN={common_name}", "-key",
+        str(private_key_file), "-out",
+        str(server_csr_file), "-sha256"
+    ]
     return execute_command(cmd)
 
 
-def __openssl_create_signed_certificate__(common_name: str, opensslcnf: Path, ca_key_file: Path, ca_cert_file: Path,
-                                          private_key_file: Path, cert_file: Path, as_server: bool = False):
+def __openssl_create_signed_certificate__(common_name: str,
+                                          opensslcnf: Path,
+                                          ca_key_file: Path,
+                                          ca_cert_file: Path,
+                                          private_key_file: Path,
+                                          cert_file: Path,
+                                          as_server: bool = False):
     csr_file = Path(f"/tmp/{common_name}")
     __openssl_create_csr__(common_name, opensslcnf, private_key_file, csr_file)
     # openssl ca -keyfile /root/tls/private/ec-cakey.pem -cert /root/tls/certs/ec-cacert.pem \
     #   -in server.csr -out server.crt -config /root/tls/openssl.cnf
-    cmd = ["openssl", "ca",
-           "-keyfile", str(ca_key_file),
-           "-cert", str(ca_cert_file),
-           "-subj", f"/C=US/CN={common_name}",
-           "-in", str(csr_file),
-           "-out", str(cert_file),
-           "-config", str(opensslcnf),
-           # For no prompt use -batch
-           "-batch"]
+    cmd = [
+        "openssl",
+        "ca",
+        "-keyfile",
+        str(ca_key_file),
+        "-cert",
+        str(ca_cert_file),
+        "-subj",
+        f"/C=US/CN={common_name}",
+        "-in",
+        str(csr_file),
+        "-out",
+        str(cert_file),
+        "-config",
+        str(opensslcnf),
+    # For no prompt use -batch
+        "-batch"
+    ]
     # if as_server:
     #     "-server"
     # print(" ".join(cmd))
@@ -174,11 +219,6 @@ def __openssl_fingerprint__(cert_file: Path, algorithm: str = "sha1"):
     else:
         raise NotImplementedError()
 
-    cmd = ["openssl",
-           "x509",
-           "-in", str(cert_file),
-           "-noout",
-           "-fingerprint",
-           algorithm]
+    cmd = ["openssl", "x509", "-in", str(cert_file), "-noout", "-fingerprint", algorithm]
     ret_value = execute_command(cmd)
     return ret_value

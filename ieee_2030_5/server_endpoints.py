@@ -9,14 +9,14 @@ import werkzeug
 from flask import Flask, Response, request
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import Time, DeviceCapability
-from ieee_2030_5.models.base import TimeType, TimeOffsetType, EndDevice
+from ieee_2030_5.models import Time, DeviceCapability, TimeType
 from ieee_2030_5.models.end_devices import EndDevices, Lfid
 from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.models.serializer import serialize_xml
 
 
 class ServerEndpoints:
+
     def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository):
         self.hrefs = EndpointHrefs()
         self.end_devices = end_devices
@@ -72,9 +72,7 @@ class ServerEndpoints:
         lfid = self.__request_lfid__()
         end_device_list = self.end_devices.get_device_by_lfid(lfid)
 
-        cap = DeviceCapability(
-
-        )
+        cap = DeviceCapability()
         return self.__response__(self.end_devices.get_list(0, self.end_devices.num_devices))
 
     def _tm(self) -> Response:
@@ -82,19 +80,19 @@ class ServerEndpoints:
         local_tz = datetime.now().astimezone().tzinfo
         now_local = datetime.now().replace(tzinfo=local_tz)
 
-        start_dst_utc, end_dst_utc = [dt for dt in local_tz._utc_transition_times if dt.year == now_local.year]
+        start_dst_utc, end_dst_utc = [
+            dt for dt in local_tz._utc_transition_times if dt.year == now_local.year
+        ]
 
         utc_offset = local_tz.utcoffset(start_dst_utc - timedelta(days=1))
         dst_offset = local_tz.utcoffset(start_dst_utc + timedelta(days=1)) - utc_offset
         local_but_utc = datetime.now().replace(tzinfo=pytz.utc)
 
-        tm = Time(
-            current_time=self.__format_time__(now_utc),
-            dst_end_time=self.__format_time__(end_dst_utc.replace(tzinfo=pytz.utc)),
-            dst_offset=TimeOffsetType(int(dst_offset.total_seconds())),
-            local_time=self.__format_time__(local_but_utc),
-            quality=None,
-            tz_offset=TimeOffsetType(utc_offset.total_seconds())
-        )
+        tm = Time(current_time=self.__format_time__(now_utc),
+                  dst_end_time=self.__format_time__(end_dst_utc.replace(tzinfo=pytz.utc)),
+                  dst_offset=TimeOffsetType(int(dst_offset.total_seconds())),
+                  local_time=self.__format_time__(local_but_utc),
+                  quality=None,
+                  tz_offset=TimeOffsetType(utc_offset.total_seconds()))
 
         return self.__response__(tm)

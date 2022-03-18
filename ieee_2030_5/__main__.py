@@ -15,7 +15,6 @@ from ieee_2030_5.models.end_devices import EndDevices
 
 logging.basicConfig(level=logging.DEBUG)
 
-
 _log = logging.getLogger(__name__)
 
 if __name__ == '__main__':

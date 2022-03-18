@@ -5,7 +5,6 @@ import ssl
 import OpenSSL
 from pathlib import Path
 
-
 __all__ = ["run_server"]
 
 # templates = Jinja2Templates(directory="templates")
@@ -64,8 +63,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices):
 
-    app = Flask(__name__,
-                template_folder="/repos/gridappsd-2030_5/templates")
+    app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
 
     # to establish an SSL socket we need the private key and certificate that
     # we want to serve to users.
@@ -81,17 +79,17 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     # aligns with the purpose we provide as an argument. Here we provide
     # Purpose.CLIENT_AUTH, so the SSLContext is set up to handle validation
     # of client certificates.
-    ssl_context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH,
-                                             cafile=str(ca_cert))
+    ssl_context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH, cafile=str(ca_cert))
 
     # load in the certificate and private key for our server to provide to clients.
     # force the client to provide a certificate.
-    ssl_context.load_cert_chain(certfile=server_cert_file,
-                                keyfile=server_key_file,
-                                # password=app_key_password
-                                )
+    ssl_context.load_cert_chain(
+        certfile=server_cert_file,
+        keyfile=server_key_file,
+    # password=app_key_password
+    )
     # change this to ssl.CERT_REQUIRED during deployment.
-    ssl_context.verify_mode = ssl.CERT_OPTIONAL #  ssl.CERT_REQUIRED
+    ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
 
     ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo)
 
@@ -140,11 +138,7 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     #@app.route("/dcap/edev/")
     def route_edev(index: int, part: str):
         args = request.args.to_dict()
-        return {
-            "args": args,
-            "index": index,
-            "part": part
-        }
+        return {"args": args, "index": index, "part": part}
 
     try:
         host, port = config.server_hostname.split(":")
@@ -157,9 +151,11 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
             ssl_context=ssl_context,
             request_handler=PeerCertWSGIRequestHandler,
             port=port)
-            #debug=True)
-            #,
-            #debug=True)
+    #debug=True)
+    #,
+    #debug=True)
+
+
 #
 # # start our webserver!
 # if __name__ == "__main__":

@@ -1,8 +1,6 @@
-
 import inspect
 from dataclasses import dataclass
 from typing import Any, Tuple, Dict, List, Literal, Union
-
 
 from pydantic import BaseSettings, Field, Extra, BaseModel
 
@@ -20,23 +18,10 @@ class DeviceConfiguration:
 
     @classmethod
     def from_dict(cls, env):
-        return cls(**{
-            k: v for k, v in env.items()
-            if k in inspect.signature(cls).parameters
-        })
+        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
         return self.id.__hash__()
-
-#
-# class DeviceConfiguration(BaseModel):
-#     id: str
-#     ip: str
-#     hostname: str
-#     device_category_type: int
-#
-#     class Config:
-#         extra = Extra.allow
 
 
 @dataclass
@@ -52,13 +37,11 @@ class ServerConfiguration:
 
     @classmethod
     def from_dict(cls, env):
-        return cls(**{
-            k: v for k, v in env.items()
-            if k in inspect.signature(cls).parameters
-        })
+        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __post_init__(self):
         self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
+
     #
     # class Config:
     #     # env_prefix = "IEEE_2030_5_"
@@ -73,6 +56,7 @@ class ServerConfiguration:
     #     ) -> Tuple[SettingsSourceCallable, ...]:
     #         # Add load from yml file, change priority and remove file secret option
     #         return init_settings, yml_config_setting, env_settings
+
 
 # class ConfigObj:
 #     def __init__(self, in_dict: dict):

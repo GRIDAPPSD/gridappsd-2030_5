@@ -15,8 +15,11 @@ def execute_command(cmds, env=None, cwd=None, logger=None, err_prefix=None) -> s
     :raises RuntimeError: if the return code is not 0 from suprocess.run
     """
 
-    results = subprocess.run(cmds, env=env, cwd=cwd,
-                             stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    results = subprocess.run(cmds,
+                             env=env,
+                             cwd=cwd,
+                             stderr=subprocess.PIPE,
+                             stdout=subprocess.PIPE)
     if results.returncode != 0:
         err_prefix = err_prefix if err_prefix is not None else "Error executing command"
         err_message = "\n{}: Below Command failed with non zero exit code.\n" \
