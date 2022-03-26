@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Clients</title>
+</head>
+<body>
+    <h1>Groups</h1>
+    <div>
+        <ul>
+            {% for c, v in groups.items() %}
+                <li>
+                    {{c.name}}
+                {% if v  %}
+                <ul>
+                    {% for t in v.get_devices() %}
+                        <li>{{ t }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+</body>
+</html>

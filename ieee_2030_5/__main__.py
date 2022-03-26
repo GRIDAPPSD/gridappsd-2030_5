@@ -12,6 +12,7 @@ from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
+from ieee_2030_5.models.server_constructs import get_groups, GroupLevel
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -81,6 +82,7 @@ if __name__ == '__main__':
                 print(f"adding k: {k}")
                 tls_repo.create_cert(k.hostname)
 
+    groups = get_groups()
     end_devices = EndDevices()
     # Create the enddevice on the server on startup.
     #
@@ -89,8 +91,10 @@ if __name__ == '__main__':
     # or added through the web interface.
     if config.server_mode == "enddevices_create_on_start":
         for k in config.devices:
-            end_devices.register(DeviceCategoryType[k.device_category_type],
+            device = end_devices.register(DeviceCategoryType[k.device_category_type],
                                  tls_repo.lfdi(k.hostname))
+
+        groups[GroupLevel.SubTransmission].add_end_device(device)
         #for k in config.devices:
 
     try:

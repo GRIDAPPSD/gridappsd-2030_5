@@ -29,6 +29,9 @@ class DeviceCategoryType(IntEnum):
     ENERGY_MANAGEMENT_SYSTEM = 19
     SMART_ENERGY_MODULE = 20
 
+    # Additional here for Aggregator
+    AGGREGATOR = 99
+
 
 #     0 - Programmable Communicating Thermostat
 #     1 - Strip Heaters
