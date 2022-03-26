@@ -15,6 +15,7 @@ from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.models.serializer import serialize_xml
 from ieee_2030_5.server_endpoints import ServerEndpoints
+from ieee_2030_5.models.server_constructs import get_groups
 
 hrefs = EndpointHrefs()
 
@@ -112,6 +113,14 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
         clients = tlsrepo.client_list
         return render_template("admin/clients.html", registered=clients, connected=[])
 
+    @app.route("/admin/groups")
+    def admin_groups():
+        groups = get_groups()
+        return render_template("admin/groups.html", groups=groups)
+
+    @app.route("/admin/aggregators")
+    def admin_aggregators():
+        return Response("<h1>Aggregators</h1>")
     # @app.route("/admin" + hrefs.dcap)
     # def admin_dcap():
     #     return Response(serialize_xml(enddevices.get_list(0, enddevices.num_devices)),
