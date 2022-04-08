@@ -1,8 +1,14 @@
+import io
 from dataclasses import dataclass
 from typing import List
 
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
+from xsdata.formats.dataclass.parsers.xml import XmlParser
+from xsdata.formats.dataclass.context import XmlContext
+
+__xml_context__ = XmlContext()
+__xml_parser__ = XmlParser(context=__xml_context__)
 
 __config__ = SerializerConfig(xml_declaration=True, )
 __serializer__ = XmlSerializer(config=__config__)
@@ -15,3 +21,10 @@ def serialize_xml(obj: dataclass) -> str:
     returning to a client.
     """
     return __serializer__.render(obj)
+
+
+def parse_xml(xml: str) -> dataclass:
+    """
+    Parse the xml passed and return result from loaded classes.
+    """
+    return __xml_parser__.from_string(xml)
