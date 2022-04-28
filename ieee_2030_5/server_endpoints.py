@@ -24,12 +24,15 @@ class ServerEndpoints:
         self.mimetype = "text/xml"
 
         app.add_url_rule(self.hrefs.dcap, view_func=self._dcap)
+        # app.add_url_rule(self.hrefs.rsps, view_func=None)
         app.add_url_rule(self.hrefs.tm, view_func=self._tm)
+        # app.add_url_rule(self.hrefs.upt, view_func=None)
+        # app.add_url_rule(self.hrefs.edev, view_func=None)
+        # app.add_url_rule(self.hrefs.mup, view_func=None)
 
     def __required_cert__(self):
-        pass
-        # if 'ieee_2030_5_peercert' not in request.environ:
-        #     raise werkzeug.exceptions.Forbidden()
+        if 'ieee_2030_5_peercert' not in request.environ:
+            raise werkzeug.exceptions.Forbidden()
 
     def __response__(self, obj: dataclass) -> Response:
         return Response(serialize_xml(obj), mimetype=self.mimetype)
@@ -70,10 +73,14 @@ class ServerEndpoints:
 
         # Based upon the connecting client we need to filter usages
         lfid = self.__request_lfid__()
-        end_device_list = self.end_devices.get_device_by_lfid(lfid)
+        end_device = self.end_devices.get_device_by_lfid(lfid)
 
-        cap = DeviceCapability()
-        return self.__response__(self.end_devices.get_list(0, self.end_devices.num_devices))
+        # cap = DeviceCapability(time_link=)
+
+
+        # cap = DeviceCapability()
+
+        # return self.__response__(end_device_list.end_devices.get_list(0, self.end_devices.num_devices))
 
     def _tm(self) -> Response:
         now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)

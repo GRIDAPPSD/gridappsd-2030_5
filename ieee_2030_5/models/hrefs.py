@@ -7,7 +7,17 @@ DEFAULT_EDEV_ROOT = f"{DEFAULT_DCAP_ROOT}/edev"
 @dataclass
 class EndpointHrefs:
     dcap: str = f"{DEFAULT_DCAP_ROOT}"
+    # TimeLink
     tm: str = f"{DEFAULT_DCAP_ROOT}/tm"
+    # ResponseSetListLink
+    rsps: str = f"{DEFAULT_DCAP_ROOT}/rsps"
+    # UsagePointListLink
+    upt: str = f"{DEFAULT_DCAP_ROOT}/upt"
+    # EndDeviceListLink
+    edev: str = f"{DEFAULT_DCAP_ROOT}/edev"
+    # MirrorUsagePointListLink
+    mup: str = f"{DEFAULT_DCAP_ROOT}/mup"
+
     sdev: str = f"{DEFAULT_DCAP_ROOT}/sdev"
     edev_list: str = f"{DEFAULT_DCAP_ROOT}/edev"
     sdev_di: str = f"{DEFAULT_DCAP_ROOT}/sdev/di"

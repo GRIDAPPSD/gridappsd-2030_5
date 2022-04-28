@@ -8,6 +8,8 @@ from ieee_2030_5.execute import execute_command
 
 __all__ = ['TLSRepository']
 
+from ieee_2030_5.models.end_devices import Lfid
+
 _log = logging.getLogger(__name__)
 
 
@@ -89,9 +91,9 @@ class TLSRepository:
 
         self._hostnames[hostname] = hostname
 
-    def lfdi(self, hostname: str) -> int:
+    def lfdi(self, hostname: str) -> Lfid:
         fp = self.fingerprint(hostname, True)
-        return int(fp[:16], 16)
+        return Lfid(int(fp[:16], 16))
 
     def sfdi(self, hostname: str):
         lfdi_: int = self.lfdi(hostname)

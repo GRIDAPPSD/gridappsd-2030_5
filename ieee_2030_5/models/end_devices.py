@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, NewType
 
 from pydantic import BaseModel
 
@@ -9,7 +9,7 @@ from . import (EndDevice, Registration, RegistrationLink, DeviceInformation, Dev
                FileStatusLink, EndDeviceList, DeviceCategoryType)
 from .hrefs import EndpointHrefs
 
-Lfid = type(int)
+Lfid = int
 
 hrefs = EndpointHrefs()
 
@@ -28,11 +28,6 @@ class EndDevices:
     end_devices_by_lfid: Dict[Lfid, EndDeviceIndexer] = field(default_factory=dict)
     device_numbers: int = field(default=-1)
 
-    # def __post_init__(self):
-    #     self.end_devices = {}
-    #     self.end_devices_by_lfid = {}
-    #     self.device_numbers = -1
-
     @property
     def num_devices(self) -> int:
         return len(self.end_devices)
@@ -41,9 +36,11 @@ class EndDevices:
         return self.end_devices.get(index)
 
     def get_device_by_lfid(self, lfid: Lfid) -> Optional[EndDevice]:
+        if not isinstance(lfid, Lfid):
+            lfid = Lfid(lfid)
         return self.end_devices_by_lfid.get(lfid)
 
-    def register(self, device_category: DeviceCategoryType, l_fid: Lfid, pin_code=999):
+    def register(self, device_category: DeviceCategoryType, l_fid: Lfid, pin_code=999) -> EndDevice:
         ts = int(round(datetime.utcnow().timestamp()))
         self.device_numbers += 1
         new_dev_number = self.device_numbers
@@ -78,7 +75,8 @@ class EndDevices:
         #,
         #registration=registration)
         self.end_devices[new_dev_number] = dev_indexer
-        self.end_devices_by_lfid[l_fid_bytes] = dev_indexer
+        self.end_devices_by_lfid[Lfid(l_fid_bytes)] = dev_indexer
+        return dev
 
     def get(self, index: int) -> EndDevice:
         return self.end_devices[index].end_device

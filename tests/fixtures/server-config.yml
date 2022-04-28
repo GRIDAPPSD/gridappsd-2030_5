@@ -1,0 +1,76 @@
+devices:
+- bus: '634'
+  device_category_type: SMART_INVERTER
+  hostname: _def62366-746e-4fcb-b3ee-ebebb90d72d4
+  id: _def62366-746e-4fcb-b3ee-ebebb90d72d4
+  ip: 127.0.0.20
+  ipu: '1.1111111'
+  name: school
+  p: 240000.0
+  phases: ''
+  q: 0.0
+  ratedS: 300000.0
+  ratedU: 480.0
+  resource_id: _15EEE173-CC90-4888-B9B8-43916D56890C
+
+- device_category_type: SMART_INVERTER
+  hostname: dev1
+  id: dev1
+  ip: 127.0.0.1
+
+- device_category_type: SMART_INVERTER
+  hostname: dev2
+  id: dev2
+  ip: 127.0.0.2
+
+- device_category_type: SMART_INVERTER
+  hostname: dev3
+  id: dev3
+  ip: 127.0.0.3
+- device_category_type: SMART_INVERTER
+  hostname: dev4
+  id: dev4
+  ip: 127.0.0.4
+- device_category_type: SMART_INVERTER
+  hostname: dev5
+  id: dev5
+  ip: 127.0.0.5
+- device_category_type: SMART_INVERTER
+  hostname: dev6
+  id: dev6
+  ip: 127.0.0.6
+- device_category_type: SMART_INVERTER
+  hostname: dev7
+  id: dev7
+  ip: 127.0.0.7
+- device_category_type: SMART_INVERTER
+  hostname: dev8
+  id: dev8
+  ip: 127.0.0.8
+- device_category_type: SMART_INVERTER
+  hostname: dev9
+  id: dev9
+  ip: 127.0.0.9
+- device_category_type: SMART_INVERTER
+  hostname: dev10
+  id: dev10
+  ip: 127.0.0.10
+- device_category_type: SMART_INVERTER
+  hostname: dev11
+  id: dev11
+  ip: 127.0.0.11
+- device_category_type: SMART_INVERTER
+  hostname: dev12
+  id: dev12
+  ip: 127.0.0.12
+- aggregator: 'agg'
+  hostname: aggregator
+  ip: 127.0.0.3
+  id: _aef62366-746e-4fcb-b3ee-ebebb90d72d8
+  device_category_type: AGGREGATOR
+
+# This is only during test mode not in any other location.
+openssl_cnf: ../openssl.cnf
+server_hostname: gridappsd_dev_2004
+server_mode: enddevices_create_on_start
+tls_repository: ~/tls

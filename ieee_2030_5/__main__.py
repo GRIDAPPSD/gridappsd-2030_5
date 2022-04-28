@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 import socket
 import sys
+from typing import Dict, Tuple
 
 import yaml
 
@@ -12,11 +13,49 @@ from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
-from ieee_2030_5.models.server_constructs import get_groups, GroupLevel
+from ieee_2030_5.server.server_constructs import get_groups, GroupLevel, Group
 
 logging.basicConfig(level=logging.DEBUG)
 
 _log = logging.getLogger(__name__)
+
+
+def get_tls_repository(cfg: ServerConfiguration, create_certs: bool = True) -> TLSRepository:
+    tlsrepo = TLSRepository(cfg.tls_repository,
+                            cfg.openssl_cnf,
+                            cfg.server_hostname,
+                            clear=create_certs)
+    if create_certs:
+        already_represented = set()
+
+        # registers the devices, but doesn't register the end devices here.
+        for k in cfg.devices:
+            if k in already_represented:
+                _log.error(f"Already have {k.hostname} represented by {k.device_category_type}")
+            else:
+                already_represented.add(k)
+                print(f"adding k: {k}")
+                tlsrepo.create_cert(k.hostname)
+    return tlsrepo
+
+
+def get_end_devices(cfg: ServerConfiguration, tlsrepo: TLSRepository) -> Tuple[Dict[GroupLevel, Group], EndDevices]:
+    grps = get_groups()
+    devices = EndDevices()
+    # Create the enddevice on the server on startup.
+    #
+    # The other option is enddevices_register_access_only which in effect
+    # becomes a noop as the certificates should already be created for the system
+    # or added through the web interface.
+    if cfg.server_mode == "enddevices_create_on_start":
+        for k in cfg.devices:
+            device = devices.register(DeviceCategoryType[k.device_category_type],
+                                      tlsrepo.lfdi(k.hostname))
+
+            grps[GroupLevel.SubTransmission].add_end_device(device)
+
+    return grps, devices
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -34,9 +73,9 @@ if __name__ == '__main__':
     os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
         Path(opts.config).expanduser().resolve(strict=True))
     #
-    cfg = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
+    cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
 
-    config = ServerConfiguration(**cfg)
+    config = ServerConfiguration(**cfg_dict)
 
     assert config.tls_repository
     assert len(config.devices) > 0
@@ -66,36 +105,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     create_certs = not opts.no_create_certs
-    tls_repo = TLSRepository(config.tls_repository,
-                             config.openssl_cnf,
-                             config.server_hostname,
-                             clear=create_certs)
-    if create_certs:
-        already_represented = set()
-
-        # registers the devices, but doesn't register the end devices here.
-        for k in config.devices:
-            if k in already_represented:
-                _log.error(f"Already have {k.hostname} represented by {k.device_category_type}")
-            else:
-                already_represented.add(k)
-                print(f"adding k: {k}")
-                tls_repo.create_cert(k.hostname)
-
-    groups = get_groups()
-    end_devices = EndDevices()
-    # Create the enddevice on the server on startup.
-    #
-    # The other option is enddevices_register_access_only which in effect
-    # becomes a noop as the certificates should already be created for the system
-    # or added through the web interface.
-    if config.server_mode == "enddevices_create_on_start":
-        for k in config.devices:
-            device = end_devices.register(DeviceCategoryType[k.device_category_type],
-                                 tls_repo.lfdi(k.hostname))
-
-        groups[GroupLevel.SubTransmission].add_end_device(device)
-        #for k in config.devices:
+    tls_repo = get_tls_repository(config, create_certs)
+    groups, end_devices = get_end_devices(config)
 
     try:
         run_server(config, tls_repo, enddevices=end_devices)

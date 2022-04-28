@@ -1,9 +1,9 @@
+import json
+
 from flask import Flask, render_template, request, redirect, Response
-import werkzeug.serving
 import werkzeug.exceptions
 import ssl
 import OpenSSL
-from pathlib import Path
 
 __all__ = ["run_server"]
 
@@ -13,9 +13,8 @@ from ieee_2030_5 import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
-from ieee_2030_5.models.serializer import serialize_xml
 from ieee_2030_5.server_endpoints import ServerEndpoints
-from ieee_2030_5.models.server_constructs import get_groups
+from ieee_2030_5.server.server_constructs import get_groups
 
 hrefs = EndpointHrefs()
 
@@ -53,7 +52,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
 
             x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
             environ['ieee_2030_5_peercert'] = x509
-            environ['ieee_2030_5_subject'] = x509.get_subject()
+            environ['ieee_2030_5_subject'] = x509.get_subject().CN
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
 
         except OpenSSL.crypto.Error:
@@ -111,7 +110,7 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     @app.route("/admin/clients")
     def admin_clients():
         clients = tlsrepo.client_list
-        return render_template("admin/clients.html", registered=clients, connected=[])
+        return json.dumps(clients) #  render_template("admin/clients.html", registered=clients, connected=[])
 
     @app.route("/admin/groups")
     def admin_groups():

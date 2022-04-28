@@ -13,15 +13,16 @@ def tls_repo() -> TLSRepository:
     assert Path(tmp).exists()
 
     try:
-        tls = TLSRepository(repo_dir=tmp,
-                            # Default openssl.cnf is two directories up from this test.
-                            openssl_cnffile=Path(__file__).parent.parent.joinpath("openssl.cnf"),
-                            serverhost="serverhostname")
+        tls = TLSRepository(
+            repo_dir=tmp,
+        # Default openssl.cnf is two directories up from this test.
+            openssl_cnffile=Path(__file__).parent.parent.joinpath("openssl.cnf"),
+            serverhost="serverhostname")
 
         yield tls
 
     finally:
-        pass #shutil.rmtree(tmp, ignore_errors=True)
+        pass    #shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_tls_creates_ca_and_server_keys(tls_repo):

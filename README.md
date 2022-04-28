@@ -1,5 +1,11 @@
 # GridAPPS-D IEEE 2030.5 Server
 
+## Overview
+
+The GridAPPS-D IEEE 2030.5 Server implements the Common Smart Inverter Profile (CSIP).  The server
+can work in both in-band and out-of-band registration models detailed in  CCIP Implementation Guide v2 
+section 6.1.3 and 6.1.4 respectively.  
+
 ## Setup
 
 ## Running the server
@@ -43,7 +49,10 @@ devices:
   bus: m2001-ess1  
   # Device category type is the 2030.5 DeviceCategoryType bit field mentioned
   # in documentation below.
-  device_category_type: 3
+  #
+  # An enumeration has been created at ieee_2030_5/models/device_category.py for you to
+  # enter the types of devices supported.
+  device_category_type: WATER_HEATER
   
   id: 6F33B5DD-50CD-4599-8559-3299BC22D9F0
   ip: 127.0.0.2
@@ -58,40 +67,9 @@ devices:
   state: Waiting
   storedE: 500000.0
 ```
-#### Device Category Types
-```
-# Bit positions SHALL be defined as follows:
-# 0 - Programmable Communicating Thermostat
-# 1 - Strip Heaters
-# 2 - Baseboard Heaters
-# 3 - Water Heater
-# 4 - Pool Pump
-# 5 - Sauna
-# 6 - Hot Tub
-# 7 - Smart Appliance
-# 8 - Irrigation Pump
-# 9 - Managed Commercial and Industrial (C&amp;amp;I) Loads
-# 10 - Simple Misc. (Residential On/Off) Loads
-# 11 - Exterior Lighting
-# 12 - Interior Lighting
-# 13 - Load Control Switch
-# 14 - Energy Management System
-# 15 - Smart Energy Module
-# 16 - Electric Vehicle
-# 17 - EVSE
-# 18 - Virtual or Mixed DER
-# 19 - Reciprocating Engine
-# 20 - Fuel Cell
-# 21 - Photovoltaic System
-# 22 - Combined Heat and Power
-# 23 - Combined PV and Storage
-# 24 - Other Generation System
-# 25 - Other Storage System
-# All other values reserved.
-```
 
 ## Client Connectivity
 
-The server will expose an endpoint of begining with https://myserver/dcap.  From there
+The server will expose an endpoint of beginning with https://myserver/dcap.  From there
 a client will be able to traverse and do any PUT, POST, GET, and DELETE operations specified
 in the 2030.5 test procedures.
