@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Optional, NewType
+from typing import Dict, Optional
 
-from pydantic import BaseModel
-
-from . import (EndDevice, Registration, RegistrationLink, DeviceInformation, DeviceInformationLink,
+from . import (EndDevice, Registration, RegistrationLink, DeviceInformationLink,
                DeviceStatusLink, PowerStatusLink, SubscriptionListLink, ConfigurationLink,
-               FileStatusLink, EndDeviceList, DeviceCategoryType)
+               FileStatusLink, EndDeviceList, DeviceCategoryType, DeviceCapability, EndDeviceListLink, SelfDeviceLink,
+               MirrorUsagePointListLink)
 from .hrefs import EndpointHrefs
 
 Lfid = int
@@ -24,16 +23,37 @@ class EndDeviceIndexer:
 
 @dataclass
 class EndDevices:
-    end_devices: Dict[int, EndDeviceIndexer] = field(default_factory=dict)
+    all_end_devices: Dict[int, EndDeviceIndexer] = field(default_factory=dict)
     end_devices_by_lfid: Dict[Lfid, EndDeviceIndexer] = field(default_factory=dict)
     device_numbers: int = field(default=-1)
+    _device_data: Dict[Lfid, Dict] = field(default_factory=dict)
 
     @property
     def num_devices(self) -> int:
-        return len(self.end_devices)
+        return len(self.all_end_devices)
+
+    def get_device_capability(self, lfid: Lfid) -> DeviceCapability:
+        if not isinstance(lfid, Lfid):
+            lfid = Lfid(lfid)
+
+        if lfid not in self._device_data:
+            index = self.end_devices_by_lfid[lfid].index
+            sdev = SelfDeviceLink(href=hrefs.sdev)
+            edll = EndDeviceListLink(href=f"{hrefs.edev}/{index}", all=1)
+            mup = MirrorUsagePointListLink(href=f"{hrefs.mup}/{index}")
+            poll_rate = 900
+            dc = DeviceCapability(
+                mirror_usage_point_list_link=mup,
+                self_device_link=sdev,
+                end_device_list_link=edll,
+                poll_rate=poll_rate
+            )
+            self._device_data[lfid] = dc
+
+        return self._device_data.get(lfid)
 
     def get_device_by_index(self, index: int) -> Optional[EndDevice]:
-        return self.end_devices.get(index)
+        return self.all_end_devices.get(index)
 
     def get_device_by_lfid(self, lfid: Lfid) -> Optional[EndDevice]:
         if not isinstance(lfid, Lfid):
@@ -72,15 +92,14 @@ class EndDevices:
         registration = Registration(date_time_registered=ts, p_in=999)
 
         dev_indexer = EndDeviceIndexer(index=new_dev_number, end_device=dev)
-        #,
-        #registration=registration)
-        self.end_devices[new_dev_number] = dev_indexer
+
+        self.all_end_devices[new_dev_number] = dev_indexer
         self.end_devices_by_lfid[Lfid(l_fid_bytes)] = dev_indexer
         return dev
 
     def get(self, index: int) -> EndDevice:
-        return self.end_devices[index].end_device
+        return self.all_end_devices[index].end_device
 
     def get_list(self, start: int, length: int = 1) -> EndDeviceList:
-        return EndDeviceList(end_device=[x.end_device for x in self.end_devices.values()])
+        return EndDeviceList(end_device=[x.end_device for x in self.all_end_devices.values()])
         #return [x.end_device for x in self.end_devices.values()]

@@ -13,7 +13,7 @@ from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
-from ieee_2030_5.server.server_constructs import get_groups, GroupLevel, Group
+from ieee_2030_5.server import get_group, get_groups, GroupLevel, Group
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -51,9 +51,10 @@ def get_end_devices(cfg: ServerConfiguration, tlsrepo: TLSRepository) -> Tuple[D
         for k in cfg.devices:
             device = devices.register(DeviceCategoryType[k.device_category_type],
                                       tlsrepo.lfdi(k.hostname))
-
-            grps[GroupLevel.SubTransmission].add_end_device(device)
-
+            # TODO: Add the ability to use other groups
+            get_group(level=GroupLevel.SubTransmission).add_end_device(device)
+        # TODO: Only valid when we are adding to the subtransmission group.
+        assert devices.num_devices == len(get_group(level=GroupLevel.SubTransmission).get_devices())
     return grps, devices
 
 
@@ -106,7 +107,7 @@ if __name__ == '__main__':
 
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
-    groups, end_devices = get_end_devices(config)
+    groups, end_devices = get_end_devices(config, tls_repo)
 
     try:
         run_server(config, tls_repo, enddevices=end_devices)

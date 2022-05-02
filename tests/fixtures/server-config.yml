@@ -1,3 +1,15 @@
+---
+# Group should be set to one of the following
+# System
+# SubTransmission
+# Substation
+# Feeder
+# Segment
+# Transformer
+# ServicePoint
+#
+# If not in this set then assigned to the group
+# named in the group value
 devices:
 - bus: '634'
   device_category_type: SMART_INVERTER
@@ -15,6 +27,7 @@ devices:
 
 - device_category_type: SMART_INVERTER
   hostname: dev1
+  group:
   id: dev1
   ip: 127.0.0.1
 

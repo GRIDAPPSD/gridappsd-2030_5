@@ -17,8 +17,16 @@ class EndpointHrefs:
     edev: str = f"{DEFAULT_DCAP_ROOT}/edev"
     # MirrorUsagePointListLink
     mup: str = f"{DEFAULT_DCAP_ROOT}/mup"
-
+    # DemandResponseProgramListLink
+    drp: str = f"{DEFAULT_DCAP_ROOT}/drp"
+    # MessagingProgramListLink
+    msg: str = f"{DEFAULT_DCAP_ROOT}/msg"
+    # SelfDeviceLink
     sdev: str = f"{DEFAULT_DCAP_ROOT}/sdev"
+
+
+
+
     edev_list: str = f"{DEFAULT_DCAP_ROOT}/edev"
     sdev_di: str = f"{DEFAULT_DCAP_ROOT}/sdev/di"
     sdev_log: str = f"{DEFAULT_DCAP_ROOT}/sdev/log"
@@ -53,3 +61,6 @@ class EndpointHrefs:
     edev_power_status_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/ps"
     edev_file_status_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/fs"
     edev_sub_list_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/subl"
+
+    def extend_url(self, base_url: str, index: int):
+        return base_url + f"/{index}"

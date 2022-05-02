@@ -75,10 +75,21 @@ class IEEE2030_5_Client:
         if method.upper() == 'GET':
             return self.__get_request__(endpoint, body)
 
+        if method.upper() == 'POST':
+            return self.__post__(endpoint, body)
+
+    def __post__(self, url: str, body=None):
+        self.http_conn.request(method="POST", url=url, body=body)
+        response = self._http_conn.getresponse()
+        response_data = response.read().decode("utf-8")
+
+        return response.status
+
     def __get_request__(self, url: str, body=None):
         self.http_conn.request(method="GET", url=url, body=body)
         response = self._http_conn.getresponse()
         response_data = response.read().decode("utf-8")
+
         response_obj = parse_xml(response_data)
         print(type(response_obj))
         print(f"response_data {response_data}")
@@ -121,6 +132,9 @@ if __name__ == '__main__':
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
     dcap = h.request_device_capability()
-    tl = h.request_timelink()
-    print(dcap.pollRate)
-    print(IEEE2030_5_Client.clients)
+    print(dcap.mirror_usage_point_list_link)
+    # print(h.request(dcap.mirror_usage_point_list_link.href))
+    print(h.request("/dcap", method="post"))
+
+    # tl = h.request_timelink()
+    #print(IEEE2030_5_Client.clients)

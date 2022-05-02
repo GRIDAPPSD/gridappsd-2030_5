@@ -1,18 +1,41 @@
 import calendar
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Optional
-import time
 
 import pytz
-import werkzeug
 from flask import Flask, Response, request
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import Time, DeviceCapability, TimeType
-from ieee_2030_5.models.end_devices import EndDevices, Lfid
+from ieee_2030_5.models import Time, TimeType, MirrorUsagePointListLink
+from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.models.serializer import serialize_xml
+from ieee_2030_5.server import ServerOperation
+
+
+def dataclass_to_xml(dc: dataclass) -> Response:
+    return Response(serialize_xml(dc), mimetype="text/xml")
+
+
+class RequestOp(ServerOperation):
+    def __init__(self, end_devices: EndDevices, tls_repo: TLSRepository):
+        super().__init__()
+        self._end_devices = end_devices
+        self._tls_repository = tls_repo
+
+    @property
+    def lfid(self):
+        return self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
+
+
+class Dcap(RequestOp):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def get(self) -> Response:
+        return dataclass_to_xml(self._end_devices.get_device_capability(self.lfid))
 
 
 class ServerEndpoints:
@@ -26,22 +49,9 @@ class ServerEndpoints:
         app.add_url_rule(self.hrefs.dcap, view_func=self._dcap)
         # app.add_url_rule(self.hrefs.rsps, view_func=None)
         app.add_url_rule(self.hrefs.tm, view_func=self._tm)
-        # app.add_url_rule(self.hrefs.upt, view_func=None)
-        # app.add_url_rule(self.hrefs.edev, view_func=None)
-        # app.add_url_rule(self.hrefs.mup, view_func=None)
 
-    def __required_cert__(self):
-        if 'ieee_2030_5_peercert' not in request.environ:
-            raise werkzeug.exceptions.Forbidden()
-
-    def __response__(self, obj: dataclass) -> Response:
-        return Response(serialize_xml(obj), mimetype=self.mimetype)
-
-    def __request_lfid__(self) -> Lfid:
-        return self.tls_repo.lfdi(request.environ['ieee_2030_5_subject'])
-
-    def __request_sfid__(self):
-        pass
+        for index, ed in end_devices.all_end_devices.items():
+            app.add_url_rule(self.hrefs.mup + f"/{index}", view_func=self._mup)
 
     @staticmethod
     def __format_time__(dt_obj: datetime, is_local: bool = False) -> TimeType:
@@ -68,19 +78,20 @@ class ServerEndpoints:
         else:
             return TimeType(int(calendar.timegm(dt_obj.timetuple())))
 
-    def _dcap(self) -> Response:
+    def _mup(self) -> Response:
         self.__required_cert__()
+        # TODO: validate access
 
-        # Based upon the connecting client we need to filter usages
-        lfid = self.__request_lfid__()
-        end_device = self.end_devices.get_device_by_lfid(lfid)
+        return self.__response__(MirrorUsagePointListLink())
 
-        # cap = DeviceCapability(time_link=)
+    def _dcap(self) -> Response:
+        return Dcap(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
 
-
-        # cap = DeviceCapability()
-
-        # return self.__response__(end_device_list.end_devices.get_list(0, self.end_devices.num_devices))
+        # self.__required_cert__()
+        #
+        # # Based upon the connecting client we need to filter usages
+        # lfid = self.__request_lfid__()
+        # return self.__response__(self.end_devices.get_device_capability(lfid))
 
     def _tm(self) -> Response:
         now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
