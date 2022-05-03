@@ -4,7 +4,9 @@ from pathlib import Path
 import ssl
 import atexit
 from typing import Optional
+import xml.dom.minidom
 
+import xsdata
 
 from ieee_2030_5.models import DeviceCapability
 
@@ -90,9 +92,15 @@ class IEEE2030_5_Client:
         response = self._http_conn.getresponse()
         response_data = response.read().decode("utf-8")
 
-        response_obj = parse_xml(response_data)
-        print(type(response_obj))
-        print(f"response_data {response_data}")
+        response_obj = None
+        try:
+            response_obj = parse_xml(response_data)
+            resp_xml = xml.dom.minidom.parseString(response_data)
+            if resp_xml:
+                print(f"{resp_xml.toprettyxml()}")
+
+        except xsdata.exceptions.ParserError as ex:
+            print(f"Invalid data returned.  Not able to parse xml for:\n{response_data} ")
 
         return response_obj
 
@@ -131,10 +139,18 @@ if __name__ == '__main__':
                           certfile=CERT_FILE)
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
+
     dcap = h.request_device_capability()
-    print(dcap.mirror_usage_point_list_link)
-    # print(h.request(dcap.mirror_usage_point_list_link.href))
-    print(h.request("/dcap", method="post"))
+    # get device list
+    dev_list = h.request(dcap.end_device_list_link.href).end_device
+
+    ed = h.request(dev_list[0].href)
+    print(ed)
+    #
+    # print(dcap.mirror_usage_point_list_link)
+    # # print(h.request(dcap.mirror_usage_point_list_link.href))
+    # print(h.request("/dcap", method="post"))
+
 
     # tl = h.request_timelink()
     #print(IEEE2030_5_Client.clients)
