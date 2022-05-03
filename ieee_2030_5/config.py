@@ -41,6 +41,8 @@ class ServerConfiguration:
 
     def __post_init__(self):
         self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
+        for d in self.devices:
+            d.device_category_type = eval(f"DeviceCategoryType.{d.device_category_type}")
 
     #
     # class Config:
