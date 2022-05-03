@@ -2,6 +2,9 @@ import logging
 from pathlib import Path
 from typing import List
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+
 from ieee_2030_5 import PathStr
 from ieee_2030_5.execute import execute_command
 
@@ -27,6 +30,7 @@ class TLSRepository:
         self._combined_dir = repo_dir.joinpath("combined")
         self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile.name)
         self._hostnames = {serverhost: serverhost}
+        self._client_hostnames = set()
 
         if not self._repo_dir.exists() or not self._certs_dir.exists() or \
                 not self._private_dir.exists() or not self._combined_dir.exists():
@@ -73,6 +77,13 @@ class TLSRepository:
             __openssl_create_private_key__(self.__get_key_file__(self._serverhost))
             self.create_cert(self._serverhost, True)
 
+        if not clear:
+            for f in self._certs_dir.glob('*.crt'):
+                f = Path(f)
+                cn = self.get_common_name(f.stem)
+                if cn not in ('ca', serverhost):
+                    self._client_hostnames.add(cn)
+
     def __create_ca__(self):
         __openssl_create_private_key__(self._ca_key)
         __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key,
@@ -112,9 +123,14 @@ class TLSRepository:
             value = value.split("=")[1]
         return value
 
+    def get_common_name(self, hostname: str) -> x509:
+        pem_data = Path(self.__get_cert_file__(hostname)).read_bytes()
+        cert = x509.load_pem_x509_certificate(pem_data, default_backend())
+        return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
+
     @property
     def client_list(self) -> List[str]:
-        return list(self._hostnames.keys())
+        return list(self._client_hostnames)
 
     @property
     def ca_key_file(self) -> Path:
