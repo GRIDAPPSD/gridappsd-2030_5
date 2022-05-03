@@ -13,7 +13,7 @@ from ieee_2030_5 import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
-from ieee_2030_5.server_endpoints import ServerEndpoints
+from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups
 
 hrefs = EndpointHrefs()
@@ -61,7 +61,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
         return environ
 
 
-def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices):
+def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
     app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
 
@@ -89,6 +89,7 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     # password=app_key_password
     )
     # change this to ssl.CERT_REQUIRED during deployment.
+    # TODO if required we have to have one all the time on the server.
     ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
 
     ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo)
@@ -120,15 +121,23 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     @app.route("/admin/aggregators")
     def admin_aggregators():
         return Response("<h1>Aggregators</h1>")
+
+    @app.route("/admin/routes")
+    def admin_routes():
+        routes = '<ul>'
+        for p in app.url_map.iter_rules():
+            routes += f"<li>{p.rule}</li>"
+        routes += "</ul>"
+        return Response(f"{routes}")
     # @app.route("/admin" + hrefs.dcap)
     # def admin_dcap():
-    #     return Response(serialize_xml(enddevices.get_list(0, enddevices.num_devices)),
+    #     return Response(serialize_xml(enddevices.get_end_device_list(0, enddevices.num_devices)),
     #                     mimetype="text/xml")
     #
     #
     # @app.route(hrefs.dcap)
     # def dcap():
-    #     return Response(serialize_xml(enddevices.get_list(0, enddevices.num_devices))
+    #     return Response(serialize_xml(enddevices.get_end_device_list(0, enddevices.num_devices))
     #
     # @app.route("/dcap", methods=['GET'])
     # def route_dcap():
@@ -140,13 +149,13 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     #
     #     return dcap()
 
-    @app.route("/dcap/edev", defaults={'index': None, 'part': None})
-    @app.route("/dcap/edev/<index>", defaults={'part': None})
-    @app.route("/dcap/edev/<index>/<part>")
-    #@app.route("/dcap/edev/")
-    def route_edev(index: int, part: str):
-        args = request.args.to_dict()
-        return {"args": args, "index": index, "part": part}
+    # @app.route("/dcap/edev", defaults={'index': None, 'part': None})
+    # @app.route("/dcap/edev/<index>", defaults={'part': None})
+    # @app.route("/dcap/edev/<index>/<part>")
+    # #@app.route("/dcap/edev/")
+    # def route_edev(index: int, part: str):
+    #     args = request.args.to_dict()
+    #     return {"args": args, "index": index, "part": part}
 
     try:
         host, port = config.server_hostname.split(":")
@@ -158,7 +167,7 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=PeerCertWSGIRequestHandler,
-            port=port)
+            port=port, **kwargs)
     #debug=True)
     #,
     #debug=True)

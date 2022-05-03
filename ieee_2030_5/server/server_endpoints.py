@@ -13,6 +13,9 @@ from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.models.serializer import serialize_xml
 from ieee_2030_5.server import ServerOperation
 
+# module level instance of hrefs class.
+hrefs = EndpointHrefs()
+
 
 def dataclass_to_xml(dc: dataclass) -> Response:
     return Response(serialize_xml(dc), mimetype="text/xml")
@@ -38,6 +41,62 @@ class Dcap(RequestOp):
         return dataclass_to_xml(self._end_devices.get_device_capability(self.lfid))
 
 
+class EDev(RequestOp):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def get(self) -> Response:
+        """
+        Supports the get request for end_devices(EDev) and end_device_list_link.
+
+        Paths:
+            /edev
+            /edev/0
+            /edev/0/di
+        """
+        pth = request.environ['PATH_INFO']
+
+        if not pth.startswith(hrefs.edev):
+            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
+
+        pth = request.path[len(hrefs.edev.strip()):].split("/")
+        # split returns a single value whether or not there was any characters found. if
+        # this is the case then we want to return the list of the end devices.
+        if len(pth) == 1:
+            retval = ServerList("EndDevice", end_devices=self._end_devices, tls_repo=self._tls_repository).execute()
+        else:
+            # This should mean we have an index of an end device that we are going to return
+            index = int(pth[1])
+            if len(pth) == 2:
+                retval = dataclass_to_xml(self._end_devices.get(index))
+            else:
+                sub_info = pth[3]
+
+
+        return retval
+        # return dataclass_to_xml(self._end_devices.get())
+
+class MUP(RequestOp):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class ServerList(RequestOp):
+    def __init__(self, list_type: str, **kwargs):
+        super().__init__(**kwargs)
+        self._list_type = list_type
+
+    def get(self) -> Response:
+        response = None
+        if self._list_type == 'EndDevice':
+            response = self._end_devices.get_end_device_list(self.lfid)
+
+        if response:
+            response = dataclass_to_xml(response)
+
+        return response
+
+
 class ServerEndpoints:
 
     def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository):
@@ -47,10 +106,12 @@ class ServerEndpoints:
         self.mimetype = "text/xml"
 
         app.add_url_rule(self.hrefs.dcap, view_func=self._dcap)
+        app.add_url_rule(self.hrefs.edev, view_func=self._edev)
         # app.add_url_rule(self.hrefs.rsps, view_func=None)
         app.add_url_rule(self.hrefs.tm, view_func=self._tm)
 
         for index, ed in end_devices.all_end_devices.items():
+            app.add_url_rule(self.hrefs.edev + f"/{index}", view_func=self._edev)
             app.add_url_rule(self.hrefs.mup + f"/{index}", view_func=self._mup)
 
     @staticmethod
@@ -86,6 +147,9 @@ class ServerEndpoints:
 
     def _dcap(self) -> Response:
         return Dcap(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
+
+    def _edev(self) -> Response:
+        return EDev(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
 
         # self.__required_cert__()
         #

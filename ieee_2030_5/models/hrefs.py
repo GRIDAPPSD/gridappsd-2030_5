@@ -1,7 +1,13 @@
 from dataclasses import dataclass
+from typing import Optional
 
 DEFAULT_DCAP_ROOT = "/dcap"
-DEFAULT_EDEV_ROOT = f"{DEFAULT_DCAP_ROOT}/edev"
+DEFAULT_EDEV_ROOT = "/edev"
+DEFAULT_UPT_ROOT = "/utp"
+DEFAULT_MUP_ROOT = "/mup"
+DEFAULT_DRP_ROOT = "/drp"
+DEFAULT_SELF_ROOT = "/sdev"
+DEFAULT_MESSAGE_ROOT = "/msg"
 
 
 @dataclass
@@ -12,27 +18,22 @@ class EndpointHrefs:
     # ResponseSetListLink
     rsps: str = f"{DEFAULT_DCAP_ROOT}/rsps"
     # UsagePointListLink
-    upt: str = f"{DEFAULT_DCAP_ROOT}/upt"
+    upt: str = DEFAULT_UPT_ROOT
     # EndDeviceListLink
-    edev: str = f"{DEFAULT_DCAP_ROOT}/edev"
+    edev: str = DEFAULT_EDEV_ROOT
     # MirrorUsagePointListLink
-    mup: str = f"{DEFAULT_DCAP_ROOT}/mup"
+    mup: str = DEFAULT_MUP_ROOT
     # DemandResponseProgramListLink
-    drp: str = f"{DEFAULT_DCAP_ROOT}/drp"
+    drp: str = DEFAULT_DRP_ROOT
     # MessagingProgramListLink
-    msg: str = f"{DEFAULT_DCAP_ROOT}/msg"
+    msg: str = DEFAULT_MESSAGE_ROOT
     # SelfDeviceLink
-    sdev: str = f"{DEFAULT_DCAP_ROOT}/sdev"
+    sdev: str = DEFAULT_SELF_ROOT
 
-
-
-
-    edev_list: str = f"{DEFAULT_DCAP_ROOT}/edev"
     sdev_di: str = f"{DEFAULT_DCAP_ROOT}/sdev/di"
     sdev_log: str = f"{DEFAULT_DCAP_ROOT}/sdev/log"
-    mup_list: str = f"{DEFAULT_DCAP_ROOT}/mup"
 
-    mup_fmt: str = f"{DEFAULT_DCAP_ROOT}/mup" + "/{index}"
+    mup_fmt: str = f"{DEFAULT_MUP_ROOT}" + "/{index}"
 
     edev_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}"
     reg_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/reg"
@@ -62,5 +63,12 @@ class EndpointHrefs:
     edev_file_status_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/fs"
     edev_sub_list_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/subl"
 
-    def extend_url(self, base_url: str, index: int):
-        return base_url + f"/{index}"
+    @staticmethod
+    def extend_url(base_url: str, index: Optional[int] = None, suffix: Optional[str] = None):
+        result = base_url
+        if index is not None:
+            result += f"/{index}"
+        if suffix:
+            result += f"/{suffix}"
+
+        return result
