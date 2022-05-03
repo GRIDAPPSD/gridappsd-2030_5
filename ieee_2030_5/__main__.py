@@ -49,7 +49,7 @@ def get_end_devices(cfg: ServerConfiguration, tlsrepo: TLSRepository) -> Tuple[D
     # or added through the web interface.
     if cfg.server_mode == "enddevices_create_on_start":
         for k in cfg.devices:
-            device = devices.register(DeviceCategoryType[k.device_category_type],
+            device = devices.register(k.device_category_type,
                                       tlsrepo.lfdi(k.hostname))
             # TODO: Add the ability to use other groups
             get_group(level=GroupLevel.SubTransmission).add_end_device(device)
@@ -110,6 +110,6 @@ if __name__ == '__main__':
     groups, end_devices = get_end_devices(config, tls_repo)
 
     try:
-        run_server(config, tls_repo, enddevices=end_devices)
+        run_server(config, tls_repo, enddevices=end_devices, debug=True)
     except KeyboardInterrupt as ex:
         print("Shutting down server.")
