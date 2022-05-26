@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from http.client import HTTPSConnection
 from os import PathLike
 from pathlib import Path
@@ -8,19 +10,16 @@ import xml.dom.minidom
 
 import xsdata
 
-from ieee_2030_5.models import DeviceCapability
+from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint
 
 #from IEEE2030_5.xsd_models import DeviceCapability
 #from IEEE2030_5.end_device import IEEE2030_5Parser
 from ieee_2030_5.models.serializer import parse_xml
-
-SERVER_CA_CERT = Path("~/tls/certs/ca.crt").expanduser().resolve()
-KEY_FILE = Path("~/tls/private/_def62366-746e-4fcb-b3ee-ebebb90d72d4.pem").expanduser().resolve()
-CERT_FILE = Path("~/tls/certs/_def62366-746e-4fcb-b3ee-ebebb90d72d4.crt").expanduser().resolve()
+from ieee_2030_5.utils import dataclass_to_xml
 
 
 class IEEE2030_5_Client:
-    clients: "IEEE2030_5_Client" = set()
+    clients: set[IEEE2030_5_Client] = set()
 
     # noinspection PyUnresolvedReferences
     def __init__(self,
@@ -28,11 +27,13 @@ class IEEE2030_5_Client:
                  server_hostname: str,
                  keyfile: Path,
                  certfile: Path,
-                 ssl_port: Optional[int] = 443):
+                 hostname: str,
+                 server_ssl_port: Optional[int] = 443):
 
         assert cafile.exists(), f"cafile doesn't exist ({cafile})"
         assert keyfile.exists(), f"keyfile doesn't exist ({keyfile})"
         assert certfile.exists(), f"certfile doesn't exist ({certfile})"
+        assert hostname, "hostname not specified"
 
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
         self._ssl_context.verify_mode = ssl.CERT_REQUIRED
@@ -43,10 +44,23 @@ class IEEE2030_5_Client:
         self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
         self._http_conn = HTTPSConnection(host=server_hostname,
-                                          port=ssl_port,
+                                          port=server_ssl_port,
                                           context=self._ssl_context)
         self._device_cap: Optional[DeviceCapability] = None
+        self._mup: Optional[MirrorUsagePointList] = None
+
+        self._hostname = hostname
         IEEE2030_5_Client.clients.add(self)
+
+    @property
+    def device_capability(self) -> DeviceCapability:
+        if self._device_cap is None:
+            self.request_device_capability()
+        return self._device_cap
+
+    @property
+    def hostname(self) -> str:
+        return self._hostname
 
     @property
     def http_conn(self) -> HTTPSConnection:
@@ -58,10 +72,14 @@ class IEEE2030_5_Client:
         self._device_cap = self.__get_request__(url)
         return self._device_cap
 
+    def request_mirror_usage_point_list(self, url: str = "/mup") -> MirrorUsagePointList:
+        self._mup = self.__get_request__(url)
+        return self._mup
+
     def request_edev_list(self,
                           length: int = 1,
                           start: Optional[int] = None,
-                          after: Optional[int] = None):
+                          after: Optional[int] = None) -> EndDeviceListLink:
         """
 
         """
@@ -79,6 +97,9 @@ class IEEE2030_5_Client:
 
         if method.upper() == 'POST':
             return self.__post__(endpoint, body)
+
+    def post_mirror_usage_point(self, url: str, mirror_usage_point: MirrorUsagePoint):
+        return self.__post__(url, body=dataclass_to_xml(mirror_usage_point))
 
     def __post__(self, url: str, body=None):
         self.http_conn.request(method="POST", url=url, body=body)
@@ -132,17 +153,22 @@ atexit.register(__release_clients__)
 # con.close()
 
 if __name__ == '__main__':
+    SERVER_CA_CERT = Path("~/tls/certs/ca.crt").expanduser().resolve()
+    KEY_FILE = Path("~/tls/private/_def62366-746e-4fcb-b3ee-ebebb90d72d4.pem").expanduser().resolve()
+    CERT_FILE = Path("~/tls/certs/_def62366-746e-4fcb-b3ee-ebebb90d72d4.crt").expanduser().resolve()
+
     h = IEEE2030_5_Client(cafile=SERVER_CA_CERT,
                           server_hostname="gridappsd_dev_2004",
-                          ssl_port=8443,
+                          server_ssl_port=8443,
                           keyfile=KEY_FILE,
-                          certfile=CERT_FILE)
+                          certfile=CERT_FILE,
+                          hostname='_def62366-746e-4fcb-b3ee-ebebb90d72d4')
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
 
     dcap = h.request_device_capability()
     # get device list
-    dev_list = h.request(dcap.end_device_list_link.href).end_device
+    dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice
 
     ed = h.request(dev_list[0].href)
     print(ed)

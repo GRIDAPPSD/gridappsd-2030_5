@@ -1,24 +1,25 @@
+from __future__ import annotations
+
 import calendar
 import time
-from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Dict
 
 import pytz
 from flask import Flask, Response, request
+from werkzeug.exceptions import BadRequest
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import Time, TimeType, MirrorUsagePointListLink
+from ieee_2030_5.models import Time, MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.models.serializer import serialize_xml
 from ieee_2030_5.server import ServerOperation
 
 # module level instance of hrefs class.
+from ieee_2030_5.utils import dataclass_to_xml
+
 hrefs = EndpointHrefs()
-
-
-def dataclass_to_xml(dc: dataclass) -> Response:
-    return Response(serialize_xml(dc), mimetype="text/xml")
 
 
 class RequestOp(ServerOperation):
@@ -30,6 +31,10 @@ class RequestOp(ServerOperation):
     @property
     def lfid(self):
         return self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
+
+    @property
+    def device_id(self):
+        return request.environ.get("ieee_2030_5_subject")
 
 
 class Dcap(RequestOp):
@@ -72,13 +77,62 @@ class EDev(RequestOp):
             else:
                 sub_info = pth[3]
 
-
         return retval
         # return dataclass_to_xml(self._end_devices.get())
 
+
 class MUP(RequestOp):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # Load from repository or data storage after passed data?
+        self.__mup_info__: Dict[int, MirrorUsagePointList] = {}
+        self.__mup_point_readings__: Dict[str, ]
+        self._last_added = 0
+
+    def get(self) -> Response:
+        pth_info = request.environ['PATH_INFO']
+
+        if not pth_info.startswith(hrefs.mup):
+            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
+
+        pths = request.path[len(hrefs.mup.strip()):].split("/")
+        an_mup_list = self.__mup_info__.get(self.device_id)
+
+        if not an_mup_list:
+            an_mup_list = MirrorUsagePointList(href=pth_info)
+            self.__mup_info__[self.device_id] = an_mup_list
+            self._last_added += 1
+
+        retval = an_mup_list
+
+        if len(pths) == 2:
+            retval = an_mup_list.results[pths[1]]
+        return dataclass_to_xml(retval)
+
+    def post(self):
+        data = serialize_xml(request.data)
+        data_type = type(data)
+        if data_type not in (MirrorUsagePoint, MirrorReadingSet):
+            raise BadRequest()
+
+        pth_info = request.path
+        pths = pth_info.split("/")
+        if len(pths) == 1 and data_type is not MirrorUsagePoint:
+            # Check to make sure not a new mrid
+            raise BadRequest("Must post MirrorUsagePoint to top level only")
+        else:
+            # Creating a new mup
+            self._last_added += 1
+            self.__mup_info__[self._last_added] = data
+
+
+
+        return Location()
+
+
+
+
 
 
 class ServerList(RequestOp):
@@ -107,6 +161,7 @@ class ServerEndpoints:
 
         app.add_url_rule(self.hrefs.dcap, view_func=self._dcap)
         app.add_url_rule(self.hrefs.edev, view_func=self._edev)
+        app.add_url_rule(self.hrefs.mup, view_func=self._mup)
         # app.add_url_rule(self.hrefs.rsps, view_func=None)
         app.add_url_rule(self.hrefs.tm, view_func=self._tm)
 
@@ -140,10 +195,7 @@ class ServerEndpoints:
             return TimeType(int(calendar.timegm(dt_obj.timetuple())))
 
     def _mup(self) -> Response:
-        self.__required_cert__()
-        # TODO: validate access
-
-        return self.__response__(MirrorUsagePointListLink())
+        return MUP(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
 
     def _dcap(self) -> Response:
         return Dcap(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()

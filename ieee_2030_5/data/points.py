@@ -26,7 +26,19 @@ def get_point(key):
     """
     Retrieve a point from the key/value store.  If the key doesn't exist returns None.
     """
-    db.get(key)
+    return db.get(key)
+
+
+def get_points():
+    return db.getall()
 
 
 atexit.register(db.dump)
+
+
+if __name__ == '__main__':
+
+    set_point("foo", "bar")
+    set_point("bim", "baf")
+    # print(get_point("foo"))
+    get_points()

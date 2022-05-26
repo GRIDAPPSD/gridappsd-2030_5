@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 from ieee_2030_5.models.sep import (
-    DER as SepDer,
+    DER,
     IdentifiedObject,
     Link,
     Resource,
@@ -89,7 +91,7 @@ class ForecastParameter:
 
 
 @dataclass
-class DER(SepDer):
+class DERFlexibility(DER):
     """
     Extends sep DER to include DERForecastLink.
     """

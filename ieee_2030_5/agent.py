@@ -74,7 +74,7 @@ def IEEE2030_5_agent(config_path, **kwargs):
     if not config:
         _log.info("Using IEEE 2030.5 Agent defaults for starting configuration.")
 
-    devices = config.get('devices', [])  # To add devices, include them in a config file
+    devices = config.get('devices', [])    # To add devices, include them in a config file
     # This default should be overridden in config file
     IEEE2030_5_server_sfdi = config.get('IEEE2030_5_server_sfdi', 'foo')
     # This default should be overridden in config file
@@ -82,12 +82,8 @@ def IEEE2030_5_agent(config_path, **kwargs):
     load_shed_device_category = config.get('load_shed_device_category', '0020')
     timezone = config.get('timezone', 'America/Los_Angeles')
 
-    return IEEE2030_5Agent(devices,
-                           IEEE2030_5_server_sfdi,
-                           IEEE2030_5_server_lfdi,
-                           load_shed_device_category,
-                           timezone,
-                           **kwargs)
+    return IEEE2030_5Agent(devices, IEEE2030_5_server_sfdi, IEEE2030_5_server_lfdi,
+                           load_shed_device_category, timezone, **kwargs)
 
 
 class IEEE2030_5Agent(Agent):
@@ -112,8 +108,13 @@ class IEEE2030_5Agent(Agent):
                 -t IEEE2030_5agent -f
     """
 
-    def __init__(self, device_config=[], IEEE2030_5_server_sfdi='foo', IEEE2030_5_server_lfdi='bar',
-                 load_shed_device_category='0020', timezone='America/Los_Angeles', **kwargs):
+    def __init__(self,
+                 device_config=[],
+                 IEEE2030_5_server_sfdi='foo',
+                 IEEE2030_5_server_lfdi='bar',
+                 load_shed_device_category='0020',
+                 timezone='America/Los_Angeles',
+                 **kwargs):
         super(IEEE2030_5Agent, self).__init__(enable_web=True, **kwargs)
 
         self.device_config = device_config
@@ -123,11 +124,13 @@ class IEEE2030_5Agent(Agent):
         self.timezone = timezone
         self.devices = {}
 
-        self.default_config = {"devices": device_config,
-                               "IEEE2030_5_server_sfdi": IEEE2030_5_server_sfdi,
-                               "IEEE2030_5_server_lfdi": IEEE2030_5_server_lfdi,
-                               "load_shed_device_category": load_shed_device_category,
-                               "timezone": timezone}
+        self.default_config = {
+            "devices": device_config,
+            "IEEE2030_5_server_sfdi": IEEE2030_5_server_sfdi,
+            "IEEE2030_5_server_lfdi": IEEE2030_5_server_lfdi,
+            "load_shed_device_category": load_shed_device_category,
+            "timezone": timezone
+        }
         self.vip.config.set_default("config", self.default_config)
         self.devices = self.register_devices(device_config)
         self.mups = []
@@ -168,7 +171,8 @@ class IEEE2030_5Agent(Agent):
         _log.debug("Registering Endpoints: {}".format(self.__class__.__name__))
         for _, endpoint in IEEE2030_5.IEEE2030_5_ENDPOINTS.items():
             if endpoint.url not in self.vip.web._endpoints:
-                self.vip.web.register_endpoint(endpoint.url, getattr(self, endpoint.callback), "raw")
+                self.vip.web.register_endpoint(endpoint.url, getattr(self, endpoint.callback),
+                                               "raw")
         for device_id, device in self.devices.items():
             for _, endpoint in IEEE2030_5.IEEE2030_5_EDEV_ENDPOINTS.items():
                 if endpoint.url.format(device_id) not in self.vip.web._endpoints:
@@ -251,13 +255,16 @@ class IEEE2030_5Agent(Agent):
                 _log.warning("Bad XML input for HTTP Endpoint.")
                 return [IEEE2030_5.STATUS_CODES[500], '', IEEE2030_5.XML_HEADERS]
         else:
-            return IEEE2030_5Agent.prep_200_response({'received_data': data, 'result': getattr(device, attr_name)})
+            return IEEE2030_5Agent.prep_200_response({
+                'received_data': data,
+                'result': getattr(device, attr_name)
+            })
 
     @staticmethod
     def add_meter_readings(mup, meter_readings):
         """ Update/Create Meter Readings for MUP based on existance.
 
-        If Meter Reading already exists, send an update.  If it does not, create new Meter Reading for MUP.
+        If Meter Reading already exists, send an update.  If it does not, register new Meter Reading for MUP.
 
         :param mup: MUP object
         :param meter_readings: List of incoming Meter Readings to insert into MUP object.
@@ -266,7 +273,8 @@ class IEEE2030_5Agent(Agent):
         for meter_reading in meter_readings:
             flag = True
             for index, xsd in enumerate(mup.mup_xsd.get_MirrorMeterReading()):
-                if meter_reading.description == mup.mup_xsd.get_MirrorMeterReading()[index].description:
+                if meter_reading.description == mup.mup_xsd.get_MirrorMeterReading(
+                )[index].description:
                     mup.mup_xsd.replace_MirrorMeterReading_at(index, meter_reading)
                     flag = False
             if flag:
@@ -280,12 +288,13 @@ class IEEE2030_5Agent(Agent):
 
         :return: Tuple of (Status Code, Response Data, Headers)
         """
-        return (IEEE2030_5.STATUS_CODES[200],
-                IEEE2030_5Renderer.render(render_dict),
-                #base64.b64decode(IEEE2030_5Renderer.render(render_dict).encode('ascii')),
-                #,
-                # base64.b64encode(IEEE2030_5Renderer.render(render_dict)).decode('ascii'),
-                IEEE2030_5.XML_HEADERS)
+        return (
+            IEEE2030_5.STATUS_CODES[200],
+            IEEE2030_5Renderer.render(render_dict),
+        #base64.b64decode(IEEE2030_5Renderer.render(render_dict).encode('ascii')),
+        #,
+        # base64.b64encode(IEEE2030_5Renderer.render(render_dict)).decode('ascii'),
+            IEEE2030_5.XML_HEADERS)
 
     @RPC.export
     def get_point(self, sfdi, point_name):
@@ -335,8 +344,7 @@ class IEEE2030_5Agent(Agent):
         dcap = xsd_models.DeviceCapability(
             EndDeviceListLink=xsd_models.EndDeviceListLink(),
             MirrorUsagePointListLink=xsd_models.MirrorUsagePointListLink(),
-            SelfDeviceLink=xsd_models.SelfDeviceLink()
-        )
+            SelfDeviceLink=xsd_models.SelfDeviceLink())
         dcap.set_href(IEEE2030_5.IEEE2030_5_ENDPOINTS["dcap"].url)
 
         dcap.EndDeviceListLink.set_href(IEEE2030_5.IEEE2030_5_ENDPOINTS["edev-list"].url)
@@ -352,7 +360,8 @@ class IEEE2030_5Agent(Agent):
     def sdev(self, env, data):
         sdev = xsd_models.SelfDevice()
         sdev.sFDI = xsd_models.SFDIType(valueOf_=int(self.IEEE2030_5_server_sfdi))
-        sdev.loadShedDeviceCategory = xsd_models.DeviceCategoryType(valueOf_=self.load_shed_device_category)
+        sdev.loadShedDeviceCategory = xsd_models.DeviceCategoryType(
+            valueOf_=self.load_shed_device_category)
         sdev.DeviceInformationLink = xsd_models.DeviceInformationLink()
         sdev.DeviceInformationLink.set_href(IEEE2030_5.IEEE2030_5_ENDPOINTS["sdev-di"].url)
         sdev.LogEventListLink = xsd_models.LogEventListLink()
@@ -373,7 +382,9 @@ class IEEE2030_5Agent(Agent):
         local_tz = pytz.timezone(self.timezone)
         now_local = datetime.now().replace(tzinfo=local_tz)
 
-        start_dst_utc, end_dst_utc = [dt for dt in local_tz._utc_transition_times if dt.year == now_local.year]
+        start_dst_utc, end_dst_utc = [
+            dt for dt in local_tz._utc_transition_times if dt.year == now_local.year
+        ]
 
         utc_offset = local_tz.utcoffset(start_dst_utc - timedelta(days=1))
         dst_offset = local_tz.utcoffset(start_dst_utc + timedelta(days=1)) - utc_offset
@@ -386,14 +397,14 @@ class IEEE2030_5Agent(Agent):
             dstStartTime=IEEE2030_5Time(start_dst_utc.replace(tzinfo=pytz.utc)),
             localTime=IEEE2030_5Time(local_but_utc),
             quality=IEEE2030_5.QUALITY_NTP,
-            tzOffset=xsd_models.TimeOffsetType(valueOf_=int(utc_offset.total_seconds()))
-        )
+            tzOffset=xsd_models.TimeOffsetType(valueOf_=int(utc_offset.total_seconds())))
         tm.set_href(IEEE2030_5.IEEE2030_5_ENDPOINTS["tm"].url)
         return IEEE2030_5Agent.prep_200_response({"result": tm})
 
     def edev_list(self, env, data):
         device_list = xsd_models.EndDeviceList()
-        start, limit = parse_list_query(env['QUERY_STRING'].encode('ascii', 'ignore'), len(self.devices))
+        start, limit = parse_list_query(env['QUERY_STRING'].encode('ascii', 'ignore'),
+                                        len(self.devices))
 
         for i in range(start, limit):
             device_list.add_EndDevice(self.devices[i].end_device)
@@ -405,14 +416,22 @@ class IEEE2030_5Agent(Agent):
         return IEEE2030_5Agent.prep_200_response({'received_data': data, 'result': device_list})
 
     def edev(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.EndDevice, attr_name="end_device")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.EndDevice,
+                                 attr_name="end_device")
 
     def edev_di(self, env, data):
-        return self.process_edev(env=env, data=data,
-                                 xsd_type=xsd_models.DeviceInformation, attr_name="device_information")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DeviceInformation,
+                                 attr_name="device_information")
 
     def edev_dstat(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DeviceStatus, attr_name="device_status")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DeviceStatus,
+                                 attr_name="device_status")
 
     def edev_fsa_list(self, env, data):
         device = self.get_end_device(env['PATH_INFO'])
@@ -424,14 +443,22 @@ class IEEE2030_5Agent(Agent):
         return IEEE2030_5Agent.prep_200_response({"result": fsa_list})
 
     def edev_fsa(self, env, data):
-        return self.process_edev(env=env, data=data,
-                                 xsd_type=xsd_models.FunctionSetAssignments, attr_name="function_set_assignments")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.FunctionSetAssignments,
+                                 attr_name="function_set_assignments")
 
     def edev_ps(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.PowerStatus, attr_name="power_status")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.PowerStatus,
+                                 attr_name="power_status")
 
     def edev_reg(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.Registration, attr_name="registration")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.Registration,
+                                 attr_name="registration")
 
     def edev_der_list(self, env, data):
         device = self.get_end_device(env['PATH_INFO'])
@@ -446,7 +473,10 @@ class IEEE2030_5Agent(Agent):
         return self.process_edev(env=env, data=data, xsd_type=xsd_models.DER, attr_name="der")
 
     def edev_dera(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DERAvailability, attr_name="der_availability")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DERAvailability,
+                                 attr_name="der_availability")
 
     def edev_derc_list(self, env, data):
         device = self.get_end_device(env['PATH_INFO'])
@@ -458,13 +488,22 @@ class IEEE2030_5Agent(Agent):
         return IEEE2030_5Agent.prep_200_response({"result": derc_list})
 
     def edev_derc(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DERControl, attr_name="der_control")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DERControl,
+                                 attr_name="der_control")
 
     def edev_dercap(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DERCapability, attr_name="der_capability")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DERCapability,
+                                 attr_name="der_capability")
 
     def edev_derg(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DERSettings, attr_name="der_settings")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DERSettings,
+                                 attr_name="der_settings")
 
     def edev_derp_list(self, env, data):
         device = self.get_end_device(env['PATH_INFO'])
@@ -476,10 +515,16 @@ class IEEE2030_5Agent(Agent):
         return IEEE2030_5Agent.prep_200_response({"result": derp_list})
 
     def edev_derp(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DERProgram, attr_name="der_program")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DERProgram,
+                                 attr_name="der_program")
 
     def edev_ders(self, env, data):
-        return self.process_edev(env=env, data=data, xsd_type=xsd_models.DERStatus, attr_name="der_status")
+        return self.process_edev(env=env,
+                                 data=data,
+                                 xsd_type=xsd_models.DERStatus,
+                                 attr_name="der_status")
 
     def mup_list(self, env, data):
         if env['REQUEST_METHOD'] in ('POST', 'PUT'):
@@ -492,18 +537,21 @@ class IEEE2030_5Agent(Agent):
                 device.mup = m
                 self.mups.append(m)
                 if endpoint.url.format(m.id) not in self.vip.web._endpoints:
-                    self.vip.web.register_endpoint(endpoint.url.format(m.id), getattr(self, endpoint.callback), "raw")
+                    self.vip.web.register_endpoint(endpoint.url.format(m.id),
+                                                   getattr(self, endpoint.callback), "raw")
             else:
                 IEEE2030_5Agent.add_meter_readings(device.mup, mup.get_MirrorMeterReading())
 
-            return [IEEE2030_5.STATUS_CODES[201],
-                    '',
-                    IEEE2030_5.XML_HEADERS+[("Location", endpoint.url.format(device.mup.id))]]
+            return [
+                IEEE2030_5.STATUS_CODES[201], '',
+                IEEE2030_5.XML_HEADERS + [("Location", endpoint.url.format(device.mup.id))]
+            ]
 
         else:
             mup_list = xsd_models.MirrorUsagePointList()
 
-            start, limit = parse_list_query(env['QUERY_STRING'].encode('ascii', 'ignore'), len(self.mups))
+            start, limit = parse_list_query(env['QUERY_STRING'].encode('ascii', 'ignore'),
+                                            len(self.mups))
 
             for i in range(start, limit):
                 mup_list.add_MirrorUsagePoint(self.mups[i].mup_xsd)
@@ -529,10 +577,11 @@ class IEEE2030_5Agent(Agent):
                 return [IEEE2030_5.STATUS_CODES[500], '', IEEE2030_5.XML_HEADERS]
             IEEE2030_5Agent.add_meter_readings(device.mup, readings)
 
-            return [IEEE2030_5.STATUS_CODES[201],
-                    '',
-                    IEEE2030_5.XML_HEADERS + [
-                        ("Location", IEEE2030_5.IEEE2030_5_MUP_ENDPOINTS["mup"].url.format(mup.id))]]
+            return [
+                IEEE2030_5.STATUS_CODES[201], '', IEEE2030_5.XML_HEADERS +
+                [("Location", IEEE2030_5.IEEE2030_5_MUP_ENDPOINTS["mup"].url.format(
+                    mup.simulation_id))]
+            ]
         else:
             xsd_object = getattr(mup, 'mup_xsd')
             return IEEE2030_5Agent.prep_200_response({'received_data': data, 'result': xsd_object})
@@ -547,7 +596,8 @@ def parse_list_query(query, length):
     :param length: Length of the list
     :return: (start index 0 based, limit) - xrange style
     """
-    params = {a[0]: a[1] for a in [x.split('=') for x in query.split("&")]} if len(query) > 0 else {}
+    params = {a[0]: a[1]
+              for a in [x.split('=') for x in query.split("&")]} if len(query) > 0 else {}
     start = max(0, int(params.get('s', '0')))
     limit = max(0, min(length, start + int(params.get('l', '255'))))
     return start, limit
@@ -555,8 +605,7 @@ def parse_list_query(query, length):
 
 def main():
     """Main method called to start the agent."""
-    utils.vip_main(IEEE2030_5_agent, identity='IEEE2030_5agent',
-                   version=__version__)
+    utils.vip_main(IEEE2030_5_agent, identity='IEEE2030_5agent', version=__version__)
 
 
 if __name__ == '__main__':

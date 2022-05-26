@@ -6,7 +6,7 @@ from pydantic import BaseSettings, Field, Extra, BaseModel
 
 __all__ = ["ServerConfiguration"]
 
-from ieee_2030_5.models.device_category import DeviceCategoryType
+from ieee_2030_5.models import DeviceCategoryType
 
 
 @dataclass

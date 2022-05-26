@@ -15,7 +15,7 @@ def get_2030_5_client(tls_repo: TLSRepository, server_config: ServerConfiguratio
             h = IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,
                                   server_hostname=server_config.server_hostname,
                                   # need to be better about hard coding the path
-                                  ssl_port=8443,
+                                  server_ssl_port=8443,
                                   keyfile=tls_repo.__get_key_file__(client_device),
                                   certfile=tls_repo.__get_cert_file__(client_device))
         except ConnectionRefusedError:

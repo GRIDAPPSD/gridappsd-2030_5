@@ -4,7 +4,6 @@ import ssl
 
 from icecream import ic
 
-
 SERVER_CA_CERT = Path("~/tls/certs/ca.crt").expanduser().resolve()
 KEY_FILE = Path("~/tls/private/dev1.me.com.pem").expanduser().resolve()
 CERT_FILE = Path("~/tls/certs/dev1.me.com.crt").expanduser().resolve()
@@ -22,9 +21,7 @@ ic(certfile, keyfile)
 # client side validation.
 ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
-http_conn = HTTPSConnection(host="me.com",
-                            port=8000,
-                            context=ssl_context)
+http_conn = HTTPSConnection(host="me.com", port=8000, context=ssl_context)
 
 http_conn.connect()
 
@@ -34,4 +31,3 @@ response_data = response.read().decode("utf-8")
 ic(response.reason, response.getcode(), response_data)
 
 http_conn.close()
-

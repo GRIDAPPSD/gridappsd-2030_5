@@ -11,7 +11,6 @@ import yaml
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import run_server
-from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.server import get_group, get_groups, GroupLevel, Group
 

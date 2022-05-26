@@ -6,7 +6,7 @@ from typing import Dict, Optional
 from . import (EndDevice, Registration, RegistrationLink, DeviceInformationLink,
                DeviceStatusLink, PowerStatusLink, SubscriptionListLink, ConfigurationLink,
                FileStatusLink, EndDeviceList, DeviceCategoryType, DeviceCapability, EndDeviceListLink, SelfDeviceLink,
-               MirrorUsagePointListLink, DerlistLink, FunctionSetAssignmentsListLink, LogEventListLink,
+               MirrorUsagePointListLink, DERListLink, FunctionSetAssignmentsListLink, LogEventListLink,
                UsagePointListLink, TimeLink)
 from .hrefs import EndpointHrefs
 
@@ -49,17 +49,12 @@ class EndDevices:
             poll_rate = 50
             timelink = TimeLink(href=f"{hrefs.tm}")
             dc = DeviceCapability(
-                mirror_usage_point_list_link=mup,
-                self_device_link=sdev,
-                end_device_list_link=edll,
-                poll_rate=poll_rate,
-                time_link=timelink,
-                # response_set_list_link,
-                # demand_response_program_list_link
-                # derprogram_list_link
-                # messaging_program_list_link
-                # usage_point_list_link
-                usage_point_list_link=upt
+                MirrorUsagePointListLink=mup,
+                SelfDeviceLink=sdev,
+                EndDeviceListLink=edll,
+                pollRate=poll_rate,
+                TimeLink=timelink,
+                UsagePointListLink=upt
             )
             self._device_data[lfid]["device_capability"] = dc
 
@@ -92,29 +87,29 @@ class EndDevices:
             index=new_dev_number))
         l_fid_bytes = str(l_fid).encode('utf-8')
         base_edev_single = hrefs    .extend_url(hrefs.edev, new_dev_number)
-        der_list_link = DerlistLink(href=hrefs.extend_url(base_edev_single, suffix="der"))
+        der_list_link = DERListLink(href=hrefs.extend_url(base_edev_single, suffix="der"))
         fsa_list_link = FunctionSetAssignmentsListLink(href=hrefs.extend_url(base_edev_single, suffix="fsa"))
         log_event_list_link = LogEventListLink(href=hrefs.extend_url(base_edev_single, suffix="log"))
         changed_time = datetime.now()
         changed_time.replace(microsecond=0)
-        dev = EndDevice(device_category=device_category.value,
-                        l_fdi=l_fid_bytes,
-                        registration_link=reg_link,
-                        device_status_link=dev_status_link,
-                        configuration_link=cfg_link,
-                        power_status_link=power_status_link,
-                        device_information_link=dev_info_link,
-                        s_fdi=l_fid,
+        dev = EndDevice(deviceCategory=device_category.value,
+                        lFDI=l_fid_bytes,
+                        RegistrationLink=reg_link,
+                        DeviceStatusLink=dev_status_link,
+                        ConfigurationLink=cfg_link,
+                        PowerStatusLink=power_status_link,
+                        DeviceInformationLink=dev_info_link,
+                        # TODO: Do actual sfid rather than lfid.
+                        sFDI=l_fid,
                         # file_status_link=file_status_link,
                         # subscription_list_link=sub_list_link,
                         href=f"{hrefs.edev}/{new_dev_number}",
-                        derlist_link=der_list_link,
-                        function_set_assignments_list_link=fsa_list_link,
-                        log_event_list_link=log_event_list_link,
+                        DERListLink=der_list_link,
+                        FunctionSetAssignmentsListLink=fsa_list_link,
+                        LogEventListLink=log_event_list_link,
                         enabled=True,
-                        changed_time=int(changed_time.timestamp()))  # int(mktime(datetime.now().timetuple())))
-
-        registration = Registration(date_time_registered=ts, p_in=999)
+                        changedTime=int(changed_time.timestamp()))
+        registration = Registration(dateTimeRegistered=ts, pollRate=900, pIN=999)
 
         dev_indexer = EndDeviceIndexer(index=new_dev_number, end_device=dev)
 
@@ -127,11 +122,11 @@ class EndDevices:
 
     def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> EndDeviceList:
         ed = self.get_device_by_lfid(lfid)
-        if DeviceCategoryType(ed.device_category) == DeviceCategoryType.AGGREGATOR:
+        if DeviceCategoryType(ed.deviceCategory) == DeviceCategoryType.AGGREGATOR:
             devices = [x.end_device for x in self.all_end_devices.values()]
         else:
             devices = [ed]
 
         # TODO Handle start, length list things.
-        dl = EndDeviceList(end_device=devices, all=len(devices), results=len(devices), href=hrefs.edev)
+        dl = EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices), href=hrefs.edev, pollRate=900)
         return dl

@@ -3,7 +3,8 @@ from enum import IntEnum
 
 class DeviceCategoryType(IntEnum):
     """
-
+    DeviceCategoryType defined from 20305-2018_IIEStandardforSmartEnergyProfileApplicationsProtocol.pdf Appendix
+    B.2.3.4 Types package
     """
     # The Device category types defined.
     # Bit positions SHALL be defined as follows:
@@ -17,17 +18,22 @@ class DeviceCategoryType(IntEnum):
     SMART_APPLIANCE = 7
     IRRIGATION_PUMP = 8
     MANAGED_COMMERCIAL_AND_INDUSTRIAL_LOADS = 9
-    SIMPLE_RESIDENTIAL_LOADS = 10
+    SIMPLE_RESIDENTIAL_LOADS = 10   # On/Off loads
     EXTERIOR_LIGHTING = 11
     INTERIOR_LIGHTING = 12
-    ELECTRIC_VEHICLE = 13
-    GENERATION_SYSTEMS = 14    # Synchronous Machine, Solar
-    LOAD_CONTROL_SWITCH = 15
-    SMART_INVERTER = 16    # Inverter
+    LOAD_CONTROL_SWITCH = 13
+    ENERGY_MANAGEMENT_SYSTEM = 14
+    SMART_ENERGY_MODULE = 15
+    ELECTRIC_VEHICLE = 16
     ELECTRIC_VEHICLE_SUPPLY_EQUIPMENT = 17
-    RESIDENTIAL_ENERGY_STORAGE_UNIT = 18    # Battery
-    ENERGY_MANAGEMENT_SYSTEM = 19
-    SMART_ENERGY_MODULE = 20
+    VIRTUAL_OR_MIXED_DER = 18
+    RECIPROCATING_ENGINE = 19  # Synchronous Machine
+    FUEL_CELL = 20  # Battery
+    PHOTOVOLTAIC_SYSTEM = 21  # Solar
+    COMBINED_HEAT_AND_POWER = 22
+    COMBINED_PV_AND_STORAGE = 23
+    OTHER_GENERATION_SYSTEMS = 24
+    OTHER_STORAGE_SYSTEMS = 25
 
     # Additional here for Aggregator
     AGGREGATOR = 99

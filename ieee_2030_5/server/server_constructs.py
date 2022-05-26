@@ -7,12 +7,12 @@ from flask import request
 
 from ieee_2030_5.models import (
     EndDevice,
-    Derprogram,
-    DerprogramList,
-    ActiveDercontrolListLink,
-    DefaultDercontrolLink,
-    DercontrolListLink,
-    DercurveListLink)
+    DERProgram,
+    DERProgramList,
+    ActiveDERControlListLink,
+    DefaultDERControlLink,
+    DERControlListLink,
+    DERCurveListLink)
 
 
 class GroupLevel(Flag):
@@ -35,14 +35,14 @@ class Group:
     name: str
     description: str
     level: GroupLevel
-    der_program: Derprogram
+    der_program: DERProgram
     _end_devices: Dict[bytes, EndDevice] = field(default_factory=dict)
 
     def add_end_device(self, end_device: EndDevice):
-        self._end_devices[end_device.l_fdi] = end_device
+        self._end_devices[end_device.lFDI] = end_device
 
     def remove_end_device(self, end_device: EndDevice):
-        self.remove_end_device_by_lfid(end_device.l_fdi)
+        self.remove_end_device_by_lfid(end_device.lFDI)
 
     def remove_end_device_by_lfid(self, lfid: bytes):
         del self._end_devices[lfid]
@@ -52,7 +52,7 @@ class Group:
 
 
 groups: Dict[GroupLevel, Group] = {}
-der_programs: List[Derprogram] = []
+der_programs: List[DERProgram] = []
 
 
 def get_group(level: Optional[GroupLevel] = None, name: Optional[str] = None):
@@ -92,14 +92,14 @@ def create_group(level: GroupLevel, name: Optional[str] = None) -> Group:
 
     # TODO: Standardize urls so we can get them from a central spot.
     program_href = f"/sep2/A{index}/derp/1"
-    program = Derprogram(m_rid=mrid.encode('utf-8'),
+    program = DERProgram(mRID=mrid.encode('utf-8'),
                          description=name,
                          primacy=index * 10,
                          href=program_href)
-    program.active_dercontrol_list_link = ActiveDercontrolListLink(href=f"{program_href}/actderc")
-    program.default_dercontrol_link = DefaultDercontrolLink(href=f"{program_href}/dderc")
-    program.dercontrol_list_link = DercontrolListLink(href=f"{program_href}/derc")
-    program.dercurve_list_link = DercurveListLink(href=f"{program_href}/dc")
+    program.active_dercontrol_list_link = ActiveDERControlListLink(href=f"{program_href}/actderc")
+    program.default_dercontrol_link = DefaultDERControlLink(href=f"{program_href}/dderc")
+    program.dercontrol_list_link = DERControlListLink(href=f"{program_href}/derc")
+    program.dercurve_list_link = DERCurveListLink(href=f"{program_href}/dc")
 
     if level not in groups:
         groups[level] = Group(level=level, name=name, description=name, der_program=program)
@@ -112,7 +112,7 @@ for _, lvl in enumerate(GroupLevel):
     create_group(lvl, name=lvl.name)
 
 
-der_program_list = DerprogramList(derprogram=der_programs)
+der_program_list = DERProgramList(DERProgram=der_programs)
 
 
 def get_der_program_list():
@@ -161,7 +161,7 @@ class ServerOperation:
 
 if __name__ == '__main__':
     print(get_groups())
-    for x in der_program_list.derprogram:
+    for x in der_program_list.DERProgram:
         print(x.href)
 
     for x, v in get_groups().items():
