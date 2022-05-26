@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema targetNamespace="epri:derforecast:ns" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.0.0" xmlns="epri:derforecast:ns" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:sep="urn:ieee:std:2030.5:ns">
+
+  <xs:import namespace="urn:ieee:std:2030.5:ns" schemaLocation="sep.xsd"/>
+
+  <xs:complexType name="DERFlexibility">
+    <xs:annotation>
+      <xs:documentation>Extends sep DER to include DERForecastLink </xs:documentation>
+    </xs:annotation>
+    <xs:complexContent>
+      <xs:extension base="sep:DER">
+        <xs:sequence>
+          <xs:element name="DERForecastLink" type="DERForecastLink" minOccurs="0" maxOccurs="1" />
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="ForecastNumericType">
+    <xs:annotation>
+      <xs:documentation>Real number expressed as an integer and power-of-ten-multiplier</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="value" minOccurs="1" maxOccurs="1" type="sep:UInt32">
+        <xs:annotation>
+          <xs:documentation>Value expressed as integer</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="multiplier" minOccurs="1" maxOccurs="1" type="sep:PowerOfTenMultiplierType">
+        <xs:annotation>
+          <xs:documentation>Multiplier for value. Multiply value by 10^this.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ForecastParameter">
+    <xs:annotation>
+      <xs:documentation>Object holding forecast for a single parameter</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="name" minOccurs="1" maxOccurs="1" type="sep:UInt32">
+        <xs:annotation>
+          <xs:documentation>Name of the paramater</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="forecast" minOccurs="1" maxOccurs="1" type="ForecastNumericType">
+        <xs:annotation>
+          <xs:documentation>Forecast for the parameter named.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="sigma" minOccurs="0" maxOccurs="1" type="ForecastNumericType">
+        <xs:annotation>
+          <xs:documentation>Standard deviation for the parameter named.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ForecastParameterSet">
+    <xs:annotation>
+      <xs:documentation>A set of forecasts.</xs:documentation>
+    </xs:annotation>
+    <xs:complexContent>
+      <xs:extension base="sep:Resource">
+        <xs:sequence>
+          <xs:element name="ForecastParameter" type="ForecastParameter" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="ForecastParameterSetList">
+    <xs:annotation>
+      <xs:documentation>A List element to hold ForecastParameterSet  objects.</xs:documentation>
+    </xs:annotation>
+    <xs:complexContent>
+      <xs:extension base="sep:SubscribableList">
+        <xs:sequence>
+          <xs:element name="ForecastParameterSet" type="ForecastParameterSet" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="DERForecast">
+    <xs:annotation>
+      <xs:documentation>DER forecast information.</xs:documentation>
+    </xs:annotation>
+    <xs:complexContent>
+      <xs:extension base="sep:IdentifiedObject">
+        <xs:sequence>
+          <xs:element name="startTime" minOccurs="1" maxOccurs="1" type="sep:TimeType">
+            <xs:annotation>
+              <xs:documentation>The start time in epoch for this forecast.</xs:documentation>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="interval" minOccurs="1" maxOccurs="1" type="sep:UInt32">
+            <xs:annotation>
+              <xs:documentation>Forecast interval for the included ForecastParameterSetList, in seconds.</xs:documentation>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="ForecastParameterSetList" minOccurs="0" maxOccurs="1" type="ForecastParameterSetList"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="DERForecastLink">
+    <xs:annotation>
+      <xs:documentation>SHALL contain a Link to an instance of DERForecast.</xs:documentation>
+    </xs:annotation>
+    <xs:complexContent>
+      <xs:extension base="sep:Link">
+        <xs:attribute name="postRate" use="optional" default="900" type="sep:UInt32"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="DERFlexibility" type="DERFlexibility"/>
+  <xs:element name="ForecastParameterSetList" type="ForecastParameterSetList"/>
+  <xs:element name="ForecastParameterSet" type="ForecastParameterSet"/>
+  <xs:element name="ForecastParameter" type="ForecastParameter"/>
+  <xs:element name="ForecastNumericType" type="ForecastNumericType"/>
+  <xs:element name="DERForecast" type="DERForecast"/>
+  <xs:element name="DERForecastLink" type="DERForecastLink"/>
+</xs:schema>
