@@ -22,7 +22,6 @@ from ieee_2030_5.server import UUIDHandler
 _log = logging.getLogger(__name__)
 
 
-
 class GroupLevel(Flag):
     """
     Each group is a construct of the layer the EndDevice is
@@ -133,40 +132,6 @@ def get_groups() -> Dict[GroupLevel, Group]:
     return groups
 
 
-class ServerOperation:
-
-    def __init__(self):
-        if 'ieee_2030_5_peercert' not in request.environ:
-            raise werkzeug.exceptions.Forbidden()
-
-    def head(self):
-        raise werkzeug.exceptions.MethodNotAllowed()
-
-    def get(self):
-        raise werkzeug.exceptions.MethodNotAllowed()
-
-    def post(self):
-        raise werkzeug.exceptions.MethodNotAllowed()
-
-    def delete(self):
-        raise werkzeug.exceptions.MethodNotAllowed()
-
-    def put(self):
-        raise werkzeug.exceptions.MethodNotAllowed()
-
-    def execute(self):
-        methods = {
-            'GET': self.get,
-            'POST': self.post,
-            'DELETE': self.delete,
-            'PUT': self.put
-        }
-        _log.debug(f"Request method is {request.environ['REQUEST_METHOD']}")
-        fn = methods.get(request.environ['REQUEST_METHOD'])
-        if not fn:
-            raise werkzeug.exceptions.MethodNotAllowed()
-
-        return fn()
 
 
 if __name__ == '__main__':

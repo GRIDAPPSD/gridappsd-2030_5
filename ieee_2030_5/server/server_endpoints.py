@@ -4,6 +4,7 @@ import calendar
 import json
 import time
 from datetime import datetime, timedelta
+import logging
 from typing import Dict, Callable
 
 import pytz
@@ -11,37 +12,18 @@ from flask import Flask, Response, request
 from werkzeug.exceptions import BadRequest, Forbidden
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import Time, MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet, DeviceCategoryType
+from ieee_2030_5.models import Time, MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.models.serializer import serialize_xml, parse_xml
-from ieee_2030_5.server import ServerOperation, UUIDHandler
+from ieee_2030_5.server import RequestOp
 
 # module level instance of hrefs class.
 from ieee_2030_5.utils import dataclass_to_xml
 
+
+_log = logging.getLogger(__name__)
 hrefs = EndpointHrefs()
-
-
-class RequestOp(ServerOperation):
-    def __init__(self, end_devices: EndDevices, tls_repo: TLSRepository, server_endpoints: ServerEndpoints):
-        super().__init__()
-        self._end_devices = end_devices
-        self._tls_repository = tls_repo
-        self._server_endpoint = server_endpoints
-
-    @property
-    def lfid(self):
-        return self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
-
-    @property
-    def device_id(self):
-        return request.environ.get("ieee_2030_5_subject")
-
-    @property
-    def is_admin_client(self) -> bool:
-        ed = self._end_devices.get_device_by_lfid(self.lfid)
-        return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
 
 
 class Admin(RequestOp):
@@ -145,6 +127,7 @@ class MUP(RequestOp):
         # Creating a new mup
         self._last_added += 1
         self.__mup_info__[self._last_added] = data
+
 
         return Response(headers={'Location': f'/mup/{self._last_added}'},
                         status='201 Created')
