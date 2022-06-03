@@ -1,5 +1,9 @@
+from __future__ import annotations
+
+from uuid import uuid4
 from dataclasses import dataclass, field
 from enum import Flag, auto
+import logging
 from typing import Dict, Optional, List
 
 import werkzeug
@@ -13,6 +17,12 @@ from ieee_2030_5.models import (
     DefaultDERControlLink,
     DERControlListLink,
     DERCurveListLink)
+
+_log = logging.getLogger(__name__)
+
+
+class AlreadyExistsError(Exception):
+    pass
 
 
 class GroupLevel(Flag):
@@ -28,6 +38,67 @@ class GroupLevel(Flag):
     Transformer = auto()
     ServicePoint = auto()
     NonTopology = auto()
+
+
+class UUIDHandler:
+    handler: UUIDHandler = None
+    bag: dict = {}
+    uuids: set = set()
+
+    def __new__(cls):
+        if UUIDHandler.handler is None:
+            UUIDHandler.handler = super().__new__(cls)
+        return UUIDHandler.handler
+
+    def add_known(self, uuid: str, obj: object):
+        assert isinstance(uuid, str) and obj is not None
+        self.bag[uuid] = obj
+        self.bag[id(obj)] = uuid
+        self.uuids.add(uuid)
+
+    def add(self, obj) -> str:
+        """
+        Add an object to the UUIDHandler.  If the object already exists
+        in the collection then raise AlreadyExistsError
+
+        :param: obj - The object to store in the handler.
+        """
+        if obj in self.bag:
+            raise AlreadyExistsError(f"obj {obj} already exists in bag")
+
+        new_uuid = str(uuid4())
+        while new_uuid in self.uuids:
+            new_uuid = str(uuid4())
+
+        self.bag[new_uuid] = obj
+        self.bag[id(obj)] = new_uuid
+        self.uuids.add(new_uuid)
+        return new_uuid
+
+    def get_uuid(self, obj) -> Optional[str]:
+        """
+        Retrieve a uuid for a matching object.  If match exists the
+        function returns the uuid, if not then returns None.
+
+        :param: object An object to match.
+
+        return: A string uuid or None
+        """
+        return self.bag.get(id(obj))
+
+    def get_obj(self, uuid: str) -> Optional[object]:
+        """
+        Retrieve an object based on the passed uuid.  If match exists the
+        function returns the object, if not then returns None.
+
+        :param: str A uuid to match against.
+
+        return: An object or None
+        """
+        return self.bag.get(uuid)
+
+    def get_uuids(self) -> List[str]:
+        return list(self.uuids.copy())
 
 
 @dataclass
@@ -53,6 +124,7 @@ class Group:
 
 groups: Dict[GroupLevel, Group] = {}
 der_programs: List[DERProgram] = []
+uuid_handler: UUIDHandler = UUIDHandler()
 
 
 def get_group(level: Optional[GroupLevel] = None, name: Optional[str] = None):
@@ -105,6 +177,7 @@ def create_group(level: GroupLevel, name: Optional[str] = None) -> Group:
         groups[level] = Group(level=level, name=name, description=name, der_program=program)
 
     der_programs.append(program)
+    uuid_handler.add_known(mrid, program)
 
 
 # Create all but the NonTopology group, which will get added
@@ -151,7 +224,7 @@ class ServerOperation:
             'DELETE': self.delete,
             'PUT': self.put
         }
-
+        _log.debug(f"Request method is {request.environ['REQUEST_METHOD']}")
         fn = methods.get(request.environ['REQUEST_METHOD'])
         if not fn:
             raise werkzeug.exceptions.MethodNotAllowed()

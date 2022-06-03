@@ -6,6 +6,7 @@ from ieee_2030_5.server.server_constructs import (
     get_der_program_list,
     create_group,
     ServerOperation,
+    UUIDHandler
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "create_group",
     "get_der_program_list",
     "ServerOperation",
+    "UUIDHandler"
 ]

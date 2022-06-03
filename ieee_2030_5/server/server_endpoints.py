@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import calendar
+import json
 import time
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Dict, Callable
 
 import pytz
 from flask import Flask, Response, request
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, Forbidden
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import Time, MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet
+from ieee_2030_5.models import Time, MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet, DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models.hrefs import EndpointHrefs
-from ieee_2030_5.models.serializer import serialize_xml
-from ieee_2030_5.server import ServerOperation
+from ieee_2030_5.models.serializer import serialize_xml, parse_xml
+from ieee_2030_5.server import ServerOperation, UUIDHandler
 
 # module level instance of hrefs class.
 from ieee_2030_5.utils import dataclass_to_xml
@@ -23,10 +24,11 @@ hrefs = EndpointHrefs()
 
 
 class RequestOp(ServerOperation):
-    def __init__(self, end_devices: EndDevices, tls_repo: TLSRepository):
+    def __init__(self, end_devices: EndDevices, tls_repo: TLSRepository, server_endpoints: ServerEndpoints):
         super().__init__()
         self._end_devices = end_devices
         self._tls_repository = tls_repo
+        self._server_endpoint = server_endpoints
 
     @property
     def lfid(self):
@@ -35,6 +37,23 @@ class RequestOp(ServerOperation):
     @property
     def device_id(self):
         return request.environ.get("ieee_2030_5_subject")
+
+    @property
+    def is_admin_client(self) -> bool:
+        ed = self._end_devices.get_device_by_lfid(self.lfid)
+        return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
+
+
+class Admin(RequestOp):
+    def get(self):
+        if not self.is_admin_client:
+            raise Forbidden()
+        return Response("We are able to do stuff here")
+
+    def post(self):
+        if not self.is_admin_client:
+            raise Forbidden()
+        return Response(json.dumps({'abc': 'def'}), headers={'Content-Type': 'application/json'})
 
 
 class Dcap(RequestOp):
@@ -87,7 +106,7 @@ class MUP(RequestOp):
         super().__init__(**kwargs)
         # Load from repository or data storage after passed data?
         self.__mup_info__: Dict[int, MirrorUsagePointList] = {}
-        self.__mup_point_readings__: Dict[str, ]
+        self.__mup_point_readings__: Dict[str, str | int] = {}
         self._last_added = 0
 
     def get(self) -> Response:
@@ -111,7 +130,8 @@ class MUP(RequestOp):
         return dataclass_to_xml(retval)
 
     def post(self):
-        data = serialize_xml(request.data)
+        xml = request.data.decode('utf-8')
+        data = parse_xml(request.data.decode('utf-8'))
         data_type = type(data)
         if data_type not in (MirrorUsagePoint, MirrorReadingSet):
             raise BadRequest()
@@ -121,14 +141,13 @@ class MUP(RequestOp):
         if len(pths) == 1 and data_type is not MirrorUsagePoint:
             # Check to make sure not a new mrid
             raise BadRequest("Must post MirrorUsagePoint to top level only")
-        else:
-            # Creating a new mup
-            self._last_added += 1
-            self.__mup_info__[self._last_added] = data
 
+        # Creating a new mup
+        self._last_added += 1
+        self.__mup_info__[self._last_added] = data
 
-
-        return Location()
+        return Response(headers={'Location': f'/mup/{self._last_added}'},
+                        status='201 Created')
 
 
 
@@ -158,16 +177,44 @@ class ServerEndpoints:
         self.end_devices = end_devices
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
+        self.app: Flask = app
 
-        app.add_url_rule(self.hrefs.dcap, view_func=self._dcap)
-        app.add_url_rule(self.hrefs.edev, view_func=self._edev)
-        app.add_url_rule(self.hrefs.mup, view_func=self._mup)
+        # internally flask uses the name of the view_func for the removal.
+        # self.remove_endpoint(self._admin.__name__)
+
+        self.add_endpoint(self.hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
+        # app.add_url_rule(self.hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
+
+        self.add_endpoint(self.hrefs.dcap, view_func=self._dcap)
+        self.add_endpoint(self.hrefs.edev, view_func=self._edev)
+        self.add_endpoint(self.hrefs.mup, view_func=self._mup, methods=['GET', 'POST'])
         # app.add_url_rule(self.hrefs.rsps, view_func=None)
-        app.add_url_rule(self.hrefs.tm, view_func=self._tm)
+        self.add_endpoint(self.hrefs.tm, view_func=self._tm)
 
         for index, ed in end_devices.all_end_devices.items():
-            app.add_url_rule(self.hrefs.edev + f"/{index}", view_func=self._edev)
-            app.add_url_rule(self.hrefs.mup + f"/{index}", view_func=self._mup)
+            self.add_endpoint(self.hrefs.edev + f"/{index}", view_func=self._edev)
+            self.add_endpoint(self.hrefs.mup + f"/{index}", view_func=self._mup)
+
+    def add_endpoint(self, endpoint: str, view_func: Callable, **kwargs):
+        """
+        Dynamically add an endpoint to the flask application.  If the endpoint already exists
+        then it will be overwritten.
+        """
+        self.app.add_url_rule(endpoint, view_func=view_func, **kwargs)
+
+    def remove_endpoint(self, endpoint: str):
+        """
+        Remove an endpoint from the flask application.  The endpoint is the name of the view function
+        not the actual endpoint.  So when registering:
+
+        obj.add_endpoint('/foo', view_func=self._foo_method)
+
+        The actual endpoint stored is the name of the function '_foo_method'.  To dynamically remove it
+        call
+
+        obj.remove_endpoint('_foo_method')
+        """
+        self.app.view_functions.pop(endpoint)
 
     @staticmethod
     def __format_time__(dt_obj: datetime, is_local: bool = False) -> TimeType:
@@ -193,6 +240,9 @@ class ServerEndpoints:
             return TimeType(int(time.mktime(dt_obj.timetuple())))
         else:
             return TimeType(int(calendar.timegm(dt_obj.timetuple())))
+
+    def _admin(self) -> Response:
+        return Admin(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
 
     def _mup(self) -> Response:
         return MUP(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
