@@ -13,7 +13,7 @@ import math
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
-from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading
+from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading, ReadingType, Reading
 
 
 def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
@@ -22,6 +22,7 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
     mups = client.request_mirror_usage_point_list(url=cap.MirrorUsagePointListLink.href)
 
     if not mups.results:
+        mup_uuid = client.request_new_uuid()
         # f"p_ac = {p_ac}, s_ac = {s_ac}, q_ac= {q_ac}, PF = {PF}, v_ac = {v_ac}, i_ac = {i_ac}"
         mup_readings = [MirrorMeterReading("p_ac"),
                         MirrorMeterReading("s_ac"),
@@ -32,13 +33,13 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
         mup = MirrorUsagePoint(description=f"Inverter {client.hostname}",
                                status=1,
                                MirrorMeterReading=mup_readings)
-        resp = client.post_mirror_usage_point(cap.MirrorUsagePointListLink.href,
-                                              mup)
+        resp = client.create_mirror_usage_point(cap.MirrorUsagePointListLink.href,
+                                                mup)
 
-        print(resp)
+        # print(resp)
         status, location = resp
         resp = client.request(location)
-        print(resp)
+        # print(resp)
 
     # PV module
     sandia_modules = pvlib.pvsystem.retrieve_sam('SandiaMod')
@@ -94,6 +95,7 @@ if __name__ == '__main__':
     parser.add_argument("--tls-repo", help="TLS repository directory to use, defaults to ~/tls", default="~/tls")
     parser.add_argument("--server-host", help="Reference to the utilities server for data.")
     parser.add_argument("--server-port", help="Port the server is listening on, default to 443", default=443)
+    parser.add_argument("--device-id", help="The id of the device for this inverter", default="dev12")
 
     opts = parser.parse_args()
 
@@ -110,17 +112,57 @@ if __name__ == '__main__':
 
     # print(tls_repo.client_list)
     for p in tls_repo.client_list:
-        IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,
-                          keyfile=tls_repo.__get_key_file__(opts.hostname),
-                          certfile=tls_repo.__get_cert_file__(opts.hostname),
-                          hostname=p,
-                          server_hostname=opts.server_host,
-                          server_ssl_port=opts.server_port)
+        if p == opts.device_id:
+            IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,
+                              keyfile=tls_repo.__get_key_file__(opts.hostname),
+                              certfile=tls_repo.__get_cert_file__(opts.hostname),
+                              hostname=p,
+                              server_hostname=opts.server_host,
+                              server_ssl_port=opts.server_port)
     client = list(IEEE2030_5_Client.clients)[0]
     print(f"Client is {client.hostname}")
-    gen = run_inverter(client)
-    for output in gen:
-        print(output)
+    client.request_device_capability()
+    end_devices = client.request_end_devices()
+    end_device = client.request_end_device(0)
+
+
+
+    # uuidstr = client.request_new_uuid()
+    mup = client.request_mirror_usage_point_list()
+
+    mup_gas_mirroring = MirrorUsagePoint(
+        mRID=client.request_new_uuid().encode('utf-8'),
+        description="Gas Mirroring",
+        roleFlags=bytes(13),
+        serviceCategoryKind=1,
+        status=1,
+        deviceLFDI=end_device.lFDI,
+        MirrorMeterReading=[MirrorMeterReading(
+            mRID=client.request_new_uuid().encode('utf-8'),
+            Reading=Reading(
+                value=125
+            ),
+            ReadingType=ReadingType(
+                accumulationBehaviour=9,
+                commodity=7,
+                dataQualifier=0,
+                flowDirection=1,
+                powerOfTenMultiplier=3,
+                uom=119
+            )
+        )]
+    )
+
+    status, location = client.create_mirror_usage_point(mup_gas_mirroring)
+
+    client.request_mirror_usage_point_list()
+
+
+    # print(client.request_new_uuid())
+    # print(client.request_usage_point_list())
+    # gen = run_inverter(client)
+    # for output in gen:
+    #     print(output)
 
 
     # threads: List[Thread] = []

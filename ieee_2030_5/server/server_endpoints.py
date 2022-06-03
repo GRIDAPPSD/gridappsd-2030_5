@@ -70,7 +70,7 @@ class EDev(RequestOp):
         # this is the case then we want to return the list of the end devices.
         if len(pth) == 1:
             retval = ServerList("EndDevice", end_devices=self._end_devices,
-                                tls_repo=self._tls_repository, server_endpoint=self._server_endpoint).execute()
+                                tls_repo=self._tls_repository, server_endpoints=self._server_endpoints).execute()
         else:
             # This should mean we have an index of an end device that we are going to return
             index = int(pth[1])

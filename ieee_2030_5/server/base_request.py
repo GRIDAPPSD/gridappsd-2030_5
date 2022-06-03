@@ -53,7 +53,7 @@ class RequestOp(ServerOperation):
         super().__init__()
         self._end_devices = end_devices
         self._tls_repository = tls_repo
-        self._server_endpoint = server_endpoints
+        self._server_endpoints = server_endpoints
         # required so we don't have to maintain a duplicate list for removing endpoints from flask,
         # this will make the server easier to use
         self._endpoint_map: Dict[str, str] = {}
@@ -86,11 +86,11 @@ class RequestOp(ServerOperation):
             methods.append("PUT")
 
         # TODO: What happens if no methods specified?
-        self._server_endpoint.add_endpoint(endpoint, view_func, methods=methods)
+        self._server_endpoints.add_endpoint(endpoint, view_func, methods=methods)
 
     def remove_endpoint(self, endpoint: str):
         _log.debug(f"Removing endpoint {endpoint}")
-        self._server_endpoint.remove_endpoint(self._endpoint_map[endpoint])
+        self._server_endpoints.remove_endpoint(self._endpoint_map[endpoint])
         self._endpoint_map.pop(endpoint)
 
 from ieee_2030_5.server.server_endpoints import ServerEndpoints

@@ -73,7 +73,7 @@ def handle_chunking():
 
 
 def before_request():
-    if True:
+    if False:
         print("HEADERS", request.headers)
         print("REQ_path", request.path)
         print("ARGS", request.args)

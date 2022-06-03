@@ -62,6 +62,7 @@ edev_file_status_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/fs"
 edev_sub_list_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/subl"
 
 admin: str = "/admin"
+uuid_gen: str = "/uuid"
 
 
 def extend_url(base_url: str, index: Optional[int] = None, suffix: Optional[str] = None):

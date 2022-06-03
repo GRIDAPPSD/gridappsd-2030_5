@@ -5,13 +5,13 @@ from os import PathLike
 from pathlib import Path
 import ssl
 import atexit
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 import xml.dom.minidom
 
 import xsdata
 
 from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint, \
-    UsagePointList
+    UsagePointList, EndDevice
 
 #from IEEE2030_5.xsd_models import DeviceCapability
 #from IEEE2030_5.end_device import IEEE2030_5Parser
@@ -29,7 +29,8 @@ class IEEE2030_5_Client:
                  keyfile: Path,
                  certfile: Path,
                  hostname: str,
-                 server_ssl_port: Optional[int] = 443):
+                 server_ssl_port: Optional[int] = 443,
+                 debug: bool = True):
 
         assert cafile.exists(), f"cafile doesn't exist ({cafile})"
         assert keyfile.exists(), f"keyfile doesn't exist ({keyfile})"
@@ -50,8 +51,11 @@ class IEEE2030_5_Client:
         self._device_cap: Optional[DeviceCapability] = None
         self._mup: Optional[MirrorUsagePointList] = None
         self._upt: Optional[UsagePointList] = None
+        self._edev: Optional[EndDeviceListLink] = None
+        self._end_devices: Optional[EndDeviceListLink] = None
 
         self._hostname = hostname
+        self._debug = debug
         IEEE2030_5_Client.clients.add(self)
 
     @property
@@ -70,27 +74,36 @@ class IEEE2030_5_Client:
             self._http_conn.connect()
         return self._http_conn
 
+    def request_new_uuid(self, url: str = "/uuid") -> str:
+        res = self.__get_request__(url)
+        return res
+
+    def request_end_devices(self) -> EndDeviceListLink:
+        self._end_devices = self.__get_request__(self._device_cap.EndDeviceListLink.href)
+        return self._end_devices
+
+    def request_end_device(self, index: int = 0) -> EndDevice:
+        if not self._end_devices:
+            self.request_end_devices()
+
+        return self._end_devices.EndDevice[index]
+
     def request_device_capability(self, url: str = "/dcap") -> DeviceCapability:
         self._device_cap = self.__get_request__(url)
         return self._device_cap
 
-    def request_mirror_usage_point_list(self, url: str = "/mup") -> MirrorUsagePointList:
-        self._mup = self.__get_request__(url)
+    def request_mirror_usage_point_list(self) -> MirrorUsagePointList:
+        self._mup = self.__get_request__(self._device_cap.MirrorUsagePointListLink.href)
         return self._mup
 
-    def request_usage_point_list(self, url: str = "/upt") -> UsagePointList:
-        self._upt = self.__get_request__(url)
+    def request_usage_point_list(self) -> UsagePointList:
+        self._upt = self.__get_request__(self._device_cap.UsagePointListLink.href)
         return self._upt
 
-    def request_edev_list(self,
-                          length: int = 1,
-                          start: Optional[int] = None,
-                          after: Optional[int] = None) -> EndDeviceListLink:
-        """
-
-        """
-        edev = self.__get_request__(self._device_cap.EndDeviceListLink.href)
-        return edev
+    def request_edev(self, index:int = 0):
+        if self._edev is None:
+            self.request_end_devices()
+        #edev = self.__get_request__(self._edev)
 
     def request_timelink(self):
         if self._device_cap is None:
@@ -107,9 +120,9 @@ class IEEE2030_5_Client:
             print("Doing post")
             return self.__post__(endpoint, body, headers=headers)
 
-    def post_mirror_usage_point(self, url: str, mirror_usage_point: MirrorUsagePoint):
+    def create_mirror_usage_point(self, mirror_usage_point: MirrorUsagePoint) -> Tuple[int, str]:
         data = dataclass_to_xml(mirror_usage_point)
-        resp = self.__post__(url, data=data)
+        resp = self.__post__(self._device_cap.MirrorUsagePointListLink.href, data=data)
         return resp.status, resp.headers['Location']
 
     def __post__(self, url: str, data=None, headers: Optional[Dict[str, str]]=None):
@@ -127,6 +140,9 @@ class IEEE2030_5_Client:
         if headers is None:
             headers = {}
 
+        if self._debug:
+            print(f"----> GET REQUEST")
+            print(f"url: {url} body: {body}")
         self.http_conn.request(method="GET", url=url, body=body, headers=headers)
         response = self._http_conn.getresponse()
         response_data = response.read().decode("utf-8")
@@ -135,10 +151,14 @@ class IEEE2030_5_Client:
         try:
             response_obj = parse_xml(response_data)
             resp_xml = xml.dom.minidom.parseString(response_data)
-            if resp_xml:
+            if resp_xml and self._debug:
+                print(f"<---- GET RESPONSE")
                 print(f"{resp_xml.toprettyxml()}")
 
         except xsdata.exceptions.ParserError as ex:
+            if self._debug:
+                print(f"<---- GET RESPONSE")
+                print(f"{response_data}")
             response_obj = response_data
 
         return response_obj
