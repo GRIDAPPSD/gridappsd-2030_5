@@ -9,6 +9,7 @@ from typing import Dict, Optional, List
 import werkzeug
 from flask import request
 
+from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.models import (
     EndDevice,
     DERProgram,
@@ -17,7 +18,6 @@ from ieee_2030_5.models import (
     DefaultDERControlLink,
     DERControlListLink,
     DERCurveListLink)
-from ieee_2030_5.server import UUIDHandler
 
 _log = logging.getLogger(__name__)
 
