@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Optional, List
 from uuid import uuid4
 
-from ieee_2030_5.server import AlreadyExistsError
+from ieee_2030_5.server.exceptions import AlreadyExistsError
+
+__write_lock__: Lock = Lock()
 
 
 class UUIDHandler:
@@ -18,9 +21,12 @@ class UUIDHandler:
 
     def add_known(self, uuid: str, obj: object):
         assert isinstance(uuid, str) and obj is not None
-        self.bag[uuid] = obj
-        self.bag[id(obj)] = uuid
-        self.uuids.add(uuid)
+
+        with __write_lock__:
+            self.bag[uuid] = obj
+            # TODO: Not sure this is correct for id(obj) to be able to determine equality.
+            self.bag[id(obj)] = uuid
+            self.uuids.add(uuid)
 
     def add(self, obj) -> str:
         """
@@ -32,13 +38,8 @@ class UUIDHandler:
         if obj in self.bag:
             raise AlreadyExistsError(f"obj {obj} already exists in bag")
 
-        new_uuid = str(uuid4())
-        while new_uuid in self.uuids:
-            new_uuid = str(uuid4())
-
-        self.bag[new_uuid] = obj
-        self.bag[id(obj)] = new_uuid
-        self.uuids.add(new_uuid)
+        new_uuid = self.generate()
+        self.add_known(new_uuid, obj)
         return new_uuid
 
     def get_uuid(self, obj) -> Optional[str]:
@@ -65,3 +66,9 @@ class UUIDHandler:
 
     def get_uuids(self) -> List[str]:
         return list(self.uuids.copy())
+
+    def generate(self) -> str:
+        new_uuid = str(uuid4())
+        while new_uuid in self.uuids:
+            new_uuid = str(uuid4())
+        return new_uuid

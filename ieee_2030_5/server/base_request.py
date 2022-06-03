@@ -9,7 +9,6 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.models.end_devices import EndDevices
 
-
 _log = logging.getLogger(__name__)
 
 
@@ -93,3 +92,5 @@ class RequestOp(ServerOperation):
         _log.debug(f"Removing endpoint {endpoint}")
         self._server_endpoint.remove_endpoint(self._endpoint_map[endpoint])
         self._endpoint_map.pop(endpoint)
+
+from ieee_2030_5.server.server_endpoints import ServerEndpoints

@@ -8,11 +8,24 @@ from typing import Dict
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
 
-from ieee_2030_5.models import MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet
+from ieee_2030_5.models import MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet, UsagePointList
 from ieee_2030_5.models.serializer import parse_xml
-from ieee_2030_5.server import RequestOp
+from ieee_2030_5.server.uuid_handler import UUIDHandler
+from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5 import hrefs
 from ieee_2030_5.utils import dataclass_to_xml
+
+__mup_info__: Dict[int, MirrorUsagePointList] = {}
+__utp_info__: Dict[int, UsagePointList] = {}
+__uuid_handler__: UUIDHandler = UUIDHandler()
+
+
+class UTP(RequestOp):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def get(self) -> Response:
+        pass
 
 
 class MUP(RequestOp):

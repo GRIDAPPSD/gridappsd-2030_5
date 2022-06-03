@@ -15,10 +15,11 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import Time
 from ieee_2030_5.models.end_devices import EndDevices
 import ieee_2030_5.hrefs as hrefs
-from ieee_2030_5.server import RequestOp
+from ieee_2030_5.server.base_request import RequestOp
+from ieee_2030_5.server.uuid_handler import UUIDHandler
 
 # module level instance of hrefs class.
-from ieee_2030_5.server.usage_points import MUP
+from ieee_2030_5.server.usage_points import MUP, UTP
 from ieee_2030_5.utils import dataclass_to_xml
 
 
@@ -68,7 +69,8 @@ class EDev(RequestOp):
         # split returns a single value whether or not there was any characters found. if
         # this is the case then we want to return the list of the end devices.
         if len(pth) == 1:
-            retval = ServerList("EndDevice", end_devices=self._end_devices, tls_repo=self._tls_repository).execute()
+            retval = ServerList("EndDevice", end_devices=self._end_devices,
+                                tls_repo=self._tls_repository, server_endpoint=self._server_endpoint).execute()
         else:
             # This should mean we have an index of an end device that we are going to return
             index = int(pth[1])
@@ -115,6 +117,7 @@ class ServerEndpoints:
         self.add_endpoint(hrefs.dcap, view_func=self._dcap)
         self.add_endpoint(hrefs.edev, view_func=self._edev)
         self.add_endpoint(hrefs.mup, view_func=self._mup, methods=['GET', 'POST'])
+        self.add_endpoint(hrefs.uuid_gen, view_func=self._generate_uuid)
         # app.add_url_rule(hrefs.rsps, view_func=None)
         # self.add_endpoint(hrefs.tm, view_func=self._tm)
         #
@@ -168,8 +171,14 @@ class ServerEndpoints:
         else:
             return TimeType(int(calendar.timegm(dt_obj.timetuple())))
 
+    def _generate_uuid(self) -> Response:
+        return Response(UUIDHandler().generate())
+
     def _admin(self) -> Response:
         return Admin(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
+
+    def _upt(self) -> Response:
+        return UTP(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
 
     def _mup(self) -> Response:
         return MUP(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
