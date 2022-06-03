@@ -1,3 +1,4 @@
+import time
 from argparse import ArgumentParser
 import asyncio
 from pathlib import Path
@@ -16,7 +17,7 @@ from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading
 
 
 def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
-
+    print(f"running inverter for {client.hostname}")
     cap = client.request_device_capability(capabilities_url)
     mups = client.request_mirror_usage_point_list(url=cap.MirrorUsagePointListLink.href)
 
@@ -31,10 +32,13 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
         mup = MirrorUsagePoint(description=f"Inverter {client.hostname}",
                                status=1,
                                MirrorMeterReading=mup_readings)
-        client.post_mirror_usage_point(cap.MirrorUsagePointListLink.href,
-                                       mup)
-    for pt in mups.results:
-        print(pt)
+        resp = client.post_mirror_usage_point(cap.MirrorUsagePointListLink.href,
+                                              mup)
+
+        print(resp)
+        status, location = resp
+        resp = client.request(location)
+        print(resp)
 
     # PV module
     sandia_modules = pvlib.pvsystem.retrieve_sam('SandiaMod')
@@ -69,19 +73,19 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
         # single phase circuit calculation
 
 
-def main(clients: List[IEEE2030_5_Client], params: Optional[Dict[int, str]] = None):
-    if not isinstance(clients, list):
-        raise ValueError("clients must be a list")
-
-    if params is None:
-        params = {}
-
-    for index, c in enumerate(clients):
-        if params.get(index):
-            print(f"Got inverter params for index {index} {params.get(index)}")
-        else:
-            print(f"No params for {index}")
-        p_ac, s_ac, PF, v_ac, i_ac = run_inverter(c)
+# def main(clients: List[IEEE2030_5_Client], params: Optional[Dict[int, str]] = None):
+#     if not isinstance(clients, list):
+#         raise ValueError("clients must be a list")
+#
+#     if params is None:
+#         params = {}
+#
+#     for index, c in enumerate(clients):
+#         if params.get(index):
+#             print(f"Got inverter params for index {index} {params.get(index)}")
+#         else:
+#             print(f"No params for {index}")
+#         p_ac, s_ac, PF, v_ac, i_ac = run_inverter(c)
 
 
 if __name__ == '__main__':
@@ -112,19 +116,27 @@ if __name__ == '__main__':
                           hostname=p,
                           server_hostname=opts.server_host,
                           server_ssl_port=opts.server_port)
+    client = list(IEEE2030_5_Client.clients)[0]
+    print(f"Client is {client.hostname}")
+    gen = run_inverter(client)
+    for output in gen:
+        print(output)
 
-    threads: List[Thread] = []
 
-    for index, client in enumerate(IEEE2030_5_Client.clients):
-        th = Thread(target=run_inverter, args=[client, client.device_capability])
-        th.daemon = True
-        th.start()
-
-    while True:
-        alive = False
-        for t in threads:
-            if t.is_alive():
-                alive = True
-                break
-        if alive:
-            break
+    # threads: List[Thread] = []
+    #
+    # for index, client in enumerate(IEEE2030_5_Client.clients):
+    #     th = Thread(target=run_inverter, args=(client,))
+    #     threads.append(th)
+    #     th.daemon = True
+    #     th.start()
+    #
+    # while True:
+    #     alive = False
+    #     for t in threads:
+    #         if t.is_alive():
+    #             alive = True
+    #             break
+    #     if alive:
+    #         break
+    #     time.sleep(1)
