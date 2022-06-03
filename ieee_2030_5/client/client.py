@@ -5,12 +5,13 @@ from os import PathLike
 from pathlib import Path
 import ssl
 import atexit
-from typing import Optional
+from typing import Optional, Dict
 import xml.dom.minidom
 
 import xsdata
 
-from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint
+from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint, \
+    UsagePointList
 
 #from IEEE2030_5.xsd_models import DeviceCapability
 #from IEEE2030_5.end_device import IEEE2030_5Parser
@@ -48,6 +49,7 @@ class IEEE2030_5_Client:
                                           context=self._ssl_context)
         self._device_cap: Optional[DeviceCapability] = None
         self._mup: Optional[MirrorUsagePointList] = None
+        self._upt: Optional[UsagePointList] = None
 
         self._hostname = hostname
         IEEE2030_5_Client.clients.add(self)
@@ -76,6 +78,10 @@ class IEEE2030_5_Client:
         self._mup = self.__get_request__(url)
         return self._mup
 
+    def request_usage_point_list(self, url: str = "/upt") -> UsagePointList:
+        self._upt = self.__get_request__(url)
+        return self._upt
+
     def request_edev_list(self,
                           length: int = 1,
                           start: Optional[int] = None,
@@ -91,25 +97,37 @@ class IEEE2030_5_Client:
             raise ValueError("Request device capability first")
         return self.__get_request__(url=self._device_cap.TimeLink.href)
 
-    def request(self, endpoint: str, body: dict = None, method: str = "GET"):
+    def request(self, endpoint: str, body: dict = None, method: str = "GET",
+                headers: dict = None):
+
         if method.upper() == 'GET':
-            return self.__get_request__(endpoint, body)
+            return self.__get_request__(endpoint, body, headers=headers)
 
         if method.upper() == 'POST':
-            return self.__post__(endpoint, body)
+            print("Doing post")
+            return self.__post__(endpoint, body, headers=headers)
 
     def post_mirror_usage_point(self, url: str, mirror_usage_point: MirrorUsagePoint):
-        return self.__post__(url, body=dataclass_to_xml(mirror_usage_point))
+        data = dataclass_to_xml(mirror_usage_point)
+        resp = self.__post__(url, data=data)
+        return resp.status, resp.headers['Location']
 
-    def __post__(self, url: str, body=None):
-        self.http_conn.request(method="POST", url=url, body=body)
+    def __post__(self, url: str, data=None, headers: Optional[Dict[str, str]]=None):
+        if not headers:
+            headers = {'Content-Type': 'text/xml'}
+
+        self.http_conn.request(method="POST", headers=headers,
+                               url=url, body=data)
         response = self._http_conn.getresponse()
-        response_data = response.read().decode("utf-8")
+        # response_data = response.read().decode("utf-8")
 
-        return response.status
+        return response
 
-    def __get_request__(self, url: str, body=None):
-        self.http_conn.request(method="GET", url=url, body=body)
+    def __get_request__(self, url: str, body=None, headers: dict = None):
+        if headers is None:
+            headers = {}
+
+        self.http_conn.request(method="GET", url=url, body=body, headers=headers)
         response = self._http_conn.getresponse()
         response_data = response.read().decode("utf-8")
 
@@ -121,7 +139,7 @@ class IEEE2030_5_Client:
                 print(f"{resp_xml.toprettyxml()}")
 
         except xsdata.exceptions.ParserError as ex:
-            print(f"Invalid data returned.  Not able to parse xml for:\n{response_data} ")
+            response_obj = response_data
 
         return response_obj
 

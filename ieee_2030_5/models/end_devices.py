@@ -1,25 +1,26 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
-from time import mktime
 from typing import Dict, Optional
 
-from . import (EndDevice, Registration, RegistrationLink, DeviceInformationLink,
-               DeviceStatusLink, PowerStatusLink, SubscriptionListLink, ConfigurationLink,
-               FileStatusLink, EndDeviceList, DeviceCategoryType, DeviceCapability, EndDeviceListLink, SelfDeviceLink,
-               MirrorUsagePointListLink, DERListLink, FunctionSetAssignmentsListLink, LogEventListLink,
-               UsagePointListLink, TimeLink)
-from .hrefs import EndpointHrefs
+from ieee_2030_5.models.device_category import DeviceCategoryType
+from ieee_2030_5.models.sep import (EndDevice, Registration, RegistrationLink, DeviceInformationLink,
+                                    DeviceStatusLink, PowerStatusLink, SubscriptionListLink, ConfigurationLink,
+                                    FileStatusLink, EndDeviceList, DeviceCapability, EndDeviceListLink,
+                                    SelfDeviceLink,
+                                    MirrorUsagePointListLink, DERListLink, FunctionSetAssignmentsListLink,
+                                    LogEventListLink,
+                                    UsagePointListLink, TimeLink)
 
 Lfid = int
-
-hrefs = EndpointHrefs()
 
 
 @dataclass
 class EndDeviceIndexer:
     index: int
     end_device: EndDevice
-    #registration: Registration
+    # registration: Registration
     # device_information: DeviceInformation
 
 
@@ -86,7 +87,7 @@ class EndDevices:
         sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
             index=new_dev_number))
         l_fid_bytes = str(l_fid).encode('utf-8')
-        base_edev_single = hrefs    .extend_url(hrefs.edev, new_dev_number)
+        base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
         der_list_link = DERListLink(href=hrefs.extend_url(base_edev_single, suffix="der"))
         fsa_list_link = FunctionSetAssignmentsListLink(href=hrefs.extend_url(base_edev_single, suffix="fsa"))
         log_event_list_link = LogEventListLink(href=hrefs.extend_url(base_edev_single, suffix="log"))
@@ -130,3 +131,5 @@ class EndDevices:
         # TODO Handle start, length list things.
         dl = EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices), href=hrefs.edev, pollRate=900)
         return dl
+
+import ieee_2030_5.hrefs as hrefs

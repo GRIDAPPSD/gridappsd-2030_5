@@ -1,8 +1,6 @@
 import inspect
 from dataclasses import dataclass
-from typing import Any, Tuple, Dict, List, Literal, Union
-
-from pydantic import BaseSettings, Field, Extra, BaseModel
+from typing import List, Literal, Union
 
 __all__ = ["ServerConfiguration"]
 

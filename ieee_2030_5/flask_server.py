@@ -12,11 +12,8 @@ __all__ = ["run_server"]
 from ieee_2030_5 import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models.end_devices import EndDevices
-from ieee_2030_5.models.hrefs import EndpointHrefs
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups
-
-hrefs = EndpointHrefs()
 
 
 class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):

@@ -5,25 +5,24 @@ import json
 import time
 from datetime import datetime, timedelta
 import logging
-from typing import Dict, Callable
+from typing import Callable
 
 import pytz
 from flask import Flask, Response, request
-from werkzeug.exceptions import BadRequest, Forbidden
+from werkzeug.exceptions import Forbidden
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import Time, MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet
+from ieee_2030_5.models import Time
 from ieee_2030_5.models.end_devices import EndDevices
-from ieee_2030_5.models.hrefs import EndpointHrefs
-from ieee_2030_5.models.serializer import serialize_xml, parse_xml
+import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.server import RequestOp
 
 # module level instance of hrefs class.
+from ieee_2030_5.server.usage_points import MUP
 from ieee_2030_5.utils import dataclass_to_xml
 
 
 _log = logging.getLogger(__name__)
-hrefs = EndpointHrefs()
 
 
 class Admin(RequestOp):
@@ -82,61 +81,6 @@ class EDev(RequestOp):
         # return dataclass_to_xml(self._end_devices.get())
 
 
-class MUP(RequestOp):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Load from repository or data storage after passed data?
-        self.__mup_info__: Dict[int, MirrorUsagePointList] = {}
-        self.__mup_point_readings__: Dict[str, str | int] = {}
-        self._last_added = 0
-
-    def get(self) -> Response:
-        pth_info = request.environ['PATH_INFO']
-
-        if not pth_info.startswith(hrefs.mup):
-            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
-
-        pths = request.path[len(hrefs.mup.strip()):].split("/")
-        an_mup_list = self.__mup_info__.get(self.device_id)
-
-        if not an_mup_list:
-            an_mup_list = MirrorUsagePointList(href=pth_info)
-            self.__mup_info__[self.device_id] = an_mup_list
-            self._last_added += 1
-
-        retval = an_mup_list
-
-        if len(pths) == 2:
-            retval = an_mup_list.results[pths[1]]
-        return dataclass_to_xml(retval)
-
-    def post(self):
-        xml = request.data.decode('utf-8')
-        data = parse_xml(request.data.decode('utf-8'))
-        data_type = type(data)
-        if data_type not in (MirrorUsagePoint, MirrorReadingSet):
-            raise BadRequest()
-
-        pth_info = request.path
-        pths = pth_info.split("/")
-        if len(pths) == 1 and data_type is not MirrorUsagePoint:
-            # Check to make sure not a new mrid
-            raise BadRequest("Must post MirrorUsagePoint to top level only")
-
-        # Creating a new mup
-        self._last_added += 1
-        self.__mup_info__[self._last_added] = data
-
-
-        return Response(headers={'Location': f'/mup/{self._last_added}'},
-                        status='201 Created')
-
-
-
-
-
-
 class ServerList(RequestOp):
     def __init__(self, list_type: str, **kwargs):
         super().__init__(**kwargs)
@@ -156,7 +100,6 @@ class ServerList(RequestOp):
 class ServerEndpoints:
 
     def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository):
-        self.hrefs = EndpointHrefs()
         self.end_devices = end_devices
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
@@ -165,18 +108,19 @@ class ServerEndpoints:
         # internally flask uses the name of the view_func for the removal.
         # self.remove_endpoint(self._admin.__name__)
 
-        self.add_endpoint(self.hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
-        # app.add_url_rule(self.hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
+        self.add_endpoint(hrefs.admin,
+                          view_func=self._admin, methods=['GET', 'POST'])
+        # app.add_url_rule(hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
 
-        self.add_endpoint(self.hrefs.dcap, view_func=self._dcap)
-        self.add_endpoint(self.hrefs.edev, view_func=self._edev)
-        self.add_endpoint(self.hrefs.mup, view_func=self._mup, methods=['GET', 'POST'])
-        # app.add_url_rule(self.hrefs.rsps, view_func=None)
-        self.add_endpoint(self.hrefs.tm, view_func=self._tm)
-
-        for index, ed in end_devices.all_end_devices.items():
-            self.add_endpoint(self.hrefs.edev + f"/{index}", view_func=self._edev)
-            self.add_endpoint(self.hrefs.mup + f"/{index}", view_func=self._mup)
+        self.add_endpoint(hrefs.dcap, view_func=self._dcap)
+        self.add_endpoint(hrefs.edev, view_func=self._edev)
+        self.add_endpoint(hrefs.mup, view_func=self._mup, methods=['GET', 'POST'])
+        # app.add_url_rule(hrefs.rsps, view_func=None)
+        # self.add_endpoint(hrefs.tm, view_func=self._tm)
+        #
+        # for index, ed in end_devices.all_end_devices.items():
+        #     self.add_endpoint(hrefs.edev + f"/{index}", view_func=self._edev)
+        #     self.add_endpoint(hrefs.mup + f"/{index}", view_func=self._mup)
 
     def add_endpoint(self, endpoint: str, view_func: Callable, **kwargs):
         """
@@ -225,16 +169,16 @@ class ServerEndpoints:
             return TimeType(int(calendar.timegm(dt_obj.timetuple())))
 
     def _admin(self) -> Response:
-        return Admin(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
+        return Admin(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
 
     def _mup(self) -> Response:
-        return MUP(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
+        return MUP(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
 
     def _dcap(self) -> Response:
-        return Dcap(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
+        return Dcap(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
 
     def _edev(self) -> Response:
-        return EDev(end_devices=self.end_devices, tls_repo=self.tls_repo).execute()
+        return EDev(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
 
         # self.__required_cert__()
         #
