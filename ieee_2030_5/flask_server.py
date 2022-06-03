@@ -44,8 +44,8 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
 
         # Assume browser is being hit with things that start with /admin allow
         # a pass through from web (should be protected via auth but not right now)
-        if environ['PATH_INFO'].startswith("/admin"):
-            return environ
+        # if environ['PATH_INFO'].startswith("/admin"):
+        #     return environ
 
         try:
             x509_binary = self.connection.getpeercert(True)
@@ -61,9 +61,34 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
         return environ
 
 
+# based on
+# https://stackoverflow.com/questions/19459236/how-to-handle-413-request-entity-too-large-in-python-flask-server#:~:text=server%20MAY%20close%20the%20connection,client%20from%20continuing%20the%20request.&text=time%20the%20client%20MAY%20try,you%20the%20Broken%20pipe%20error.&text=Great%20than%20the%20application%20is%20acting%20correct.
+def handle_chunking():
+    """
+    Sets the "wsgi.input_terminated" environment flag, thus enabling
+    Werkzeug to pass chunked requests as streams.  The gunicorn server
+    should set this, but it's not yet been implemented.
+    """
+
+    transfer_encoding = request.headers.get("Transfer-Encoding", None)
+    if transfer_encoding == u"chunked":
+        request.environ["wsgi.input_terminated"] = True
+
+
+def before_request():
+    if True:
+        print("HEADERS", request.headers)
+        print("REQ_path", request.path)
+        print("ARGS", request.args)
+        print("DATA", request.get_data())
+        print("FORM", request.form)
+
+
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
     app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
+    app.before_request(before_request)
+    app.before_request(handle_chunking)
 
     # to establish an SSL socket we need the private key and certificate that
     # we want to serve to users.

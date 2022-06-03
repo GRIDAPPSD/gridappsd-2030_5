@@ -63,6 +63,8 @@ class EndpointHrefs:
     edev_file_status_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/fs"
     edev_sub_list_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/subl"
 
+    admin: str = "/admin"
+
     @staticmethod
     def extend_url(base_url: str, index: Optional[int] = None, suffix: Optional[str] = None):
         result = base_url

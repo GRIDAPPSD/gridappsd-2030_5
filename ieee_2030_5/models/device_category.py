@@ -37,6 +37,7 @@ class DeviceCategoryType(IntEnum):
 
     # Additional here for Aggregator
     AGGREGATOR = 99
+    OTHER_CLIENT = 100
 
 
 #     0 - Programmable Communicating Thermostat
