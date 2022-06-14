@@ -5,21 +5,26 @@ import json
 import time
 from datetime import datetime, timedelta
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 import pytz
+import tzlocal
 from flask import Flask, Response, request
 from werkzeug.exceptions import Forbidden
 
+from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import Time
 from ieee_2030_5.models.end_devices import EndDevices
 import ieee_2030_5.hrefs as hrefs
+from ieee_2030_5.server.edev import EDev
+from ieee_2030_5.server.exceptions import AlreadyExistsError
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 
 # module level instance of hrefs class.
 from ieee_2030_5.server.usage_points import MUP, UTP
+from ieee_2030_5.types import TimeType, TimeOffsetType, format_time
 from ieee_2030_5.utils import dataclass_to_xml
 
 
@@ -44,43 +49,39 @@ class Dcap(RequestOp):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        return dataclass_to_xml(self._end_devices.get_device_capability(self.lfid))
+        return Response(dataclass_to_xml(self._end_devices.get_device_capability(self.lfid)))
 
 
-class EDev(RequestOp):
+class TimeRequest(RequestOp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        """
-        Supports the get request for end_devices(EDev) and end_device_list_link.
+        # TODO fix for new stuff.
+        # local_tz = datetime.now().astimezone().tzinfo
+        # now_local = datetime.now().replace(tzinfo=local_tz)
 
-        Paths:
-            /edev
-            /edev/0
-            /edev/0/di
-        """
-        pth = request.environ['PATH_INFO']
+        now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
+        # now_utc = pytz.utc.localize(datetime.utcnow())
+        local_tz = pytz.timezone(tzlocal.get_localzone().zone)
+        now_local = datetime.now().replace(tzinfo=local_tz)
 
-        if not pth.startswith(hrefs.edev):
-            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
+        start_dst_utc, end_dst_utc = [
+            dt for dt in local_tz._utc_transition_times if dt.year == now_local.year
+        ]
 
-        pth = request.path[len(hrefs.edev.strip()):].split("/")
-        # split returns a single value whether or not there was any characters found. if
-        # this is the case then we want to return the list of the end devices.
-        if len(pth) == 1:
-            retval = ServerList("EndDevice", end_devices=self._end_devices,
-                                tls_repo=self._tls_repository, server_endpoints=self._server_endpoints).execute()
-        else:
-            # This should mean we have an index of an end device that we are going to return
-            index = int(pth[1])
-            if len(pth) == 2:
-                retval = dataclass_to_xml(self._end_devices.get(index))
-            else:
-                sub_info = pth[3]
+        utc_offset = local_tz.utcoffset(start_dst_utc - timedelta(days=1))
+        dst_offset = local_tz.utcoffset(start_dst_utc + timedelta(days=1)) - utc_offset
+        local_but_utc = datetime.now().replace(tzinfo=pytz.utc)
 
-        return retval
-        # return dataclass_to_xml(self._end_devices.get())
+        tm = Time(currentTime=format_time(now_utc),
+                  dstEndTime=format_time(end_dst_utc.replace(tzinfo=pytz.utc)),
+                  dstOffset=TimeOffsetType(int(dst_offset.total_seconds())),
+                  localTime=format_time(local_but_utc),
+                  quality=None,
+                  tzOffset=TimeOffsetType(utc_offset.total_seconds()))
+
+        return Response(dataclass_to_xml(tm))
 
 
 class ServerList(RequestOp):
@@ -101,8 +102,9 @@ class ServerList(RequestOp):
 
 class ServerEndpoints:
 
-    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository):
+    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration):
         self.end_devices = end_devices
+        self.config = config
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
         self.app: Flask = app
@@ -110,14 +112,42 @@ class ServerEndpoints:
         # internally flask uses the name of the view_func for the removal.
         # self.remove_endpoint(self._admin.__name__)
 
-        self.add_endpoint(hrefs.admin,
-                          view_func=self._admin, methods=['GET', 'POST'])
+        # self.add_endpoint(hrefs.admin,
+        #                   view_func=self._admin, methods=['GET', 'POST'])
         # app.add_url_rule(hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
 
-        self.add_endpoint(hrefs.dcap, view_func=self._dcap)
-        self.add_endpoint(hrefs.edev, view_func=self._edev)
-        self.add_endpoint(hrefs.mup, view_func=self._mup, methods=['GET', 'POST'])
-        self.add_endpoint(hrefs.uuid_gen, view_func=self._generate_uuid)
+        _log.debug(f"Adding rule: {hrefs.uuid_gen} methods: {['GET']}")
+        app.add_url_rule(hrefs.uuid_gen, view_func=self._generate_uuid)
+        _log.debug(f"Adding rule: {hrefs.dcap} methods: {['GET']}")
+        app.add_url_rule(hrefs.dcap, view_func=self._dcap)
+        _log.debug(f"Adding rule: {hrefs.tm} methods: {['GET']}")
+        app.add_url_rule(hrefs.tm, view_func=self._tm)
+
+        rulers = (
+            (hrefs.edev_urls, self._edev),
+            (hrefs.mup_urls, self._mup)
+        )
+
+        for endpoints, view_func in rulers:
+            # Item should either be a single rule or a rule with a second element having the methods
+            # in it.
+            # edev = [
+            #   /edev,
+            #   (f"/edev/<int: index>", ["GET", "POST"])
+            # ]
+            for item in endpoints:
+                try:
+                    rule, methods = item
+                except ValueError:
+                    rule = item
+                    methods = ["GET"]
+                _log.debug(f"Adding rule: {rule} methods: {methods}")
+                app.add_url_rule(rule, view_func=view_func, methods=methods)
+        #
+        # self.add_endpoint(hrefs.dcap, view_func=self._dcap)
+        # self.add_endpoint(hrefs.edev, view_func=self._edev)
+        # self.add_endpoint(hrefs.mup, view_func=self._mup, methods=['GET', 'POST'])
+        # self.add_endpoint(hrefs.uuid_gen, view_func=self._generate_uuid)
         # app.add_url_rule(hrefs.rsps, view_func=None)
         # self.add_endpoint(hrefs.tm, view_func=self._tm)
         #
@@ -125,94 +155,23 @@ class ServerEndpoints:
         #     self.add_endpoint(hrefs.edev + f"/{index}", view_func=self._edev)
         #     self.add_endpoint(hrefs.mup + f"/{index}", view_func=self._mup)
 
-    def add_endpoint(self, endpoint: str, view_func: Callable, **kwargs):
-        """
-        Dynamically add an endpoint to the flask application.  If the endpoint already exists
-        then it will be overwritten.
-        """
-        self.app.add_url_rule(endpoint, view_func=view_func, **kwargs)
-
-    def remove_endpoint(self, endpoint: str):
-        """
-        Remove an endpoint from the flask application.  The endpoint is the name of the view function
-        not the actual endpoint.  So when registering:
-
-        obj.add_endpoint('/foo', view_func=self._foo_method)
-
-        The actual endpoint stored is the name of the function '_foo_method'.  To dynamically remove it
-        call
-
-        obj.remove_endpoint('_foo_method')
-        """
-        self.app.view_functions.pop(endpoint)
-
-    @staticmethod
-    def __format_time__(dt_obj: datetime, is_local: bool = False) -> TimeType:
-        """ Return a proper IEEE2030_5 TimeType object for the dt_obj passed in.
-                From IEEE 2030.5 spec:
-                    TimeType Object (Int64)
-                        Time is a signed 64 bit value representing the number of seconds
-                        since 0 hours, 0 minutes, 0 seconds, on the 1st of January, 1970,
-                        in UTC, not counting leap seconds.
-            :param dt_obj: Datetime object to convert to IEEE2030_5 TimeType object.
-            :param local: dt_obj is in UTC or Local time. Default to UTC time.
-            :return: Time XSD object
-            :raises: If utc_dt_obj is not UTC
-        """
-
-        if dt_obj.tzinfo is None:
-            raise Exception("IEEE 2030.5 times should be timezone aware UTC or local")
-
-        if dt_obj.utcoffset() != timedelta(0) and not is_local:
-            raise Exception("IEEE 2030.5 TimeType should be based on UTC")
-
-        if is_local:
-            return TimeType(int(time.mktime(dt_obj.timetuple())))
-        else:
-            return TimeType(int(calendar.timegm(dt_obj.timetuple())))
-
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
 
     def _admin(self) -> Response:
-        return Admin(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
+        return Admin(server_endpoints=self).execute()
 
-    def _upt(self) -> Response:
-        return UTP(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
+    def _upt(self, index: Optional[int] = None) -> Response:
+        return UTP(server_endpoints=self).execute(index=index)
 
-    def _mup(self) -> Response:
-        return MUP(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
+    def _mup(self, index: Optional[int] = None) -> Response:
+        return MUP(server_endpoints=self).execute(index=index)
 
     def _dcap(self) -> Response:
-        return Dcap(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
+        return Dcap(server_endpoints=self).execute()
 
-    def _edev(self) -> Response:
-        return EDev(end_devices=self.end_devices, tls_repo=self.tls_repo, server_endpoints=self).execute()
-
-        # self.__required_cert__()
-        #
-        # # Based upon the connecting client we need to filter usages
-        # lfid = self.__request_lfid__()
-        # return self.__response__(self.end_devices.get_device_capability(lfid))
+    def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
+        return EDev(server_endpoints=self).execute(index=index, category=category)
 
     def _tm(self) -> Response:
-        now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
-        local_tz = datetime.now().astimezone().tzinfo
-        now_local = datetime.now().replace(tzinfo=local_tz)
-
-        start_dst_utc, end_dst_utc = [
-            dt for dt in local_tz._utc_transition_times if dt.year == now_local.year
-        ]
-
-        utc_offset = local_tz.utcoffset(start_dst_utc - timedelta(days=1))
-        dst_offset = local_tz.utcoffset(start_dst_utc + timedelta(days=1)) - utc_offset
-        local_but_utc = datetime.now().replace(tzinfo=pytz.utc)
-
-        tm = Time(current_time=self.__format_time__(now_utc),
-                  dst_end_time=self.__format_time__(end_dst_utc.replace(tzinfo=pytz.utc)),
-                  dst_offset=TimeOffsetType(int(dst_offset.total_seconds())),
-                  local_time=self.__format_time__(local_but_utc),
-                  quality=None,
-                  tz_offset=TimeOffsetType(utc_offset.total_seconds()))
-
-        return self.__response__(tm)
+        return TimeRequest(server_endpoints=self).execute()

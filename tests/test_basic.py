@@ -36,7 +36,7 @@ def test_basic_002(server_startup):
 
     dev0_config = server_cfg.devices[0]
     client = get_2030_5_client(tls_repo, server_cfg, dev0_config.id)
-    dcap = client.request_device_capability()
+    dcap = client.device_capability()
     print(dcap)
 
 

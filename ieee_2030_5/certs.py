@@ -5,12 +5,11 @@ from typing import List
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from ieee_2030_5 import PathStr
 from ieee_2030_5.execute import execute_command
 
 __all__ = ['TLSRepository']
 
-from ieee_2030_5.models.end_devices import Lfid
+from ieee_2030_5.types import PathStr, Lfid
 
 _log = logging.getLogger(__name__)
 
@@ -101,12 +100,12 @@ class TLSRepository:
 
         self._hostnames[hostname] = hostname
 
-    def lfdi(self, hostname: str) -> Lfid:
-        fp = self.fingerprint(hostname, True)
+    def lfdi(self, device_id: str) -> Lfid:
+        fp = self.fingerprint(device_id, True)
         return Lfid(int(fp[:16], 16))
 
-    def sfdi(self, hostname: str):
-        lfdi_: int = self.lfdi(hostname)
+    def sfdi(self, device_id: str):
+        lfdi_: int = self.lfdi(device_id)
         bit_left_truncation_len = 36
         # truncate the lFDI
         sfdi_no_sod_checksum = lfdi_ >> (lfdi_.bit_length() - bit_left_truncation_len)
@@ -115,16 +114,16 @@ class TLSRepository:
         # right concatenate the checksum digit and return
         return str(sfdi_no_sod_checksum) + str(sod_checksum)
 
-    def fingerprint(self, hostname: str, without_colan: bool = True) -> str:
-        value = __openssl_fingerprint__(self.__get_cert_file__(hostname))
+    def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
+        value = __openssl_fingerprint__(self.__get_cert_file__(device_id))
         if without_colan:
             value = value.replace(":", "")
         if "=" in value:
             value = value.split("=")[1]
         return value
 
-    def get_common_name(self, hostname: str) -> x509:
-        pem_data = Path(self.__get_cert_file__(hostname)).read_bytes()
+    def get_common_name(self, device_id: str) -> x509:
+        pem_data = Path(self.__get_cert_file__(device_id)).read_bytes()
         cert = x509.load_pem_x509_certificate(pem_data, default_backend())
         return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
 

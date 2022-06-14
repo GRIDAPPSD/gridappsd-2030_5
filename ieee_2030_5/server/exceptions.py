@@ -4,3 +4,7 @@ class AlreadyExistsError(Exception):
     into a collection where replacement is not allowed.
     """
     pass
+
+
+class NotFoundError(Exception):
+    pass

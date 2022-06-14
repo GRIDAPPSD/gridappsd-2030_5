@@ -9,9 +9,10 @@ __all__ = ["run_server"]
 
 # templates = Jinja2Templates(directory="templates")
 # from IEEE2030_5.endpoints import dcap, IEEE2030_5Renderer
-from ieee_2030_5 import ServerConfiguration
+from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models.end_devices import EndDevices
+from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups
 
@@ -41,8 +42,8 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
 
         # Assume browser is being hit with things that start with /admin allow
         # a pass through from web (should be protected via auth but not right now)
-        # if environ['PATH_INFO'].startswith("/admin"):
-        #     return environ
+        if environ['PATH_INFO'].startswith("/admin"):
+            return environ
 
         try:
             x509_binary = self.connection.getpeercert(True)
@@ -84,7 +85,9 @@ def before_request():
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
     app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
+    # Debug headers path and request arguments
     app.before_request(before_request)
+    # Allows for larger data to be sent through because of chunking types.
     app.before_request(handle_chunking)
 
     # to establish an SSL socket we need the private key and certificate that
@@ -114,7 +117,8 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     # TODO if required we have to have one all the time on the server.
     ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
 
-    ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo)
+    ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
+    AdminEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
 
     # now we get into the regular Flask details, except we're passing in the peer certificate
     # as a variable to the template.
@@ -153,13 +157,13 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
         return Response(f"{routes}")
     # @app.route("/admin" + hrefs.dcap)
     # def admin_dcap():
-    #     return Response(serialize_xml(enddevices.get_end_device_list(0, enddevices.num_devices)),
+    #     return Response(serialize_dataclass(enddevices.get_end_device_list(0, enddevices.num_devices)),
     #                     mimetype="text/xml")
     #
     #
     # @app.route(hrefs.dcap)
     # def dcap():
-    #     return Response(serialize_xml(enddevices.get_end_device_list(0, enddevices.num_devices))
+    #     return Response(serialize_dataclass(enddevices.get_end_device_list(0, enddevices.num_devices))
     #
     # @app.route("/dcap", methods=['GET'])
     # def route_dcap():

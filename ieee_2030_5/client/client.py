@@ -11,12 +11,9 @@ import xml.dom.minidom
 import xsdata
 
 from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint, \
-    UsagePointList, EndDevice
+    UsagePointList, EndDevice, Registration
 
-#from IEEE2030_5.xsd_models import DeviceCapability
-#from IEEE2030_5.end_device import IEEE2030_5Parser
-from ieee_2030_5.models.serializer import parse_xml
-from ieee_2030_5.utils import dataclass_to_xml
+from ieee_2030_5.utils import dataclass_to_xml, parse_xml
 
 
 class IEEE2030_5_Client:
@@ -59,12 +56,6 @@ class IEEE2030_5_Client:
         IEEE2030_5_Client.clients.add(self)
 
     @property
-    def device_capability(self) -> DeviceCapability:
-        if self._device_cap is None:
-            self.request_device_capability()
-        return self._device_cap
-
-    @property
     def hostname(self) -> str:
         return self._hostname
 
@@ -74,38 +65,37 @@ class IEEE2030_5_Client:
             self._http_conn.connect()
         return self._http_conn
 
-    def request_new_uuid(self, url: str = "/uuid") -> str:
+    def new_uuid(self, url: str = "/uuid") -> str:
         res = self.__get_request__(url)
         return res
 
-    def request_end_devices(self) -> EndDeviceListLink:
+    def end_devices(self) -> EndDeviceListLink:
         self._end_devices = self.__get_request__(self._device_cap.EndDeviceListLink.href)
         return self._end_devices
 
-    def request_end_device(self, index: int = 0) -> EndDevice:
+    def end_device(self, index: int = 0) -> EndDevice:
         if not self._end_devices:
-            self.request_end_devices()
+            self.end_devices()
 
         return self._end_devices.EndDevice[index]
 
-    def request_device_capability(self, url: str = "/dcap") -> DeviceCapability:
+    def device_capability(self, url: str = "/dcap") -> DeviceCapability:
         self._device_cap = self.__get_request__(url)
         return self._device_cap
 
-    def request_mirror_usage_point_list(self) -> MirrorUsagePointList:
+    def mirror_usage_point_list(self) -> MirrorUsagePointList:
         self._mup = self.__get_request__(self._device_cap.MirrorUsagePointListLink.href)
         return self._mup
 
-    def request_usage_point_list(self) -> UsagePointList:
+    def usage_point_list(self) -> UsagePointList:
         self._upt = self.__get_request__(self._device_cap.UsagePointListLink.href)
         return self._upt
 
-    def request_edev(self, index:int = 0):
-        if self._edev is None:
-            self.request_end_devices()
-        #edev = self.__get_request__(self._edev)
+    def registration(self, end_device: EndDevice) -> Registration:
+        reg = self.__get_request__(end_device.RegistrationLink.href)
+        return reg
 
-    def request_timelink(self):
+    def timelink(self):
         if self._device_cap is None:
             raise ValueError("Request device capability first")
         return self.__get_request__(url=self._device_cap.TimeLink.href)
@@ -204,7 +194,7 @@ if __name__ == '__main__':
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
 
-    dcap = h.request_device_capability()
+    dcap = h.device_capability()
     # get device list
     dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice
 
@@ -216,5 +206,5 @@ if __name__ == '__main__':
     # print(h.request("/dcap", method="post"))
 
 
-    # tl = h.request_timelink()
+    # tl = h.timelink()
     #print(IEEE2030_5_Client.clients)

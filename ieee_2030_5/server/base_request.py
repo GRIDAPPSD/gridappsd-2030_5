@@ -6,8 +6,10 @@ import werkzeug
 from flask import request
 
 from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
-from ieee_2030_5.models.end_devices import EndDevices
+# from ieee_2030_5.server.server_endpoints import ServerEndpoints
+# from ieee_2030_5.server.server_endpoints import ServerEndpoints
 
 _log = logging.getLogger(__name__)
 
@@ -18,45 +20,49 @@ class ServerOperation:
         if 'ieee_2030_5_peercert' not in request.environ:
             raise werkzeug.exceptions.Forbidden()
 
-    def head(self):
+    def head(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
 
-    def get(self):
+    def get(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
 
-    def post(self):
+    def post(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
 
-    def delete(self):
+    def delete(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
 
-    def put(self):
+    def put(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
 
-    def execute(self):
+    def execute(self, **kwargs):
         methods = {
             'GET': self.get,
             'POST': self.post,
             'DELETE': self.delete,
             'PUT': self.put
         }
-        _log.debug(f"Request method is {request.environ['REQUEST_METHOD']}")
         fn = methods.get(request.environ['REQUEST_METHOD'])
         if not fn:
             raise werkzeug.exceptions.MethodNotAllowed()
 
-        return fn()
+        return fn(**kwargs)
 
 
 class RequestOp(ServerOperation):
-    def __init__(self, end_devices: EndDevices, tls_repo: TLSRepository, server_endpoints: ServerEndpoints):
+    def __init__(self, server_endpoints: ServerEndpoints):
         super().__init__()
-        self._end_devices = end_devices
-        self._tls_repository = tls_repo
+        self._end_devices = server_endpoints.end_devices
+        self._tls_repository = server_endpoints.tls_repo
         self._server_endpoints = server_endpoints
-        # required so we don't have to maintain a duplicate list for removing endpoints from flask,
-        # this will make the server easier to use
-        self._endpoint_map: Dict[str, str] = {}
+
+    @property
+    def tls_repo(self) -> TLSRepository:
+        return self._tls_repository
+
+    @property
+    def server_config(self) -> ServerConfiguration:
+        return self._server_endpoints.config
 
     @property
     def lfid(self):
@@ -70,27 +76,3 @@ class RequestOp(ServerOperation):
     def is_admin_client(self) -> bool:
         ed = self._end_devices.get_device_by_lfid(self.lfid)
         return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
-
-    def add_endpoint(self, endpoint: str, view_func: Callable, post: bool = False,
-                     get: bool = True, put: bool = False, delete: bool = False):
-        _log.debug(f"Adding endpoint {endpoint}, function {view_func.__name__}")
-        self._endpoint_map[endpoint] = view_func.__name__
-        methods = []
-        if get:
-            methods.append("GET")
-        if post:
-            methods.append("POST")
-        if delete:
-            methods.append("DELETE")
-        if put:
-            methods.append("PUT")
-
-        # TODO: What happens if no methods specified?
-        self._server_endpoints.add_endpoint(endpoint, view_func, methods=methods)
-
-    def remove_endpoint(self, endpoint: str):
-        _log.debug(f"Removing endpoint {endpoint}")
-        self._server_endpoints.remove_endpoint(self._endpoint_map[endpoint])
-        self._endpoint_map.pop(endpoint)
-
-from ieee_2030_5.server.server_endpoints import ServerEndpoints

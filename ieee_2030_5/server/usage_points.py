@@ -3,17 +3,16 @@ This module handles MirrorUsagePoint and UsagePoint constructs for a server.
 """
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
 
 from ieee_2030_5.models import MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet, UsagePointList
-from ieee_2030_5.models.serializer import parse_xml
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5 import hrefs
-from ieee_2030_5.utils import dataclass_to_xml
+from ieee_2030_5.utils import dataclass_to_xml, parse_xml
 
 __mup_info__: Dict[int, MirrorUsagePointList] = {}
 __mup_point_readings__: Dict[str, str | int] = {}
@@ -36,7 +35,7 @@ class MUP(RequestOp):
         super().__init__(**kwargs)
         self._last_added = 0
 
-    def get(self) -> Response:
+    def get(self, index: Optional[int] = None) -> Response:
         pth_info = request.environ['PATH_INFO']
 
         if not pth_info.startswith(hrefs.mup):
@@ -56,7 +55,7 @@ class MUP(RequestOp):
             retval = an_mup_list.results[pths[1]]
         return Response(dataclass_to_xml(retval), headers={'Content-Type': 'application/xml'})
 
-    def post(self):
+    def post(self, index: Optional[int] = None) -> Response:
         xml = request.data.decode('utf-8')
         data = parse_xml(request.data.decode('utf-8'))
         data_type = type(data)
@@ -72,7 +71,6 @@ class MUP(RequestOp):
         # Creating a new mup
         self._last_added += 1
         __mup_info__[self._last_added] = data
-        self.add_endpoint(f'/mup/{self._last_added}', self.get)
 
-        return Response(headers={'Location': f'/mup/{self._last_added}'},
+        return Response(headers={'Location': f'{hrefs.mup}/{self._last_added}'},
                         status='201 Created')

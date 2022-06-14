@@ -1,0 +1,32 @@
+devices:
+- bus: '634'
+  device_category_type: PHOTOVOLTAIC_SYSTEM
+  hostname: _def62366-746e-4fcb-b3ee-ebebb90d72d4
+  id: _def62366-746e-4fcb-b3ee-ebebb90d72d4
+  ip: 127.0.0.20
+  ipu: '1.1111111'
+  name: school
+  p: 240000.0
+  phases: ''
+  q: 0.0
+  ratedS: 300000.0
+  ratedU: 480.0
+  resource_id: _15EEE173-CC90-4888-B9B8-43916D56890C
+  pin: 12345
+
+- device_category_type: PHOTOVOLTAIC_SYSTEM
+  hostname: dev1
+  id: dev1
+  ip: 127.0.0.1
+  pin: 12345
+
+- device_category_type: PHOTOVOLTAIC_SYSTEM
+  hostname: dev2
+  id: dev2
+  ip: 127.0.0.2
+  pin: 12345
+
+openssl_cnf: openssl.cnf
+server_hostname: gridappsd_dev_2004
+server_mode: enddevices_create_on_start
+tls_repository: ~/tls

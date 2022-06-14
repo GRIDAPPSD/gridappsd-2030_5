@@ -1,10 +1,17 @@
+from __future__ import annotations
+
 import inspect
 from dataclasses import dataclass
-from typing import List, Literal, Union
+from typing import List, Literal, Union, Optional
+
 
 __all__ = ["ServerConfiguration"]
 
+from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import DeviceCategoryType
+from ieee_2030_5.types import Lfid
+
+from ieee_2030_5.server.exceptions import NotFoundError
 
 
 @dataclass
@@ -13,6 +20,8 @@ class DeviceConfiguration:
     ip: str
     hostname: str
     device_category_type: DeviceCategoryType
+    pin: int
+    poll_rate: int = 900
 
     @classmethod
     def from_dict(cls, env):
@@ -41,6 +50,13 @@ class ServerConfiguration:
         self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
         for d in self.devices:
             d.device_category_type = eval(f"DeviceCategoryType.{d.device_category_type}")
+
+    def get_device_pin(self, lfid: Lfid, tls_repo: TLSRepository) -> int:
+        for d in self.devices:
+            test_lfid = tls_repo.lfdi(d.id)
+            if test_lfid == int(lfid):
+                return d.pin
+        raise NotFoundError(f"The device_id: {lfid} was not found.")
 
     #
     # class Config:

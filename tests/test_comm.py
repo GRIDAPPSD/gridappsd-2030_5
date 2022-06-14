@@ -19,7 +19,7 @@ def client() -> IEEE2030_5_Client:
 
 
 def test_comm_002(client):
-    capability = client.request_device_capability()
+    capability = client.device_capability()
 
     edev = client.request_edev_list()
 

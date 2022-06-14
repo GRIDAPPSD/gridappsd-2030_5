@@ -73,3 +73,5 @@ devices:
 The server will expose an endpoint of beginning with https://myserver/dcap.  From there
 a client will be able to traverse and do any PUT, POST, GET, and DELETE operations specified
 in the 2030.5 test procedures.
+
+## Function Sets Implemented

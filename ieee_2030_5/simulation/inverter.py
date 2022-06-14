@@ -18,11 +18,11 @@ from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading, ReadingType
 
 def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
     print(f"running inverter for {client.hostname}")
-    cap = client.request_device_capability(capabilities_url)
-    mups = client.request_mirror_usage_point_list(url=cap.MirrorUsagePointListLink.href)
+    cap = client.device_capability(capabilities_url)
+    mups = client.mirror_usage_point_list(url=cap.MirrorUsagePointListLink.href)
 
     if not mups.results:
-        mup_uuid = client.request_new_uuid()
+        mup_uuid = client.new_uuid()
         # f"p_ac = {p_ac}, s_ac = {s_ac}, q_ac= {q_ac}, PF = {PF}, v_ac = {v_ac}, i_ac = {i_ac}"
         mup_readings = [MirrorMeterReading("p_ac"),
                         MirrorMeterReading("s_ac"),
@@ -91,11 +91,13 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("hostname", help="Host of the invert to use.")
     parser.add_argument("--tls-repo", help="TLS repository directory to use, defaults to ~/tls", default="~/tls")
     parser.add_argument("--server-host", help="Reference to the utilities server for data.")
-    parser.add_argument("--server-port", help="Port the server is listening on, default to 443", default=443)
-    parser.add_argument("--device-id", help="The id of the device for this inverter", default="dev12")
+    parser.add_argument("--server-port", type=int, default=443,
+                        help="Port the server is listening on, default to 443")
+    parser.add_argument("--device-id", help="The id of the device for this inverter")
+    parser.add_argument("--pin", type=int,
+                        help="PIN for the client to validate that it is connecting to the correct server.")
 
     opts = parser.parse_args()
 
@@ -106,39 +108,42 @@ if __name__ == '__main__':
     tls_repo = TLSRepository(repo_dir=repo_dir, openssl_cnffile=path,
                              serverhost="gridappsd_dev_2004", clear=False)
 
-    if opts.hostname not in tls_repo.client_list:
-        raise ValueError(f"Hostname: ({opts.hostsname}) not in tls repository")
-
+    if opts.device_id not in tls_repo.client_list:
+        raise ValueError(f"device_id: ({opts.device_id}) not in tls repository")
 
     # print(tls_repo.client_list)
     for p in tls_repo.client_list:
         if p == opts.device_id:
             IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,
-                              keyfile=tls_repo.__get_key_file__(opts.hostname),
-                              certfile=tls_repo.__get_cert_file__(opts.hostname),
+                              keyfile=tls_repo.__get_key_file__(opts.device_id),
+                              certfile=tls_repo.__get_cert_file__(opts.device_id),
                               hostname=p,
                               server_hostname=opts.server_host,
                               server_ssl_port=opts.server_port)
     client = list(IEEE2030_5_Client.clients)[0]
+
     print(f"Client is {client.hostname}")
-    client.request_device_capability()
-    end_devices = client.request_end_devices()
-    end_device = client.request_end_device(0)
+    client.device_capability()
+    end_devices = client.end_devices()
+    end_device = client.end_device(0)
+    registration = client.registration(end_device)
 
+    # edev_config = client.request(end_device.ConfigurationLink.href)
+    client.timelink()
 
-
-    # uuidstr = client.request_new_uuid()
-    mup = client.request_mirror_usage_point_list()
+    assert registration.pIN == opts.pin
+    # uuidstr = client.new_uuid()
+    mup = client.mirror_usage_point_list()
 
     mup_gas_mirroring = MirrorUsagePoint(
-        mRID=client.request_new_uuid().encode('utf-8'),
+        mRID=client.new_uuid().encode('utf-8'),
         description="Gas Mirroring",
         roleFlags=bytes(13),
         serviceCategoryKind=1,
         status=1,
         deviceLFDI=end_device.lFDI,
         MirrorMeterReading=[MirrorMeterReading(
-            mRID=client.request_new_uuid().encode('utf-8'),
+            mRID=client.new_uuid().encode('utf-8'),
             Reading=Reading(
                 value=125
             ),
@@ -155,11 +160,11 @@ if __name__ == '__main__':
 
     status, location = client.create_mirror_usage_point(mup_gas_mirroring)
 
-    client.request_mirror_usage_point_list()
+    client.mirror_usage_point_list()
 
 
-    # print(client.request_new_uuid())
-    # print(client.request_usage_point_list())
+    # print(client.new_uuid())
+    # print(client.usage_point_list())
     # gen = run_inverter(client)
     # for output in gen:
     #     print(output)

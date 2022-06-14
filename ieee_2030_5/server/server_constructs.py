@@ -132,8 +132,6 @@ def get_groups() -> Dict[GroupLevel, Group]:
     return groups
 
 
-
-
 if __name__ == '__main__':
     print(get_groups())
     for x in der_program_list.DERProgram:

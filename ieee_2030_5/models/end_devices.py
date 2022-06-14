@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Optional
 
+from ieee_2030_5.config import DeviceConfiguration
 from ieee_2030_5.models.device_category import DeviceCategoryType
 from ieee_2030_5.models.sep import (EndDevice, Registration, RegistrationLink, DeviceInformationLink,
                                     DeviceStatusLink, PowerStatusLink, SubscriptionListLink, ConfigurationLink,
@@ -11,17 +12,16 @@ from ieee_2030_5.models.sep import (EndDevice, Registration, RegistrationLink, D
                                     SelfDeviceLink,
                                     MirrorUsagePointListLink, DERListLink, FunctionSetAssignmentsListLink,
                                     LogEventListLink,
-                                    UsagePointListLink, TimeLink)
-
-Lfid = int
+                                    UsagePointListLink, TimeLink, DeviceInformation)
+from ieee_2030_5.types import Lfid
 
 
 @dataclass
 class EndDeviceIndexer:
     index: int
     end_device: EndDevice
-    # registration: Registration
-    # device_information: DeviceInformation
+    registration: Registration
+    device_information: Optional[DeviceInformation] = None
 
 
 @dataclass
@@ -69,31 +69,29 @@ class EndDevices:
             lfid = Lfid(lfid)
         return self.end_devices_by_lfid.get(lfid).end_device
 
-    def register(self, device_category: DeviceCategoryType, l_fid: Lfid, pin_code=999) -> EndDevice:
+    def register(self, device_config: DeviceConfiguration, lfid: Lfid) -> EndDevice:
         ts = int(round(datetime.utcnow().timestamp()))
         self.device_numbers += 1
         new_dev_number = self.device_numbers
 
         # Manage links to different resources for the device.
-        reg_link = RegistrationLink(href=hrefs.reg_fmt.format(index=new_dev_number))
-        cfg_link = ConfigurationLink(href=hrefs.edev_cfg_fmt.format(index=new_dev_number))
-        dev_status_link = DeviceStatusLink(href=hrefs.edev_status_fmt.format(index=new_dev_number))
-        power_status_link = PowerStatusLink(href=hrefs.edev_power_status_fmt.format(
-            index=new_dev_number))
-        file_status_link = FileStatusLink(href=hrefs.edev_file_status_fmt.format(
-            index=new_dev_number))
-        dev_info_link = DeviceInformationLink(href=hrefs.edev_info_fmt.format(
-            index=new_dev_number))
-        sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
-            index=new_dev_number))
-        l_fid_bytes = str(l_fid).encode('utf-8')
+        reg_link = RegistrationLink(href=hrefs.build_edev_registration_link(new_dev_number))
+        cfg_link = ConfigurationLink(href=hrefs.build_edev_config_link(new_dev_number))
+        dev_status_link = DeviceStatusLink(href=hrefs.build_edev_status_link(new_dev_number))
+        power_status_link = PowerStatusLink(href=hrefs.build_edev_power_status_link(new_dev_number))
+        # file_status_link = FileStatusLink(href=hrefs.edev_file_status_fmt.format(
+        #     index=new_dev_number))
+        dev_info_link = DeviceInformationLink(href=hrefs.build_edev_info_link(new_dev_number))
+        # sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
+        #     index=new_dev_number))
+        l_fid_bytes = str(lfid).encode('utf-8')
         base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
         der_list_link = DERListLink(href=hrefs.extend_url(base_edev_single, suffix="der"))
         fsa_list_link = FunctionSetAssignmentsListLink(href=hrefs.extend_url(base_edev_single, suffix="fsa"))
         log_event_list_link = LogEventListLink(href=hrefs.extend_url(base_edev_single, suffix="log"))
         changed_time = datetime.now()
         changed_time.replace(microsecond=0)
-        dev = EndDevice(deviceCategory=device_category.value,
+        dev = EndDevice(deviceCategory=device_config.device_category_type.value,
                         lFDI=l_fid_bytes,
                         RegistrationLink=reg_link,
                         DeviceStatusLink=dev_status_link,
@@ -101,7 +99,7 @@ class EndDevices:
                         PowerStatusLink=power_status_link,
                         DeviceInformationLink=dev_info_link,
                         # TODO: Do actual sfid rather than lfid.
-                        sFDI=l_fid,
+                        sFDI=lfid,
                         # file_status_link=file_status_link,
                         # subscription_list_link=sub_list_link,
                         href=f"{hrefs.edev}/{new_dev_number}",
@@ -110,9 +108,10 @@ class EndDevices:
                         LogEventListLink=log_event_list_link,
                         enabled=True,
                         changedTime=int(changed_time.timestamp()))
-        registration = Registration(dateTimeRegistered=ts, pollRate=900, pIN=999)
 
-        dev_indexer = EndDeviceIndexer(index=new_dev_number, end_device=dev)
+        registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
+
+        dev_indexer = EndDeviceIndexer(index=new_dev_number, end_device=dev, registration=registration)
 
         self.all_end_devices[new_dev_number] = dev_indexer
         self.end_devices_by_lfid[Lfid(l_fid_bytes)] = dev_indexer
@@ -120,6 +119,9 @@ class EndDevices:
 
     def get(self, index: int) -> EndDevice:
         return self.all_end_devices[index].end_device
+
+    def get_registration(self, index: int) -> Registration:
+        return self.all_end_devices[index].registration
 
     def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> EndDeviceList:
         ed = self.get_device_by_lfid(lfid)
