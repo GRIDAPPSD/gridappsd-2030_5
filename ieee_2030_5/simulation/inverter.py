@@ -120,10 +120,16 @@ if __name__ == '__main__':
                               hostname=p,
                               server_hostname=opts.server_host,
                               server_ssl_port=opts.server_port)
+
     client = list(IEEE2030_5_Client.clients)[0]
 
     print(f"Client is {client.hostname}")
-    client.device_capability()
+    dcap = client.device_capability()
+    edevs = client.end_devices()
+
+    my_device = client.end_device()
+    client_self = client.client_self()
+    assert my_device == client_self
     end_devices = client.end_devices()
     end_device = client.end_device(0)
     registration = client.registration(end_device)

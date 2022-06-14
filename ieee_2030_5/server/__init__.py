@@ -26,3 +26,8 @@
 #     "AlreadyExistsError",
 #     "RequestOp"
 # ]
+from flask import Request as FlaskRequest
+
+
+class Request(FlaskRequest):
+    pass

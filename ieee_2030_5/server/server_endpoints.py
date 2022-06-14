@@ -17,7 +17,7 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import Time
 from ieee_2030_5.models.end_devices import EndDevices
 import ieee_2030_5.hrefs as hrefs
-from ieee_2030_5.server.edev import EDev
+from ieee_2030_5.server.edev import EDev, SDev
 from ieee_2030_5.server.exceptions import AlreadyExistsError
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
@@ -49,7 +49,7 @@ class Dcap(RequestOp):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        return Response(dataclass_to_xml(self._end_devices.get_device_capability(self.lfid)))
+        return self.build_response_from_dataclass(self._end_devices.get_device_capability(self.lfid))
 
 
 class TimeRequest(RequestOp):
@@ -81,7 +81,7 @@ class TimeRequest(RequestOp):
                   quality=None,
                   tzOffset=TimeOffsetType(utc_offset.total_seconds()))
 
-        return Response(dataclass_to_xml(tm))
+        return self.build_response_from_dataclass(tm)
 
 
 class ServerList(RequestOp):
@@ -122,6 +122,8 @@ class ServerEndpoints:
         app.add_url_rule(hrefs.dcap, view_func=self._dcap)
         _log.debug(f"Adding rule: {hrefs.tm} methods: {['GET']}")
         app.add_url_rule(hrefs.tm, view_func=self._tm)
+        _log.debug(f"Adding rule: {hrefs.sdev} methods: {['GET']}")
+        app.add_url_rule(hrefs.sdev, view_func=self._sdev)
 
         rulers = (
             (hrefs.edev_urls, self._edev),
@@ -172,6 +174,9 @@ class ServerEndpoints:
 
     def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
         return EDev(server_endpoints=self).execute(index=index, category=category)
+
+    def _sdev(self) -> Response:
+        return SDev(server_endpoints=self).execute()
 
     def _tm(self) -> Response:
         return TimeRequest(server_endpoints=self).execute()

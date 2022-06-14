@@ -10,6 +10,8 @@ TimeType = int
 TimeOffsetType = int
 Lfid = int
 
+SEP_XML = "application/sep+xml"
+
 
 def format_time(dt_obj: datetime, is_local: bool = False) -> TimeType:
     """ Return a proper IEEE2030_5 TimeType object for the dt_obj passed in.

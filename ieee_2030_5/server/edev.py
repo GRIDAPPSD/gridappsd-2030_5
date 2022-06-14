@@ -23,6 +23,7 @@ class EDev(RequestOp):
             /edev
             /edev/0
             /edev/0/di
+            /edev/0/reg
 
         """
         pth = request.environ['PATH_INFO']
@@ -41,15 +42,28 @@ class EDev(RequestOp):
             else:
 
                 if category == 'reg':
-                    retval = self._reg(index)
+                    retval = self._end_devices.get_registration(index)
 
                 else:
                     raise NotImplementedError()
 
-        retval = dataclass_to_xml(retval)
-        return Response(retval)
-        # return dataclass_to_xml(self._end_devices.get())
+        return self.build_response_from_dataclass(retval)
 
-    def _reg(self, index) -> Registration:
-        reg = self._end_devices.get_registration(index)
-        return reg
+
+class SDev(RequestOp):
+    """
+    SelfDevice is an alias for the end device of a client.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def get(self) -> Response:
+        """
+        Supports the get request for end_devices(EDev) and end_device_list_link.
+
+        Paths:
+            /sdev
+
+        """
+        end_device = self._end_devices.get_end_device_list(self.lfid).EndDevice[0]
+        return self.build_response_from_dataclass(end_device)

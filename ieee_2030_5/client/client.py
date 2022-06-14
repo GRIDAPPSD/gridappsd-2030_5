@@ -11,7 +11,7 @@ import xml.dom.minidom
 import xsdata
 
 from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint, \
-    UsagePointList, EndDevice, Registration
+    UsagePointList, EndDevice, Registration, FunctionSetAssignmentsListLink
 
 from ieee_2030_5.utils import dataclass_to_xml, parse_xml
 
@@ -50,6 +50,7 @@ class IEEE2030_5_Client:
         self._upt: Optional[UsagePointList] = None
         self._edev: Optional[EndDeviceListLink] = None
         self._end_devices: Optional[EndDeviceListLink] = None
+        self._fsa_list: Optional[FunctionSetAssignmentsListLink] = None
 
         self._hostname = hostname
         self._debug = debug
@@ -73,11 +74,21 @@ class IEEE2030_5_Client:
         self._end_devices = self.__get_request__(self._device_cap.EndDeviceListLink.href)
         return self._end_devices
 
-    def end_device(self, index: int = 0) -> EndDevice:
+    def end_device(self, index: Optional[int] = 0) -> EndDevice:
         if not self._end_devices:
             self.end_devices()
 
         return self._end_devices.EndDevice[index]
+
+    def client_self(self):
+        if not self._device_cap:
+            self.device_capability()
+
+        return self.__get_request__(self._device_cap.SelfDeviceLink.href)
+
+    def function_set_assignment(self, index: int) -> FunctionSetAssignmentsListLink:
+
+        return self._end_devices.EndDevice[index].FunctionSetAssignmentsListLink.href
 
     def device_capability(self, url: str = "/dcap") -> DeviceCapability:
         self._device_cap = self.__get_request__(url)

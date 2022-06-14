@@ -53,7 +53,7 @@ class MUP(RequestOp):
 
         if len(pths) == 2:
             retval = an_mup_list.results[pths[1]]
-        return Response(dataclass_to_xml(retval), headers={'Content-Type': 'application/xml'})
+        return self.build_response_from_dataclass(retval)
 
     def post(self, index: Optional[int] = None) -> Response:
         xml = request.data.decode('utf-8')
@@ -72,5 +72,6 @@ class MUP(RequestOp):
         self._last_added += 1
         __mup_info__[self._last_added] = data
 
+        # Note response to the post is different due to added endpoint.
         return Response(headers={'Location': f'{hrefs.mup}/{self._last_added}'},
                         status='201 Created')

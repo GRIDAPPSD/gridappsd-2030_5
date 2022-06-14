@@ -22,7 +22,8 @@ edev: str = DEFAULT_EDEV_ROOT
 edev_urls: List = [
     edev,
     f"{edev}/<int:index>",
-    f"{edev}/<int:index>/<category>"
+    f"{edev}/<int:index>/<category>",
+    f"{edev}/<int:index>/<category>/<sub_index>"
 ]
 
 # MirrorUsagePointListLink
@@ -53,6 +54,10 @@ def build_edev_info_link(index: int) -> str:
 
 def build_edev_power_status_link(index: int) -> str:
     return build_link(f"{edev}", index, "ps")
+
+
+def build_edev_fsa_link(index: int, fsa_index: Optional[int] = None) -> str:
+    return build_link(f"{edev}", index, "fsa", fsa_index)
 
 
 # edev_cfg_fmt: str = f"{DEFAULT_DCAP_ROOT}/edev" + "/{index}/cfg"
@@ -115,14 +120,16 @@ admin: str = "/admin"
 uuid_gen: str = "/uuid"
 
 
-def build_link(base_url: str, index: Optional[int] = None, suffix: Optional[str] = None):
+def build_link(base_url: str, index: Optional[int] = None, *suffix: Optional[str]):
     result = base_url
     if index is not None:
         result += f"/{index}"
     if suffix:
         if index is None:
             raise ValueError("Suffix not available when index is not specified.")
-        result += f"/{suffix}"
+        for p in suffix:
+            if p is not None:
+                result += f"/{p}"
 
     return result
 

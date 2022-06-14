@@ -1,15 +1,18 @@
 from __future__ import annotations
 import logging
+from dataclasses import dataclass
 from typing import Dict, Callable
 
 import werkzeug
-from flask import request
+from flask import request, Response
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
 # from ieee_2030_5.server.server_endpoints import ServerEndpoints
 # from ieee_2030_5.server.server_endpoints import ServerEndpoints
+from ieee_2030_5.types import SEP_XML
+from ieee_2030_5.utils import dataclass_to_xml
 
 _log = logging.getLogger(__name__)
 
@@ -19,6 +22,7 @@ class ServerOperation:
     def __init__(self):
         if 'ieee_2030_5_peercert' not in request.environ:
             raise werkzeug.exceptions.Forbidden()
+        self._headers = {'Content-Type': SEP_XML}
 
     def head(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
@@ -42,6 +46,7 @@ class ServerOperation:
             'DELETE': self.delete,
             'PUT': self.put
         }
+
         fn = methods.get(request.environ['REQUEST_METHOD'])
         if not fn:
             raise werkzeug.exceptions.MethodNotAllowed()
@@ -76,3 +81,6 @@ class RequestOp(ServerOperation):
     def is_admin_client(self) -> bool:
         ed = self._end_devices.get_device_by_lfid(self.lfid)
         return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
+
+    def build_response_from_dataclass(self, obj: dataclass) -> Response:
+        return Response(dataclass_to_xml(obj), headers=self._headers)

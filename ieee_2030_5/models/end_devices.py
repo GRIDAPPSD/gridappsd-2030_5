@@ -44,12 +44,14 @@ class EndDevices:
             index = self.end_devices_by_lfid[lfid].index
             sdev = SelfDeviceLink(href=hrefs.sdev)
             # TODO Add Aggregator for this
-            edll = EndDeviceListLink(href=f"{hrefs.edev}")
-            upt = UsagePointListLink(href=f"{hrefs.upt}")
-            mup = MirrorUsagePointListLink(href=f"{hrefs.mup}")
-            poll_rate = 50
+            edll = EndDeviceListLink(href=f"{hrefs.edev}", all=1)
+            upt = UsagePointListLink(href=f"{hrefs.upt}", all=0)
+            mup = MirrorUsagePointListLink(href=f"{hrefs.mup}", all=0)
+            poll_rate = self.get_registration(index).pollRate
             timelink = TimeLink(href=f"{hrefs.tm}")
+
             dc = DeviceCapability(
+                href=hrefs.dcap,
                 MirrorUsagePointListLink=mup,
                 SelfDeviceLink=sdev,
                 EndDeviceListLink=edll,
@@ -87,7 +89,7 @@ class EndDevices:
         l_fid_bytes = str(lfid).encode('utf-8')
         base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
         der_list_link = DERListLink(href=hrefs.extend_url(base_edev_single, suffix="der"))
-        fsa_list_link = FunctionSetAssignmentsListLink(href=hrefs.extend_url(base_edev_single, suffix="fsa"))
+        fsa_list_link = FunctionSetAssignmentsListLink(href=hrefs.extend_url(base_edev_single, suffix="fsa"), all=0)
         log_event_list_link = LogEventListLink(href=hrefs.extend_url(base_edev_single, suffix="log"))
         changed_time = datetime.now()
         changed_time.replace(microsecond=0)
