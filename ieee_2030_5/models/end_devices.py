@@ -19,6 +19,7 @@ from ieee_2030_5.types import Lfid
 @dataclass
 class EndDeviceIndexer:
     index: int
+    id: str  # mrid for the device.
     end_device: EndDevice
     registration: Registration
     device_information: Optional[DeviceInformation] = None
@@ -113,7 +114,8 @@ class EndDevices:
 
         registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
 
-        dev_indexer = EndDeviceIndexer(index=new_dev_number, end_device=dev, registration=registration)
+        dev_indexer = EndDeviceIndexer(index=new_dev_number, id=device_config.id,
+                                       end_device=dev, registration=registration)
 
         self.all_end_devices[new_dev_number] = dev_indexer
         self.end_devices_by_lfid[Lfid(l_fid_bytes)] = dev_indexer

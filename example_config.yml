@@ -30,3 +30,8 @@ openssl_cnf: openssl.cnf
 server_hostname: gridappsd_dev_2004
 server_mode: enddevices_create_on_start
 tls_repository: ~/tls
+
+gridappsd:
+  field_bus_config: gridappsd_feeder_config.yml
+  feeder_id_file: examples/simulation.feeder.txt
+  simulation_id_file: examples/simulation.id.txt

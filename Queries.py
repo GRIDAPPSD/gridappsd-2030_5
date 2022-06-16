@@ -1,6 +1,17 @@
-from gridappsd import GridAPPSD
+from typing import Optional
 
-conn = GridAPPSD()
+from gridappsd import GridAPPSD
+import atexit
+
+conn: Optional[GridAPPSD] = None
+
+
+def get_conn() -> GridAPPSD:
+    global conn
+    if conn is None:
+        conn = GridAPPSD()
+        atexit.register(conn.disconnect)
+    return conn
 
 
 def QuerySynchronousMachine(feeder_id):
@@ -30,7 +41,7 @@ def QuerySynchronousMachine(feeder_id):
     GROUP by ?name ?bus ?ratedS ?ratedU ?p ?q ?id ?fdrid
     ORDER by ?name
     """ % feeder_id
-    results = conn.query_data(querySynchronousMachine)
+    results = get_conn().query_data(querySynchronousMachine)
     return results
 
 
@@ -70,7 +81,7 @@ def QuerySolar(feeder_id):
     GROUP by ?name ?bus ?ratedS ?ratedU ?ipu ?p ?q ?fdrid ?id
     ORDER by ?name
     """ % feeder_id
-    results = conn.query_data(querySolar)
+    results = get_conn().query_data(querySolar)
     print(results)
     return results
 
@@ -114,7 +125,7 @@ def QueryBattery(feeder_id):
     ORDER by ?name
     """ % feeder_id
 
-    results = conn.query_data(queryBattery)
+    results = get_conn().query_data(queryBattery)
     return results
 
 
@@ -126,7 +137,7 @@ def QueryInverter(feeder_id):
     SELECT ?name ?bus ?ratedS ?ratedU ?ipu ?p ?q ?fdrid ?id ?pecid (group_concat(distinct ?phs;separator="\\n") as ?phases)  WHERE {
     VALUES ?fdrid {"%s"}
     #?s r:type c:PhotovoltaicUnit.
-    ?s r:type c:BatteryUnit.
+    #?s r:type c:BatteryUnit.
     ?s c:IdentifiedObject.name ?name.
     ?s c:IdentifiedObject.mRID ?id.
     ?pec c:PowerElectronicsConnection.PowerElectronicsUnit ?s.
@@ -149,7 +160,7 @@ def QueryInverter(feeder_id):
     ORDER by ?name
     """ % feeder_id
 
-    results = conn.query_data(queryInverter)
+    results = get_conn().query_data(queryInverter)
     return results
 
 
@@ -161,6 +172,7 @@ def QueryAllDERGroups(feeder_id):
     select ?mRID ?description (group_concat(distinct ?name;separator="\\n") as ?names) 
                               (group_concat(distinct ?device;separator="\\n") as ?devices)
                               (group_concat(distinct ?func;separator="\\n") as ?funcs) 
+    VALUES ?fdrid {"%s"}
     where {
       ?q1 a c:EndDeviceGroup .
       ?q1 c:IdentifiedObject.mRID ?mRIDraw .
@@ -183,5 +195,5 @@ def QueryAllDERGroups(feeder_id):
     Order by ?mRID
     """ % feeder_id
 
-    results = conn.query_data(queryAllDERGroups)
+    results = get_conn().query_data(queryAllDERGroups)
     return results
