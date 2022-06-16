@@ -12,8 +12,8 @@ from gridappsd.field_interface import MessageBusDefinition, ContextManager
 from gridappsd.field_interface.agents import FeederAgent, SecondaryAreaAgent
 
 from Queries import QueryAllDERGroups, QueryBattery, QuerySolar, QueryInverter
-from ieee_2030_5.models import Resource, PowerStatus, DERCapability, UsagePoint
-from ieee_2030_5.models.end_devices import EndDevices
+# from ieee_2030_5.models import Resource, PowerStatus, DERCapability, UsagePoint
+# from ieee_2030_5.models.end_devices import EndDevices
 
 
 class DataPumpFeederAgent(FeederAgent):
@@ -89,9 +89,9 @@ connections:
                 pprint(binding['pecid']['value'])
                 mrid = binding['pecid']['value']
                 other_mrid = binding['id']['value']
-                ieee_resources.append(
-                    UsagePoint(mRID=mrid)
-                )
+                # ieee_resources.append(
+                #     UsagePoint(mRID=mrid)
+                # )
                 if mrid in secondary_area['addressable_equipment']:
                     new_area = deepcopy(secondary_area)
                     new_area['addressable_equipment'] = [mrid, other_mrid]
