@@ -3,37 +3,127 @@ This module handles MirrorUsagePoint and UsagePoint constructs for a server.
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, Optional, List
 
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
 
-from ieee_2030_5.models import MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet, UsagePointList
+from ieee_2030_5.models import MirrorUsagePointList, MirrorUsagePoint, MirrorReadingSet, UsagePointList, UsagePoint
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5 import hrefs
 from ieee_2030_5.utils import dataclass_to_xml, parse_xml
 
-__mup_info__: Dict[int, MirrorUsagePointList] = {}
-__mup_point_readings__: Dict[str, str | int] = {}
+class Error(Exception):
+    pass
 
-__utp_info__: Dict[int, UsagePointList] = {}
-__uuid_handler__: UUIDHandler = UUIDHandler()
+@dataclass
+class ResponseStatus:
+    location: str
+    status: str
+
+
+class UsagePointsContainer:
+    __upt__: Dict[bytes, UsagePoint] = {}
+    __mup__: Dict[bytes, MirrorUsagePoint] = {}
+    __sorted_mrid__: List = []
+    __mup_href__: Dict[str, MirrorUsagePoint] = {}
+
+    def get_mup_list(self,
+                     start: Optional[int] = None,
+                     after: Optional[int] = None,
+                     length: Optional[int] = None) -> MirrorUsagePointList:
+
+        if start is not None and after is not None:
+            # after takes precedence
+            index = after + 1 + start
+        elif start is not None:
+            index = start
+        elif after is not None:
+            index = after + 1
+        else:
+            index = 0
+
+        mup_list = MirrorUsagePointList(all=len(self.__sorted_mrid__))
+
+        if length is None:
+            for x in self.__sorted_mrid__[index: len(self.__sorted_mrid__)]:
+                mup_list.MirrorUsagePoint.append(self.__mup__[x])
+        elif length - index < len(self.__sorted_mrid__):
+            for x in self.__sorted_mrid__[index: index + length]:
+                mup_list.MirrorUsagePoint.append(self.__mup__[x])
+        else:
+            for x in self.__sorted_mrid__[index:]:
+                mup_list.MirrorUsagePoint.append(self.__mup__[x])
+
+        mup_list.results = len(mup_list.MirrorUsagePoint)
+
+        return mup_list
+
+    def get_upt_list(self) -> UsagePointList:
+        pass
+
+    def get_mup_href(self, href: str) -> Optional[MirrorUsagePoint]:
+        return self.__mup_href__.get(href)
+
+    def create_update_mup(self, mup: MirrorUsagePoint) -> ResponseStatus | Error:
+        required = ["mRID", "MirrorMeterReading", "deviceLFDI"]
+        invalid = []
+        for p in required:
+            if not getattr(mup, p):
+                invalid.append(f"{p} not specified for MirrorUsagePoint")
+        # Error out top level required data
+        if invalid:
+            return Error("\n".join(invalid))
+
+        required_meter_reading = ["mRID", "ReadingType"]
+        for indx, reading in enumerate(mup.MirrorMeterReading):
+            for p in required_meter_reading:
+                if not getattr(reading, p):
+                    invalid.append(f"Reading {indx} missing {p}")
+        # Error out if meter reading invalid.
+        if invalid:
+            return Error("\n".join(invalid))
+
+        created = self.__mup__.get(mup.mRID) is None
+        self.__mup__[mup.mRID] = mup
+        self.__sorted_mrid__.append(mup.mRID)
+        # Sort mrids descending
+        self.__sorted_mrid__ = sorted(self.__sorted_mrid__, reverse=True)
+
+        item_in_list = 0
+        for indx, mrid in enumerate(self.__sorted_mrid__):
+            if mrid == mup.mRID:
+                item_in_list = indx
+                break
+        mup.href = hrefs.build_link(hrefs.mup, item_in_list)
+        return ResponseStatus(mup.href,
+                              '201 Created' if created else '204 Updated')
+
+
+point_container = UsagePointsContainer()
 
 
 class UTP(RequestOp):
+    __next_index__: int = 0
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
         pass
 
+    def create(self, mrid: Optional[str] = None) -> UsagePoint:
+        up = UsagePoint(href=f"{hrefs.build_link(hrefs.upt, UTP.__next_index__)}",
+                        mRID=mrid)
+        UTP.__next_index__ += 1
+
 
 class MUP(RequestOp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._last_added = 0
 
     def get(self, index: Optional[int] = None) -> Response:
         pth_info = request.environ['PATH_INFO']
@@ -41,19 +131,18 @@ class MUP(RequestOp):
         if not pth_info.startswith(hrefs.mup):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
 
-        pths = request.path[len(hrefs.mup.strip()):].split("/")
-        an_mup_list = __mup_info__.get(self.device_id)
+        if pth_info == hrefs.mup:
+            # Getting list of elements
+            start = request.args.get("s")
+            after = request.args.get("a")
+            length = request.args.get("l")
+            ret_value = point_container.get_mup_list(start, after, length)
+        else:
+            ret_value = point_container.get_mup_href(pth_info)
+        if ret_value:
+            return self.build_response_from_dataclass(ret_value)
 
-        if not an_mup_list:
-            an_mup_list = MirrorUsagePointList(href=pth_info)
-            __mup_info__[self.device_id] = an_mup_list
-            self._last_added += 1
-
-        retval = an_mup_list
-
-        if len(pths) == 2:
-            retval = an_mup_list.results[pths[1]]
-        return self.build_response_from_dataclass(retval)
+        return Response("Not Found", status=404)
 
     def post(self, index: Optional[int] = None) -> Response:
         xml = request.data.decode('utf-8')
@@ -69,9 +158,14 @@ class MUP(RequestOp):
             raise BadRequest("Must post MirrorUsagePoint to top level only")
 
         # Creating a new mup
-        self._last_added += 1
-        __mup_info__[self._last_added] = data
+        if data_type == MirrorUsagePoint:
+            response = point_container.create_update_mup(mup=data)
+
+            if isinstance(response, Error):
+                return Response(response.args[1], status=500)
+
+        result = point_container.create_update_mup(data)
 
         # Note response to the post is different due to added endpoint.
-        return Response(headers={'Location': f'{hrefs.mup}/{self._last_added}'},
-                        status='201 Created')
+        return Response(headers={'Location': result.location},
+                        status=result.status)

@@ -141,15 +141,16 @@ if __name__ == '__main__':
     # uuidstr = client.new_uuid()
     mup = client.mirror_usage_point_list()
 
+    mup_uuid = client.new_uuid().encode('utf-8')
     mup_gas_mirroring = MirrorUsagePoint(
-        mRID=client.new_uuid().encode('utf-8'),
+        mRID=mup_uuid,
         description="Gas Mirroring",
         roleFlags=bytes(13),
         serviceCategoryKind=1,
         status=1,
         deviceLFDI=end_device.lFDI,
         MirrorMeterReading=[MirrorMeterReading(
-            mRID=client.new_uuid().encode('utf-8'),
+            mRID=mup_uuid,
             Reading=Reading(
                 value=125
             ),
@@ -166,8 +167,9 @@ if __name__ == '__main__':
 
     status, location = client.create_mirror_usage_point(mup_gas_mirroring)
 
-    client.mirror_usage_point_list()
+    point_list = client.mirror_usage_point_list()
 
+    print(point_list)
 
     # print(client.new_uuid())
     # print(client.usage_point_list())
