@@ -9,8 +9,7 @@ from flask import request, Response
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
-# from ieee_2030_5.server.server_endpoints import ServerEndpoints
-# from ieee_2030_5.server.server_endpoints import ServerEndpoints
+
 from ieee_2030_5.types import SEP_XML
 from ieee_2030_5.utils import dataclass_to_xml
 

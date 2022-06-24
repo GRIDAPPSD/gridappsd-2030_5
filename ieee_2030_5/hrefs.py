@@ -33,7 +33,35 @@ mup_urls: List = [
     f"{mup}/<int:index>"
 ]
 
+der: str = "/der"
+der_urls: List = [
+    (f"{der}/<int:edev_id>", ('GET', 'POST')),
+    (f"{der}/<int:edev_id>/<int:id>", ('GET', 'PUT', 'DELETE')),
+    (f"{der}/<int:edev_id>/<int:id>/upt", ('GET', 'DELETE')),
+    (f"{der}/<int:edev_id>/<int:id>/derp", ('GET', 'POST')),
+    (f"{der}/<int:edev_id>/<int:id>/cdp", ('GET', 'DELETE')),
+    (f"{der}/<int:edev_id>/<int:id>/derg", ('GET', 'PUT')),
+    (f"{der}/<int:edev_id>/<int:id>/ders", ('GET', 'PUT')),
+    (f"{der}/<int:edev_id>/<int:id>/dera", ('GET', 'PUT')),
+    (f"{der}/<int:edev_id>/<int:id>/dercap", ('GET', 'PUT')),
+]
+
 sdev: str = DEFAULT_SELF_ROOT
+
+
+def build_der_link(edev_id: Optional[int] = None, id: Optional[int] = None, suffix: Optional[str] = None) -> str:
+    if edev_id is None:
+        raise ValueError("edev_id must be specified.")
+    if id is not None and suffix is not None:
+        link = build_link(f"{der}", f"{edev_id}", f"{id}", suffix)
+    elif id is not None:
+        link = build_link(f"{der}", f"{edev_id}", f"{id}")
+    elif suffix is not None:
+        link = build_link(f"{der}", f"{edev_id}", suffix)
+    else:
+        link = build_link(f"{der}", f"{edev_id}")
+
+    return link
 
 
 def build_edev_registration_link(index: int) -> str:
@@ -120,16 +148,21 @@ admin: str = "/admin"
 uuid_gen: str = "/uuid"
 
 
-def build_link(base_url: str, index: Optional[int] = None, *suffix: Optional[str]):
+def build_link(base_url: str, *suffix: Optional[str]):
     result = base_url
-    if index is not None:
-        result += f"/{index}"
+    if result.endswith("/"):
+        result = result[:-1]
+
     if suffix:
-        if index is None:
-            raise ValueError("Suffix not available when index is not specified.")
         for p in suffix:
             if p is not None:
-                result += f"/{p}"
+                if isinstance(p, str):
+                    if p.startswith("/"):
+                        result += f"{p}"
+                    else:
+                        result += f"/{p}"
+                else:
+                    result += f"/{p}"
 
     return result
 

@@ -81,6 +81,9 @@ def before_request():
         print("DATA", request.get_data())
         print("FORM", request.form)
 
+def after_request(response: Response) -> Response:
+    print(response.get_data())
+    return response
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
@@ -89,6 +92,7 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.
     app.before_request(handle_chunking)
+    app.after_request(after_request)
 
     # to establish an SSL socket we need the private key and certificate that
     # we want to serve to users.

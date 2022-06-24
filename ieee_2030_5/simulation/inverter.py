@@ -121,55 +121,70 @@ if __name__ == '__main__':
                               server_hostname=opts.server_host,
                               server_ssl_port=opts.server_port)
 
+    # Start up a client from the available in the config file.
     client = list(IEEE2030_5_Client.clients)[0]
-
-    print(f"Client is {client.hostname}")
+    # Device capability provides links to the other resources of interest.
     dcap = client.device_capability()
-    edevs = client.end_devices()
+    # Time request for offsets to keep things closely aligned.
+    tm = client.time()
+    # The device that this class is available for.
+    device = client.end_device()
+    # Registration to test if we have the correct pin for the client to be sure
+    # that it is talking to the correct server
+    reg = client.registration(device)
+    assert reg.pIN == opts.pin
 
-    my_device = client.end_device()
-    client_self = client.client_self()
-    assert my_device == client_self
-    end_devices = client.end_devices()
-    end_device = client.end_device(0)
-    registration = client.registration(end_device)
+    # Determine the function set assignment for our device.
+    fsa = client.function_set_assignment()
 
-    # edev_config = client.request(end_device.ConfigurationLink.href)
-    client.timelink()
-
-    assert registration.pIN == opts.pin
-    # uuidstr = client.new_uuid()
-    mup = client.mirror_usage_point_list()
-
-    mup_uuid = client.new_uuid().encode('utf-8')
-    mup_gas_mirroring = MirrorUsagePoint(
-        mRID=mup_uuid,
-        description="Gas Mirroring",
-        roleFlags=bytes(13),
-        serviceCategoryKind=1,
-        status=1,
-        deviceLFDI=end_device.lFDI,
-        MirrorMeterReading=[MirrorMeterReading(
-            mRID=mup_uuid,
-            Reading=Reading(
-                value=125
-            ),
-            ReadingType=ReadingType(
-                accumulationBehaviour=9,
-                commodity=7,
-                dataQualifier=0,
-                flowDirection=1,
-                powerOfTenMultiplier=3,
-                uom=119
-            )
-        )]
-    )
-
-    status, location = client.create_mirror_usage_point(mup_gas_mirroring)
-
-    point_list = client.mirror_usage_point_list()
-
-    print(point_list)
+    print(fsa)
+    # edevs = client.end_devices()
+    #
+    # my_device = client.end_device()
+    # self_device = client.self_device()
+    # assert my_device == self_device
+    # end_devices = client.end_devices()
+    # end_device = client.end_device(0)
+    # registration = client.registration(end_device)
+    #
+    # # edev_config = client.request(end_device.ConfigurationLink.href)
+    # client.timelink()
+    #
+    # assert registration.pIN == opts.pin
+    #
+    # der_list = client.__get_request__(end_device.DERListLink.href)
+    # # uuidstr = client.new_uuid()
+    # mup = client.mirror_usage_point_list()
+    #
+    # mup_uuid = client.new_uuid().encode('utf-8')
+    # mup_gas_mirroring = MirrorUsagePoint(
+    #     mRID=mup_uuid,
+    #     description="Gas Mirroring",
+    #     roleFlags=bytes(13),
+    #     serviceCategoryKind=1,
+    #     status=1,
+    #     deviceLFDI=end_device.lFDI,
+    #     MirrorMeterReading=[MirrorMeterReading(
+    #         mRID=mup_uuid,
+    #         Reading=Reading(
+    #             value=125
+    #         ),
+    #         ReadingType=ReadingType(
+    #             accumulationBehaviour=9,
+    #             commodity=7,
+    #             dataQualifier=0,
+    #             flowDirection=1,
+    #             powerOfTenMultiplier=3,
+    #             uom=119
+    #         )
+    #     )]
+    # )
+    #
+    # status, location = client.create_mirror_usage_point(mup_gas_mirroring)
+    #
+    # point_list = client.mirror_usage_point_list()
+    #
+    # print(point_list)
 
     # print(client.new_uuid())
     # print(client.usage_point_list())

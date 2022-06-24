@@ -7,6 +7,8 @@ from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
 from pprint import pprint, pformat
+from queue import Queue
+from threading import Thread
 
 from gridappsd.field_interface import MessageBusDefinition, ContextManager
 from gridappsd.field_interface.agents import FeederAgent, SecondaryAreaAgent
@@ -14,6 +16,7 @@ from gridappsd.field_interface.agents import FeederAgent, SecondaryAreaAgent
 from Queries import QueryAllDERGroups, QueryBattery, QuerySolar, QueryInverter
 # from ieee_2030_5.models import Resource, PowerStatus, DERCapability, UsagePoint
 # from ieee_2030_5.models.end_devices import EndDevices
+from ieee_2030_5.models import UsagePoint
 
 
 class DataPumpFeederAgent(FeederAgent):
@@ -43,7 +46,7 @@ class DataPumperAgent(SecondaryAreaAgent):
         print("Secondary Area")
         print(message)
 
-def start_data_pump(msg_bus_def: MessageBusDefinition, end_devices: EndDevices):
+def start_data_pump(msg_bus_def: MessageBusDefinition):
 
     atexit.register(stop_data_pump)
 
@@ -57,6 +60,43 @@ if __name__ == '__main__':
     os.environ["GRIDAPPSD_ADDRESS"] = "gridappsd"
     os.environ["GRIDAPPSD_PORT"] = "61613"
 
+    def run_simulation(queue: Queue):
+        import json
+        import os
+        from pathlib import Path
+
+        from gridappsd import GridAPPSD
+        from gridappsd.simulation import Simulation
+
+        import auth_context
+
+        sim_config = json.load(Path("/repos/gridappsd-2030_5/examples/config_files_simulated/simulation-config.json").open())
+        # sim_config = json.load(Path("config_files_simulated/simulation-config.json").open())
+        sim_feeder = sim_config['power_system_config']['Line_name']
+        print(f"Simulation for feeder: {sim_feeder}")
+        gapps = GridAPPSD()
+        sim = Simulation(gapps, run_config=sim_config)
+        print("Starting Simulation")
+        sim.start_simulation()
+        assert sim.simulation_id
+        print(f"Simulation id is {sim.simulation_id}")
+        Path("simulation.feeder.txt").write_text(sim_feeder)
+        Path("simulation.id.txt").write_text(sim.simulation_id)
+        try:
+            queue.put("Done")
+            sim.run_loop()
+        except KeyboardInterrupt:
+            print("Stopping simulation")
+            sim.stop()
+
+        gapps.disconnect()
+
+    my_wait_queue = Queue()
+    sim_thread = Thread(target=run_simulation, args=(my_wait_queue,))
+    sim_thread.daemon = True
+    sim_thread.start()
+
+    my_wait_queue.get(block=True)
     config_file = """
 connections:
   id: _49AD8E07-3BF9-A4E2-CB8F-C3722F837B62
@@ -67,18 +107,19 @@ connections:
     GRIDAPPSD_USER: system
     GRIDAPPSD_PASSWORD: manager
 """
-    Path("tmp.file.yml").write_text(config_file)
-    system_bus_def = MessageBusDefinition.load("tmp.file.yml")
-    feeder_id = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"
-    simulation_id = "1160276262"
+    Path("../server/tmp.file.yml").write_text(config_file)
+    system_bus_def = MessageBusDefinition.load("../server/tmp.file.yml")
+
+    feeder_id = Path("simulation.feeder.txt").read_text().strip()
+    simulation_id = Path("simulation.id.txt").read_text().strip()
+    # feeder_id = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"
+    # imulation_id = "1160276262"
 
     ieee_resources = []
     inverters = QueryInverter(feeder_id)
 
-
-    # Power status of a resource contains
-
     context = ContextManager.get_context_by_feeder(feeder_id)
+    pprint(context)
     bus_refs = defaultdict(list)
 
     for switch_area in context['data']['switch_areas']:
@@ -87,24 +128,27 @@ connections:
 
                 # TODO: Change to use id later...Topo processor is using pecid for now.
                 pprint(binding['pecid']['value'])
-                mrid = binding['pecid']['value']
-                other_mrid = binding['id']['value']
+                pecid = binding['pecid']['value']
+                mrid = binding['id']['value']
                 # ieee_resources.append(
                 #     UsagePoint(mRID=mrid)
                 # )
-                if mrid in secondary_area['addressable_equipment']:
+                # pecid is being found, but id is not
+                #ieee_resources.append(UsagePoint(mRID=other_mrid))
+                ieee_resources.append(UsagePoint(mRID=pecid))
+                if pecid in secondary_area['addressable_equipment']:
                     new_area = deepcopy(secondary_area)
-                    new_area['addressable_equipment'] = [mrid, other_mrid]
+                    new_area['addressable_equipment'] = [pecid, mrid]
                     new_area['unaddressable_equipment'] = []
 
                     bus_refs[secondary_area['message_bus_id']].append(new_area)
 
     pprint(bus_refs)
     feeder = context['data']
-    Path("data.dump.json").write_text(pformat(context['data'], indent=2))
-    data = Path("data.dump.json").read_text()
+    Path("../server/data.dump.json").write_text(pformat(context['data'], indent=2))
+    data = Path("../server/data.dump.json").read_text()
     for p in ieee_resources:
-        if p.mRID in data:
+        if str(p.mRID) in data:
             print(f"Found: {p.mRID}")
         else:
             print(f"Not found: {p.mRID}")
@@ -126,6 +170,8 @@ connections:
         except KeyboardInterrupt:
             print("Exiting sample")
             break
+
+    sim_thread.join(timeout=5)
     #         break
     # coordinating_agent.spawn_distributed_agent(feeder_agent)
     # addressable = context["addressable_equipment"]

@@ -29,6 +29,7 @@ class UsagePointsContainer:
     __mup__: Dict[bytes, MirrorUsagePoint] = {}
     __sorted_mrid__: List = []
     __mup_href__: Dict[str, MirrorUsagePoint] = {}
+    __mup_readings__: Dict[bytes, MirrorReadingSet] = {}
 
     def get_mup_list(self,
                      start: Optional[int] = None,
@@ -66,6 +67,14 @@ class UsagePointsContainer:
 
     def get_mup_href(self, href: str) -> Optional[MirrorUsagePoint]:
         return self.__mup_href__.get(href)
+
+    def create_reading_set(self, mup_href: str, mrs: MirrorReadingSet) -> ResponseStatus | Error:
+        mup = point_container.get_mup_href(mup_href)
+        if mup is None:
+            return Error(f"No MirrorUsagePoint found at posted: {mup_href}")
+
+
+        #     point_container.create_reading_set(mup_href=)
 
     def create_update_mup(self, mup: MirrorUsagePoint) -> ResponseStatus | Error:
         required = ["mRID", "MirrorMeterReading", "deviceLFDI"]
@@ -159,13 +168,14 @@ class MUP(RequestOp):
 
         # Creating a new mup
         if data_type == MirrorUsagePoint:
-            response = point_container.create_update_mup(mup=data)
+            result = point_container.create_update_mup(mup=data)
 
-            if isinstance(response, Error):
-                return Response(response.args[1], status=500)
+        else:
+            # MirrorReadingSet
+            result = point_container.create_reading_set(mup_href=pth_info, mrs=data)
 
-        result = point_container.create_update_mup(data)
-
+        if isinstance(result, Error):
+            return Response(result.args[1], status=500)
         # Note response to the post is different due to added endpoint.
         return Response(headers={'Location': result.location},
                         status=result.status)

@@ -11,7 +11,7 @@ import xml.dom.minidom
 import xsdata
 
 from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint, \
-    UsagePointList, EndDevice, Registration, FunctionSetAssignmentsListLink
+    UsagePointList, EndDevice, Registration, FunctionSetAssignmentsListLink, Time
 
 from ieee_2030_5.utils import dataclass_to_xml, parse_xml
 
@@ -80,19 +80,23 @@ class IEEE2030_5_Client:
 
         return self._end_devices.EndDevice[index]
 
-    def client_self(self):
+    def self_device(self) -> EndDevice:
         if not self._device_cap:
             self.device_capability()
 
         return self.__get_request__(self._device_cap.SelfDeviceLink.href)
 
-    def function_set_assignment(self, index: int) -> FunctionSetAssignmentsListLink:
-
-        return self._end_devices.EndDevice[index].FunctionSetAssignmentsListLink.href
+    def function_set_assignment(self) -> FunctionSetAssignmentsListLink:
+        fsa_list = self.__get_request__(self.self_device().FunctionSetAssignmentsListLink.href)
+        return fsa_list
 
     def device_capability(self, url: str = "/dcap") -> DeviceCapability:
         self._device_cap = self.__get_request__(url)
         return self._device_cap
+
+    def time(self) -> Time:
+        timexml = self.__get_request__(self._device_cap.TimeLink.href)
+        return timexml
 
     def mirror_usage_point_list(self) -> MirrorUsagePointList:
         self._mup = self.__get_request__(self._device_cap.MirrorUsagePointListLink.href)

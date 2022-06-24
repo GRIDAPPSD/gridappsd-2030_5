@@ -12,8 +12,9 @@ from ieee_2030_5.models.sep import (EndDevice, Registration, RegistrationLink, D
                                     SelfDeviceLink,
                                     MirrorUsagePointListLink, DERListLink, FunctionSetAssignmentsListLink,
                                     LogEventListLink,
-                                    UsagePointListLink, TimeLink, DeviceInformation)
+                                    UsagePointListLink, TimeLink, DeviceInformation, DER, FunctionSetAssignments)
 from ieee_2030_5.types import Lfid
+
 
 
 @dataclass
@@ -23,6 +24,8 @@ class EndDeviceIndexer:
     end_device: EndDevice
     registration: Registration
     device_information: Optional[DeviceInformation] = None
+    function_set_assignment_list: Optional[FunctionSetAssignmentsListLink] = None
+    der_list: Optional[DERListLink] = None
 
 
 @dataclass
@@ -89,7 +92,7 @@ class EndDevices:
         #     index=new_dev_number))
         l_fid_bytes = str(lfid).encode('utf-8')
         base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
-        der_list_link = DERListLink(href=hrefs.extend_url(base_edev_single, suffix="der"))
+        der_list_link = DERListLink(href=hrefs.build_der_link(new_dev_number))
         fsa_list_link = FunctionSetAssignmentsListLink(href=hrefs.extend_url(base_edev_single, suffix="fsa"), all=0)
         log_event_list_link = LogEventListLink(href=hrefs.extend_url(base_edev_single, suffix="log"))
         changed_time = datetime.now()
@@ -126,6 +129,12 @@ class EndDevices:
 
     def get_registration(self, index: int) -> Registration:
         return self.all_end_devices[index].registration
+
+    def get_der_list(self, index: int) -> DERListLink:
+        return self.all_end_devices[index].end_device.DERListLink
+
+    def get_fsa(self, index: int) -> FunctionSetAssignmentsListLink:
+        return self.all_end_devices[index].end_device.FunctionSetAssignmentsListLink
 
     def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> EndDeviceList:
         ed = self.get_device_by_lfid(lfid)

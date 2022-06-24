@@ -5,7 +5,7 @@ import json
 import time
 from datetime import datetime, timedelta
 import logging
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
 
 import pytz
 import tzlocal
@@ -14,10 +14,11 @@ from werkzeug.exceptions import Forbidden
 
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.data.indexer import Indexer
 from ieee_2030_5.models import Time
 from ieee_2030_5.models.end_devices import EndDevices
 import ieee_2030_5.hrefs as hrefs
-from ieee_2030_5.server.edev import EDev, SDev
+from ieee_2030_5.server.edevrequests import EDevRequests, SDevRequests, DERRequests
 from ieee_2030_5.server.exceptions import AlreadyExistsError
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
@@ -102,12 +103,16 @@ class ServerList(RequestOp):
 
 class ServerEndpoints:
 
-    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration):
+    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration,
+                 indexers: Optional[Dict[str, Indexer]] = None):
         self.end_devices = end_devices
         self.config = config
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
         self.app: Flask = app
+        self.indexers = indexers
+        if self.indexers is None:
+            self.indexers: Dict[str, Indexer] = {}
 
         # internally flask uses the name of the view_func for the removal.
         # self.remove_endpoint(self._admin.__name__)
@@ -126,6 +131,7 @@ class ServerEndpoints:
         app.add_url_rule(hrefs.sdev, view_func=self._sdev)
 
         rulers = (
+            (hrefs.der_urls, self._der),
             (hrefs.edev_urls, self._edev),
             (hrefs.mup_urls, self._mup)
         )
@@ -157,6 +163,14 @@ class ServerEndpoints:
         #     self.add_endpoint(hrefs.edev + f"/{index}", view_func=self._edev)
         #     self.add_endpoint(hrefs.mup + f"/{index}", view_func=self._mup)
 
+    def get_indexer(self, index_name: str) -> Indexer:
+        return self.indexers.get(index_name)
+
+    def put_indexer(self, index_name: str, indexer: Indexer):
+        if index_name in self.indexers:
+            raise ValueError(f"Indexer: {index_name} already exists")
+        self.indexers[index_name] = indexer
+
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
 
@@ -169,14 +183,17 @@ class ServerEndpoints:
     def _mup(self, index: Optional[int] = None) -> Response:
         return MUP(server_endpoints=self).execute(index=index)
 
+    def _der(self, edev_id: int, id: Optional[int] = None) -> Response:
+        return DERRequests(server_endpoints=self).execute(edev_id=edev_id, id=id)
+
     def _dcap(self) -> Response:
         return Dcap(server_endpoints=self).execute()
 
     def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
-        return EDev(server_endpoints=self).execute(index=index, category=category)
+        return EDevRequests(server_endpoints=self).execute(index=index, category=category)
 
     def _sdev(self) -> Response:
-        return SDev(server_endpoints=self).execute()
+        return SDevRequests(server_endpoints=self).execute()
 
     def _tm(self) -> Response:
         return TimeRequest(server_endpoints=self).execute()

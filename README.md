@@ -11,7 +11,7 @@ section 6.1.3 and 6.1.4 respectively.
 ## Running the server
 
 ```commandline
-usage: __main__.py [-h] [--no-validate] [--no-create-certs] config
+usage: python -m ieee_2030_5 [-h] [--no-validate] [--no-create-certs] config
 
 positional arguments:
   config             Configuration file for the server.

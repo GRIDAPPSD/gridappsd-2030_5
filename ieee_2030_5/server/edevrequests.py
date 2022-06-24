@@ -8,14 +8,25 @@ from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.utils import dataclass_to_xml
 
 
-class EDev(RequestOp):
+class DERRequests(RequestOp):
     """
     Class supporting end devices and any of the subordinate calls to it.
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
+    def get(self, edev_id: Optional[int] = None, id: Optional[int] = None) -> Response:
+        return Response("Foo")
+
+
+class EDevRequests(RequestOp):
+    """
+    Class supporting end devices and any of the subordinate calls to it.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def get(self, index: Optional[int] = None, category: Optional[str] = None, id2: Optional[int] = None) -> Response:
         """
         Supports the get request for end_devices(EDev) and end_device_list_link.
 
@@ -44,13 +55,15 @@ class EDev(RequestOp):
                 if category == 'reg':
                     retval = self._end_devices.get_registration(index)
 
+                elif category == 'fsa':
+                    retval = self._end_devices.get_fsa(index)
                 else:
                     raise NotImplementedError()
 
         return self.build_response_from_dataclass(retval)
 
 
-class SDev(RequestOp):
+class SDevRequests(RequestOp):
     """
     SelfDevice is an alias for the end device of a client.
     """
