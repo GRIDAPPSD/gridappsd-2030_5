@@ -19,6 +19,7 @@ tzlocal = "^4.2"
 cryptography = "^37.0.2"
 pyOpenSSL = "^22.0.0"
 dataclasses-json = "^0.5.7"
+gridappsd-python = {git = "https://github.com/GRIDAPPSD/gridappsd-python.git", rev = "develop"}
 
 
 [tool.poetry.dev-dependencies]
