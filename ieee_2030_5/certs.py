@@ -28,8 +28,8 @@ class TLSRepository:
         self._private_dir = repo_dir.joinpath("private")
         self._combined_dir = repo_dir.joinpath("combined")
         self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile.name)
-        self._hostnames = {serverhost: serverhost}
-        self._client_hostnames = set()
+        self._common_names = {serverhost: serverhost}
+        self._client_common_name_set = set()
 
         if not self._repo_dir.exists() or not self._certs_dir.exists() or \
                 not self._private_dir.exists() or not self._combined_dir.exists():
@@ -81,24 +81,24 @@ class TLSRepository:
                 f = Path(f)
                 cn = self.get_common_name(f.stem)
                 if cn not in ('ca', serverhost):
-                    self._client_hostnames.add(cn)
+                    self._client_common_name_set.add(cn)
 
     def __create_ca__(self):
         __openssl_create_private_key__(self._ca_key)
         __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key,
                                           self._ca_cert)
 
-    def create_cert(self, hostname: str, as_server: bool = False):
-        if not self.__get_key_file__(hostname).exists():
-            __openssl_create_private_key__(self.__get_key_file__(hostname))
-        __openssl_create_signed_certificate__(hostname, self._openssl_cnf_file, self._ca_key,
-                                              self._ca_cert, self.__get_key_file__(hostname),
-                                              self.__get_cert_file__(hostname), as_server)
+    def create_cert(self, common_name: str, as_server: bool = False):
+        if not self.__get_key_file__(common_name).exists():
+            __openssl_create_private_key__(self.__get_key_file__(common_name))
+        __openssl_create_signed_certificate__(common_name, self._openssl_cnf_file, self._ca_key,
+                                              self._ca_cert, self.__get_key_file__(common_name),
+                                              self.__get_cert_file__(common_name), as_server)
 
-        __openssl_create_pkcs23_pem_and_cert__(self.__get_key_file__(hostname), self.__get_cert_file__(hostname),
-                                               self.__get_combined_file__(hostname))
+        __openssl_create_pkcs23_pem_and_cert__(self.__get_key_file__(common_name), self.__get_cert_file__(common_name),
+                                               self.__get_combined_file__(common_name))
 
-        self._hostnames[hostname] = hostname
+        self._common_names[common_name] = common_name
 
     def lfdi(self, device_id: str) -> Lfid:
         fp = self.fingerprint(device_id, True)
@@ -129,7 +129,7 @@ class TLSRepository:
 
     @property
     def client_list(self) -> List[str]:
-        return list(self._client_hostnames)
+        return list(self._client_common_name_set)
 
     @property
     def ca_key_file(self) -> Path:
@@ -147,14 +147,14 @@ class TLSRepository:
     def server_cert_file(self) -> Path:
         return self.__get_cert_file__(self._serverhost)
 
-    def __get_cert_file__(self, hostname: str) -> Path:
-        return self._certs_dir.joinpath(f"{hostname}.crt")
+    def __get_cert_file__(self, common_name: str) -> Path:
+        return self._certs_dir.joinpath(f"{common_name}.crt")
 
-    def __get_key_file__(self, hostname: str) -> Path:
-        return self._private_dir.joinpath(f"{hostname}.pem")
+    def __get_key_file__(self, common_name: str) -> Path:
+        return self._private_dir.joinpath(f"{common_name}.pem")
 
-    def __get_combined_file__(self, hostname: str) -> Path:
-        return self._combined_dir.joinpath(f"{hostname}-combined.pem")
+    def __get_combined_file__(self, common_name: str) -> Path:
+        return self._combined_dir.joinpath(f"{common_name}-combined.pem")
 
 
 def __openssl_create_pkcs23_pem_and_cert__(private_key_file: Path, cert_file: Path, combined_file: Path):
