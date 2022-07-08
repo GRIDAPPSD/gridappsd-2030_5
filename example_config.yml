@@ -1,29 +1,63 @@
+# The following are the possible list of programmable
+#     """
+#    DeviceCategoryType defined from 20305-2018_IIEStandardforSmartEnergyProfileApplicationsProtocol.pdf Appendix
+#    B.2.3.4 Types package
+#    """
+#    # The Device category types defined.
+#    # Bit positions SHALL be defined as follows:
+#    PROGRAMMABLE_COMMUNICATING_THERMOSTAT = 0
+#    STRIP_HEATERS = 1
+#    BASEBOARD_HEATERS = 2
+#    WATER_HEATER = 3
+#    POOL_PUMP = 4
+#    SAUNA = 5
+#    HOT_TUB = 6
+#    SMART_APPLIANCE = 7
+#    IRRIGATION_PUMP = 8
+#    MANAGED_COMMERCIAL_AND_INDUSTRIAL_LOADS = 9
+#    SIMPLE_RESIDENTIAL_LOADS = 10   # On/Off loads
+#    EXTERIOR_LIGHTING = 11
+#    INTERIOR_LIGHTING = 12
+#    LOAD_CONTROL_SWITCH = 13
+#    ENERGY_MANAGEMENT_SYSTEM = 14
+#    SMART_ENERGY_MODULE = 15
+#    ELECTRIC_VEHICLE = 16
+#    ELECTRIC_VEHICLE_SUPPLY_EQUIPMENT = 17
+#    VIRTUAL_OR_MIXED_DER = 18
+#    RECIPROCATING_ENGINE = 19  # Synchronous Machine
+#    FUEL_CELL = 20  # Battery
+#    PHOTOVOLTAIC_SYSTEM = 21  # Solar
+#    COMBINED_HEAT_AND_POWER = 22
+#    COMBINED_PV_AND_STORAGE = 23
+#    OTHER_GENERATION_SYSTEMS = 24
+#    OTHER_STORAGE_SYSTEMS = 25
+#
+#    # Additional here for Aggregator
+#    AGGREGATOR = 99
+#    OTHER_CLIENT = 100
+#
 devices:
-- bus: '634'
-  device_category_type: PHOTOVOLTAIC_SYSTEM
-  hostname: _def62366-746e-4fcb-b3ee-ebebb90d72d4
+- device_category_type: PHOTOVOLTAIC_SYSTEM
+  #hostname: _def62366-746e-4fcb-b3ee-ebebb90d72d4
   id: _def62366-746e-4fcb-b3ee-ebebb90d72d4
-  ip: 127.0.0.20
-  ipu: '1.1111111'
-  name: school
-  p: 240000.0
-  phases: ''
-  q: 0.0
-  ratedS: 300000.0
-  ratedU: 480.0
-  resource_id: _15EEE173-CC90-4888-B9B8-43916D56890C
+  # ip: 127.0.0.5
+  # Determines if this device is to be directly controlled or not.  If true, then only the single FSA for this
+  # device will be reflected to the client.
+  #
+  # default: true
+  direct_control: true
   pin: 12345
 
 - device_category_type: PHOTOVOLTAIC_SYSTEM
-  hostname: dev1
+  #hostname: dev1
   id: dev1
-  ip: 127.0.0.1
+  # ip: 127.0.0.1
   pin: 12345
 
 - device_category_type: PHOTOVOLTAIC_SYSTEM
-  hostname: dev2
+  #hostname: dev2
   id: dev2
-  ip: 127.0.0.2
+  # ip: 127.0.0.2
   pin: 12345
 
 openssl_cnf: openssl.cnf

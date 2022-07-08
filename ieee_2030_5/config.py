@@ -25,11 +25,13 @@ _log = logging.getLogger(__name__)
 @dataclass
 class DeviceConfiguration:
     id: str
-    ip: str
-    hostname: str
     device_category_type: DeviceCategoryType
     pin: int
+    hostname: str = None
+    ip: str = None
     poll_rate: int = 900
+    # TODO: Direct control means that only one FSA will be available to the client.
+    direct_control: bool = True
 
     @classmethod
     def from_dict(cls, env):

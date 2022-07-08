@@ -19,22 +19,21 @@ logging.basicConfig(level=logging.DEBUG)
 _log = logging.getLogger(__name__)
 
 
-def get_tls_repository(cfg: ServerConfiguration, create_certs: bool = True) -> TLSRepository:
+def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices: bool = True) -> TLSRepository:
     tlsrepo = TLSRepository(cfg.tls_repository,
                             cfg.openssl_cnf,
                             cfg.server_hostname,
-                            clear=create_certs)
-    if create_certs:
+                            clear=create_certificates_for_devices)
+    if create_certificates_for_devices:
         already_represented = set()
 
         # registers the devices, but doesn't register the end devices here.
         for k in cfg.devices:
             if k in already_represented:
-                _log.error(f"Already have {k.hostname} represented by {k.device_category_type}")
+                _log.error(f"Already have {k.id} represented by {k.device_category_type}")
             else:
                 already_represented.add(k)
-                print(f"adding k: {k}")
-                tlsrepo.create_cert(k.hostname)
+                tlsrepo.create_cert(k.id)
     return tlsrepo
 
 
@@ -48,11 +47,15 @@ def get_end_devices(cfg: ServerConfiguration, tlsrepo: TLSRepository) -> Tuple[D
     # or added through the web interface.
     if cfg.server_mode == "enddevices_create_on_start":
         for k in cfg.devices:
-            device = devices.register(device_config=k, lfid=tlsrepo.lfdi(k.hostname))
+            device = devices.register(device_config=k, lfid=tlsrepo.lfdi(k.id))
             # TODO: Add the ability to use other groups
-            get_group(level=GroupLevel.SubTransmission).add_end_device(device)
+            # TODO: By default each device will have it's own named group enabling direct commmunication
+            # TODO: See Section 5.2.3 of CSIP Implementation Guide.
+            get_group(level=GroupLevel.NonTopology, name=k.id).add_end_device(device)
+
+        devices.initialize_groups()
         # TODO: Only valid when we are adding to the subtransmission group.
-        assert devices.num_devices == len(get_group(level=GroupLevel.SubTransmission).get_devices())
+        assert devices.num_devices == len(get_group(level=GroupLevel.NonTopology).get_devices())
     return grps, devices
 
 
