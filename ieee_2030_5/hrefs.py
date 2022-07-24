@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Optional, List
 
 DEFAULT_DCAP_ROOT = "/dcap"
@@ -16,6 +15,9 @@ tm: str = f"{DEFAULT_DCAP_ROOT}/tm"
 rsps: str = f"{DEFAULT_DCAP_ROOT}/rsps"
 # UsagePointListLink
 upt: str = DEFAULT_UPT_ROOT
+
+# DERProgramListLink
+derp: str = "/derp"
 
 # EndDeviceListLink
 edev: str = DEFAULT_EDEV_ROOT
