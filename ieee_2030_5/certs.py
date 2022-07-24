@@ -87,6 +87,8 @@ class TLSRepository:
         __openssl_create_private_key__(self._ca_key)
         __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key,
                                           self._ca_cert)
+        __openssl_create_pkcs23_pem_and_cert__(self._ca_key, self._ca_cert,
+                                               self.__get_combined_file__("ca"))
 
     def create_cert(self, common_name: str, as_server: bool = False):
         if not self.__get_key_file__(common_name).exists():
