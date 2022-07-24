@@ -63,7 +63,7 @@ der_programs: List[DERProgram] = []
 uuid_handler: UUIDHandler = UUIDHandler()
 
 
-def get_group(level: Optional[GroupLevel] = None, name: Optional[str] = None):
+def get_group(level: Optional[GroupLevel] = None, name: Optional[str] = None) -> Group:
 
     if not level and not name:
         raise ValueError("level or name must be specified to this function.")
@@ -78,9 +78,9 @@ def get_group(level: Optional[GroupLevel] = None, name: Optional[str] = None):
         raise ValueError(f"Invalid level specified {level}")
 
     if name is not None and level:
-        for g in groups.values():
-            if g.name == name:
-                grp = g
+        for group in groups.values():
+            if group.name == name:
+                grp = group
                 break
 
     return grp
