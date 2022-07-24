@@ -1,4 +1,5 @@
 import json
+import logging
 
 from flask import Flask, render_template, request, redirect, Response
 import werkzeug.exceptions
@@ -15,6 +16,8 @@ from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups
+
+_log = logging.getLogger(__file__)
 
 
 class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
@@ -74,16 +77,17 @@ def handle_chunking():
 
 
 def before_request():
-    if False:
-        print("HEADERS", request.headers)
-        print("REQ_path", request.path)
-        print("ARGS", request.args)
-        print("DATA", request.get_data())
-        print("FORM", request.form)
+    _log.debug(f"HEADERS: {request.headers}")
+    _log.debug(f"REQ_path: {request.path}")
+    _log.debug(f"ARGS: {request.args}")
+    _log.debug(f"DATA: {request.get_data()}")
+    _log.debug(f"FORM: {request.form}")
+
 
 def after_request(response: Response) -> Response:
-    print(response.get_data())
+    _log.debug(f"RESP:\n{response.get_data().decode('utf-8')}")
     return response
+
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
