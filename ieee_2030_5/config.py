@@ -4,7 +4,7 @@ import inspect
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from typing import List, Literal, Union, Optional
+from typing import List, Literal, Union, Optional, Dict
 
 from dataclasses_json import dataclass_json
 
@@ -33,6 +33,8 @@ class DeviceConfiguration:
     # TODO: Direct control means that only one FSA will be available to the client.
     direct_control: bool = True
 
+    DefaultDERControl: Optional[DefaultDERControl] = None
+
     @classmethod
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
@@ -51,6 +53,14 @@ class GridappsdConfiguration:
     simulation_id_file: Optional[str] = None
     simulation_id: Optional[str] = None
 
+    # def from_dict(self, **kwargs) -> GridappsdConfiguration:
+    #     schema = marshmallow_dataclass.class_schema(GridappsdConfiguration)
+    #     return schema().load(kwargs)
+        # if kwargs:
+        #     return schema().load(init)
+        # else:
+        #     return GridappsdConfiguration()
+
 
 @dataclass
 class ServerConfiguration:
@@ -63,6 +73,7 @@ class ServerConfiguration:
     tls_repository: str
     openssl_cnf: str
     gridappsd: Optional[GridappsdConfiguration] = None
+    DefaultDERControl: Optional[DefaultDERControl] = None
 
     @classmethod
     def from_dict(cls, env):

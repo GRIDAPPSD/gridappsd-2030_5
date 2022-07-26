@@ -18,6 +18,7 @@ from ieee_2030_5.data.indexer import Indexer
 from ieee_2030_5.models import Time
 from ieee_2030_5.models.end_devices import EndDevices
 import ieee_2030_5.hrefs as hrefs
+from ieee_2030_5.server.der_program import DERProgramRequests
 from ieee_2030_5.server.edevrequests import EDevRequests, SDevRequests, DERRequests
 from ieee_2030_5.server.exceptions import AlreadyExistsError
 from ieee_2030_5.server.base_request import RequestOp
@@ -129,6 +130,8 @@ class ServerEndpoints:
         app.add_url_rule(hrefs.tm, view_func=self._tm)
         _log.debug(f"Adding rule: {hrefs.sdev} methods: {['GET']}")
         app.add_url_rule(hrefs.sdev, view_func=self._sdev)
+        _log.debug(f"Adding rule: {hrefs.derp} methods: {['GET']}")
+        app.add_url_rule(hrefs.derp, view_func=self._derp)
 
         rulers = (
             (hrefs.der_urls, self._der),
@@ -197,3 +200,6 @@ class ServerEndpoints:
 
     def _tm(self) -> Response:
         return TimeRequest(server_endpoints=self).execute()
+
+    def _derp(self) -> Response:
+        return DERProgramRequests(server_endpoints=self).execute()

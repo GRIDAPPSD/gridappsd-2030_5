@@ -49,7 +49,7 @@ def get_end_devices(cfg: ServerConfiguration, tlsrepo: TLSRepository) -> Tuple[D
         for k in cfg.devices:
             device = devices.register(device_config=k, lfid=tlsrepo.lfdi(k.id))
             # TODO: Add the ability to use other groups
-            # TODO: By default each device will have it's own named group enabling direct commmunication
+            # TODO: By default each device will have it's own named group enabling direct communication
             # TODO: See Section 5.2.3 of CSIP Implementation Guide.
             get_group(level=GroupLevel.NonTopology, name=k.id).add_end_device(device)
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     unknown = []
     # Only check for resolvability if not passed --no-validate
     if not opts.no_validate:
-        _log.debug("Validating hostnames of devices are resolvable.")
+        _log.debug("Validating hostnames and/or ip of devices are resolvable.")
         for i in range(len(config.devices)):
             assert config.devices[i].hostname
 

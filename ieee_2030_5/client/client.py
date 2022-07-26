@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import threading
 from http.client import HTTPSConnection
 from os import PathLike
 from pathlib import Path
@@ -7,13 +9,17 @@ import ssl
 import atexit
 from typing import Optional, Dict, Tuple
 import xml.dom.minidom
+from threading import Timer
 
 import xsdata
 
 from ieee_2030_5.models import DeviceCapability, EndDeviceListLink, MirrorUsagePointList, MirrorUsagePoint, \
-    UsagePointList, EndDevice, Registration, FunctionSetAssignmentsListLink, Time
+    UsagePointList, EndDevice, Registration, FunctionSetAssignmentsListLink, Time, DERProgramList, \
+    FunctionSetAssignments
 
 from ieee_2030_5.utils import dataclass_to_xml, parse_xml
+
+_log = logging.getLogger(__name__)
 
 
 class IEEE2030_5_Client:
@@ -54,6 +60,9 @@ class IEEE2030_5_Client:
 
         self._hostname = hostname
         self._debug = debug
+        self._dcap_poll_rate: int = 0
+        self._dcap_timer: Optional[Timer] = None
+
         IEEE2030_5_Client.clients.add(self)
 
     @property
@@ -90,13 +99,34 @@ class IEEE2030_5_Client:
         fsa_list = self.__get_request__(self.self_device().FunctionSetAssignmentsListLink.href)
         return fsa_list
 
+    def poll_timer(self, fn, args):
+        _log.debug(threading.currentThread().name)
+        fn(args)
+        threading.currentThread().join()
+
     def device_capability(self, url: str = "/dcap") -> DeviceCapability:
-        self._device_cap = self.__get_request__(url)
+        self._device_cap: DeviceCapability = self.__get_request__(url)
+        if self._device_cap.pollRate is not None:
+            self._dcap_poll_rate = self._device_cap.pollRate
+        else:
+            self._dcap_poll_rate = 600
+
+        _log.debug(f"devcap id {id(self._device_cap)}")
+        _log.debug(threading.currentThread().name)
+        _log.debug(f"DCAP: Poll rate: {self._dcap_poll_rate}")
+        timer = Timer(self._dcap_poll_rate, self.poll_timer, (self.device_capability, url))
+        timer.start()
         return self._device_cap
 
     def time(self) -> Time:
         timexml = self.__get_request__(self._device_cap.TimeLink.href)
         return timexml
+
+    def der_program_list(self, device: EndDevice) -> DERProgramList:
+        fsa: FunctionSetAssignments = self.__get_request__(device.FunctionSetAssignmentsListLink.href)
+        der_programs_list: DERProgramList = self.__get_request__(fsa.DERProgramListLink.href)
+
+        return der_programs_list
 
     def mirror_usage_point_list(self) -> MirrorUsagePointList:
         self._mup = self.__get_request__(self._device_cap.MirrorUsagePointListLink.href)
@@ -158,7 +188,7 @@ class IEEE2030_5_Client:
             resp_xml = xml.dom.minidom.parseString(response_data)
             if resp_xml and self._debug:
                 print(f"<---- GET RESPONSE")
-                print(f"{resp_xml.toprettyxml()}")
+                print(f"{resp_xml.toxml()}")  # toprettyxml()}")
 
         except xsdata.exceptions.ParserError as ex:
             if self._debug:

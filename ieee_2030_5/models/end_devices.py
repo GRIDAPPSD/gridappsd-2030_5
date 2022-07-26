@@ -14,7 +14,7 @@ from ieee_2030_5.models.sep import (EndDevice, Registration, RegistrationLink, D
                                     MirrorUsagePointListLink, DERListLink, FunctionSetAssignmentsListLink,
                                     LogEventListLink,
                                     UsagePointListLink, TimeLink, DeviceInformation, DER, FunctionSetAssignments,
-                                    DERProgram, DERProgramListLink)
+                                    DERProgram, DERProgramListLink, DefaultDERControl)
 from ieee_2030_5.server.server_constructs import GroupLevel, get_group
 from ieee_2030_5.types import Lfid
 
@@ -75,12 +75,12 @@ class EndDevices:
             dc = DeviceCapability(
                 href=hrefs.dcap,
                 MirrorUsagePointListLink=mup,
-                SelfDeviceLink=sdev,
+                # SelfDeviceLink=sdev,
                 EndDeviceListLink=edll,
                 pollRate=poll_rate,
                 TimeLink=timelink,
                 UsagePointListLink=upt,
-                DERProgramListLink=derp
+                # DERProgramListLink=derp
             )
             self._lfid_index_map[lfid].device_capability = dc
 
@@ -98,6 +98,8 @@ class EndDevices:
         ts = int(round(datetime.utcnow().timestamp()))
         self._last_device_number += 1
         new_dev_number = self._last_device_number
+
+        default_der_control = DefaultDERControl
 
         # Manage links to different resources for the device.
         reg_link_href = hrefs.build_edev_registration_link(new_dev_number)

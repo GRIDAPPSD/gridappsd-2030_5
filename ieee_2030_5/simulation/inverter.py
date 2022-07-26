@@ -1,19 +1,23 @@
+import sys
 import time
 from argparse import ArgumentParser
 import asyncio
 from pathlib import Path
 from typing import List, Optional, Dict
 from threading import Thread
+from threading import Timer
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import subprocess
 import pvlib
 import math
+import logging
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
 from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading, ReadingType, Reading
+from ieee_2030_5.utils import serialize_dataclass
 
 
 def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
@@ -90,6 +94,7 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     parser = ArgumentParser()
     parser.add_argument("--tls-repo", help="TLS repository directory to use, defaults to ~/tls", default="~/tls")
     parser.add_argument("--server-host", help="Reference to the utilities server for data.")
@@ -129,10 +134,17 @@ if __name__ == '__main__':
     tm = client.time()
     # The device that this class is available for.
     device = client.end_device()
+    print("EndDevice")
+    print(serialize_dataclass(device))
+
     # Registration to test if we have the correct pin for the client to be sure
     # that it is talking to the correct server
     reg = client.registration(device)
     assert reg.pIN == opts.pin
+
+    der_programs = client.der_program_list(device)
+
+    der_programs = client.der_program_list()
 
     # Determine the function set assignment for our device.
     fsa = client.function_set_assignment()
@@ -210,3 +222,9 @@ if __name__ == '__main__':
     #     if alive:
     #         break
     #     time.sleep(1)
+    while True:
+        try:
+            time.sleep(0.1)
+        except KeyboardInterrupt:
+            sys.stderr.write("Exiting program\n")
+            sys.exit(0)

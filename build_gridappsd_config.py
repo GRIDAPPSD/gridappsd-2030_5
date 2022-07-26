@@ -1,7 +1,7 @@
 import argparse
 import socket
 
-from dataclasses import dataclass
+from marshmallow_dataclass import dataclass
 from pprint import pprint
 from typing import List
 

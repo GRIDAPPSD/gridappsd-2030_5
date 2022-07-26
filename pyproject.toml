@@ -20,6 +20,7 @@ cryptography = "^37.0.2"
 pyOpenSSL = "^22.0.0"
 # gridappsd-python = {git = "https://github.com/GRIDAPPSD/gridappsd-python.git", rev = "develop"}
 simplekv = "^0.14.1"
+dataclasses-json = "^0.5.7"
 
 
 [tool.poetry.group.dev.dependencies]
