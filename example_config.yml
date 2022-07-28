@@ -84,6 +84,10 @@ openssl_cnf: openssl.cnf
 server_hostname: 0.0.0.0:8443
 server_mode: enddevices_create_on_start
 tls_repository: ~/tls
+# A file where the der programs are specified or an inline list
+# within this context.
+program_list: programs_config.yml
+curve_list: curves_config.yml
 
 # Contains control mode information to be used if no active DERControl is
 # found
