@@ -8,6 +8,7 @@ DEFAULT_DRP_ROOT = "/drp"
 DEFAULT_SELF_ROOT = "/sdev"
 DEFAULT_MESSAGE_ROOT = "/msg"
 
+
 dcap: str = f"{DEFAULT_DCAP_ROOT}"
 # TimeLink
 tm: str = f"{DEFAULT_DCAP_ROOT}/tm"
@@ -33,6 +34,18 @@ mup: str = DEFAULT_MUP_ROOT
 mup_urls: List = [
     (mup, ('GET', 'POST')),
     f"{mup}/<int:index>"
+]
+
+curve: str = "/curves"
+curve_urls: List = [
+    f"{curve}",
+    (f"{curve}/<int:index>", ("GET",))
+]
+
+program: str = "/programs"
+program_urls: List = [
+    f"{program}",
+    (f"{program}/<int:index>", ("GET",))
 ]
 
 der: str = "/der"

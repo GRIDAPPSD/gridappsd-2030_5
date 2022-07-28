@@ -14,8 +14,8 @@ from werkzeug.exceptions import Forbidden
 
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.data.indexer import Indexer
-from ieee_2030_5.models import Time
+from ieee_2030_5.data.indexer import add_href, get_href, get_all_filtered
+from ieee_2030_5.models import Time, DERCurveList, DERProgramList
 from ieee_2030_5.models.end_devices import EndDevices
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.server.der_program import DERProgramRequests
@@ -28,7 +28,6 @@ from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.server.usage_points import MUP, UTP
 from ieee_2030_5.types import TimeType, TimeOffsetType, format_time
 from ieee_2030_5.utils import dataclass_to_xml
-
 
 _log = logging.getLogger(__name__)
 
@@ -104,16 +103,12 @@ class ServerList(RequestOp):
 
 class ServerEndpoints:
 
-    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration,
-                 indexers: Optional[Dict[str, Indexer]] = None):
+    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration):
         self.end_devices = end_devices
         self.config = config
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
         self.app: Flask = app
-        self.indexers = indexers
-        if self.indexers is None:
-            self.indexers: Dict[str, Indexer] = {}
 
         # internally flask uses the name of the view_func for the removal.
         # self.remove_endpoint(self._admin.__name__)
@@ -136,7 +131,9 @@ class ServerEndpoints:
         rulers = (
             (hrefs.der_urls, self._der),
             (hrefs.edev_urls, self._edev),
-            (hrefs.mup_urls, self._mup)
+            (hrefs.mup_urls, self._mup),
+            (hrefs.curve_urls, self._curves),
+            (hrefs.program_urls, self._programs)
         )
 
         for endpoints, view_func in rulers:
@@ -165,14 +162,6 @@ class ServerEndpoints:
         # for index, ed in end_devices.all_end_devices.items():
         #     self.add_endpoint(hrefs.edev + f"/{index}", view_func=self._edev)
         #     self.add_endpoint(hrefs.mup + f"/{index}", view_func=self._mup)
-
-    def get_indexer(self, index_name: str) -> Indexer:
-        return self.indexers.get(index_name)
-
-    def put_indexer(self, index_name: str, indexer: Indexer):
-        if index_name in self.indexers:
-            raise ValueError(f"Indexer: {index_name} already exists")
-        self.indexers[index_name] = indexer
 
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
@@ -203,3 +192,19 @@ class ServerEndpoints:
 
     def _derp(self) -> Response:
         return DERProgramRequests(server_endpoints=self).execute()
+
+    def _curves(self, index: Optional[int] = None) -> Response:
+        if index is None:
+            curve_list = DERCurveList(DERCurve=get_all_filtered(href_prefix=hrefs.curve))
+            response = Response(dataclass_to_xml(curve_list))
+        else:
+            response = Response(dataclass_to_xml(get_href(request.path)))
+        return response
+
+    def _programs(self, index: Optional[int] = None) -> Response:
+        if index is None:
+            program_list = DERProgramList(DERProgram=get_all_filtered(href_prefix=hrefs.program))
+            response = Response(dataclass_to_xml(program_list))
+        else:
+            response = Response(dataclass_to_xml(get_href(request.path)))
+        return response

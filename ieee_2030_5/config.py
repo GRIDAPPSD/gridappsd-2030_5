@@ -99,7 +99,7 @@ class ServerConfiguration:
             if "DERControlBase" in item:
                 base = DERControlBase()
                 for k in item.get("DERControlBase"):
-                    setattr(base, k, item.get(k))
+                    setattr(base, k, item["DERControlBase"].get(k))
                 del item["DERControlBase"]
 
             if "default_der_control" in item:
@@ -177,7 +177,6 @@ class ServerConfiguration:
     #     ) -> Tuple[SettingsSourceCallable, ...]:
     #         # Add load from yml file, change priority and remove file secret option
     #         return init_settings, yml_config_setting, env_settings
-
 # class ConfigObj:
 #     def __init__(self, in_dict: dict):
 #         assert isinstance(in_dict, dict)

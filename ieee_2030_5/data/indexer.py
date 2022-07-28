@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import pickle
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 from datetime import datetime
 from email.utils import format_datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from ieee_2030_5.persistance.points import set_point, get_point
+
+__all__: List[str] = [
+    "get_href",
+    "add_href"
+]
 
 
 @dataclass
@@ -25,6 +31,11 @@ class Indexer:
     def init(self):
         if self.__items__ is None:
             self.__items__ = {}
+
+    @property
+    def length(self) -> int:
+        self.init()
+        return len(self.__items__)
 
     def add(self, href: str, item: dataclass):
         self.init()
@@ -54,6 +65,9 @@ class Indexer:
 
         return data
 
+    def get_all(self) -> List:
+        return deepcopy([x.item for x in self.__items__.values()])
+
 
 __indexer__ = Indexer()
 
@@ -64,3 +78,7 @@ def add_href(href: str, item: dataclass):
 
 def get_href(href: str) -> dataclass:
     return __indexer__.get(href)
+
+
+def get_all_filtered(href_prefix: str) -> List[dataclass] | []:
+    return [v.item for k, v in __indexer__.__items__.items() if k.startswith(href_prefix)]

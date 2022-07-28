@@ -1,5 +1,7 @@
 import json
 import logging
+from dataclasses import dataclass
+from typing import List
 
 from flask import Flask, render_template, request, redirect, Response
 import werkzeug.exceptions
@@ -10,8 +12,10 @@ __all__ = ["run_server"]
 
 # templates = Jinja2Templates(directory="templates")
 # from IEEE2030_5.endpoints import dcap, IEEE2030_5Renderer
+from ieee_2030_5 import hrefs
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.data.indexer import Indexer, add_href
 from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
@@ -125,6 +129,10 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     # TODO if required we have to have one all the time on the server.
     ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
 
+    # Initialize curve context from configuration file
+    initialize_href_server_context(hrefs.curve, config.curve_list)
+    initialize_href_server_context(hrefs.program, config.program_list)
+
     ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
     AdminEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
 
@@ -206,6 +214,11 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     #,
     #debug=True)
 
+
+def initialize_href_server_context(base_href: str, item_list: List[dataclass]):
+    for index, curve in enumerate(item_list):
+        curve.href = f"{base_href}/{index}"
+        add_href(curve.href, curve)
 
 #
 # # start our webserver!
