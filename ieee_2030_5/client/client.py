@@ -188,7 +188,7 @@ class IEEE2030_5_Client:
             resp_xml = xml.dom.minidom.parseString(response_data)
             if resp_xml and self._debug:
                 print(f"<---- GET RESPONSE")
-                print(f"{resp_xml.toxml()}")  # toprettyxml()}")
+                print(f"{response_data}")  # toprettyxml()}")
 
         except xsdata.exceptions.ParserError as ex:
             if self._debug:

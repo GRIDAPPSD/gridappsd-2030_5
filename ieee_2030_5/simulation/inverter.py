@@ -142,14 +142,14 @@ if __name__ == '__main__':
     reg = client.registration(device)
     assert reg.pIN == opts.pin
 
-    der_programs = client.der_program_list(device)
+    # der_programs = client.der_program_list(device)
+    #
+    # der_programs = client.der_program_list()
+    #
+    # # Determine the function set assignment for our device.
+    # fsa = client.function_set_assignment()
 
-    der_programs = client.der_program_list()
-
-    # Determine the function set assignment for our device.
-    fsa = client.function_set_assignment()
-
-    print(fsa)
+    #print(fsa)
     # edevs = client.end_devices()
     #
     # my_device = client.end_device()

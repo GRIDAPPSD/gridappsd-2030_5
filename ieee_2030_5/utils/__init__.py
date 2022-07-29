@@ -11,7 +11,7 @@ __xml_context__ = XmlContext()
 __parser_config__ = ParserConfig(fail_on_unknown_attributes=False,
                                  fail_on_unknown_properties=False)
 __xml_parser__ = XmlParser(config=__parser_config__, context=__xml_context__)
-__config__ = SerializerConfig(xml_declaration=True, pretty_print=True)
+__config__ = SerializerConfig(xml_declaration=False, pretty_print=True)
 __serializer__ = XmlSerializer(config=__config__)
 __ns_map__ = {None: "urn:ieee:std:2030.5:ns"}
 
