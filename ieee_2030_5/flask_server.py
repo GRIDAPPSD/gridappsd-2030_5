@@ -1,6 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 
 from flask import Flask, render_template, request, redirect, Response
@@ -95,7 +96,7 @@ def after_request(response: Response) -> Response:
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
-    app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
+    app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath('templates')))
     # Debug headers path and request arguments
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.

@@ -94,7 +94,7 @@ class ServerConfiguration:
             temp_program_list = yaml.safe_load(Path(self.program_list).read_text())
 
         self.program_list = []
-        for item in temp_program_list['der_program_list']:
+        for item in temp_program_list['der_program_lists']:
             base = None
             if "DERControlBase" in item:
                 base = DERControlBase()
