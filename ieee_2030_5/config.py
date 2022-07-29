@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import sys
 from dataclasses import dataclass
 import logging
 from pathlib import Path
@@ -11,7 +12,11 @@ from dataclasses_json import dataclass_json
 
 __all__ = ["ServerConfiguration"]
 
-from gridappsd.field_interface import MessageBusDefinition
+try:
+    from gridappsd.field_interface import MessageBusDefinition
+except ImportError as ex:
+    sys.stderr.write("Gridappsd integration disabled")
+    pass
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData
