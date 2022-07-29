@@ -57,6 +57,18 @@ class EndDevices:
     def num_devices(self) -> int:
         return len(self.all_end_devices)
 
+    def get_fsa_list(self, lfid: Optional[Lfid] = None,
+                     edevid: Optional[int] = None) -> List[FunctionSetAssignments] | []:
+        if not ((lfid is not None) ^ edevid is not None):
+            raise ValueError("Either lfid or edevid must be passed not both.")
+
+        if lfid:
+            indexer: EndDeviceIndexer = self._lfid_index_map.get(lfid)
+        else:
+            indexer: EndDeviceIndexer = self.all_end_devices.get(edevid)
+
+        return indexer.function_set_assignments
+
     def get_device_capability(self, lfid: Lfid) -> DeviceCapability:
         if not isinstance(lfid, Lfid):
             lfid = Lfid(lfid)
@@ -80,7 +92,7 @@ class EndDevices:
                 pollRate=poll_rate,
                 TimeLink=timelink,
                 UsagePointListLink=upt,
-                # DERProgramListLink=derp
+                DERProgramListLink=derp
             )
             self._lfid_index_map[lfid].device_capability = dc
 
@@ -94,7 +106,7 @@ class EndDevices:
             lfid = Lfid(lfid)
         return self._lfid_index_map.get(lfid).end_device
 
-    def register(self, device_config: DeviceConfiguration, lfid: Lfid) -> EndDevice:
+    def initialize_device(self, device_config: DeviceConfiguration, lfid: Lfid) -> EndDevice:
         ts = int(round(datetime.utcnow().timestamp()))
         self._last_device_number += 1
         new_dev_number = self._last_device_number
@@ -103,21 +115,21 @@ class EndDevices:
 
         # Manage links to different resources for the device.
         reg_link_href = hrefs.build_edev_registration_link(new_dev_number)
-        add_href(reg_link_href, RegistrationLink(href=reg_link_href))
+        reg_link = RegistrationLink(href=reg_link_href)
 
         cfg_link_href = hrefs.build_edev_config_link(new_dev_number)
-        add_href(cfg_link_href, ConfigurationLink(cfg_link_href))
+        cfg_link = ConfigurationLink(cfg_link_href)
 
         dev_status_link_href = hrefs.build_edev_status_link(new_dev_number)
-        add_href(dev_status_link_href, DeviceStatusLink(href=dev_status_link_href))
+        dev_status_link = DeviceStatusLink(href=dev_status_link_href)
 
         power_status_link_href = hrefs.build_edev_power_status_link(new_dev_number)
-        add_href(power_status_link_href, PowerStatusLink(href=power_status_link_href))
+        power_status_link = PowerStatusLink(href=power_status_link_href)
 
         # file_status_link = FileStatusLink(href=hrefs.edev_file_status_fmt.format(
         #     index=new_dev_number))
         dev_info_link_href = hrefs.build_edev_info_link(new_dev_number)
-        add_href(dev_status_link_href, DeviceInformationLink(href=dev_info_link_href))
+        dev_info_link = DeviceInformationLink(href=dev_info_link_href)
 
         # sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
         #     index=new_dev_number))
@@ -125,43 +137,41 @@ class EndDevices:
 
         base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
         der_list_link_href = hrefs.build_der_link(new_dev_number)
-        add_href(der_list_link_href, DERListLink(href=der_list_link_href))
+        der_list_link = DERListLink(href=der_list_link_href)
 
         fsa_list_link_href = hrefs.extend_url(base_edev_single, suffix="fsa")
-        add_href(fsa_list_link_href, FunctionSetAssignmentsListLink(href=fsa_list_link_href))
+        fsa_list_link = FunctionSetAssignmentsListLink(href=fsa_list_link_href)
 
         log_event_list_link_href = hrefs.extend_url(base_edev_single, suffix="log")
-        add_href(log_event_list_link_href, LogEventListLink(href=log_event_list_link_href))
+        log_event_list_link = LogEventListLink(href=log_event_list_link_href)
 
         end_device_href = f"{hrefs.edev}/{new_dev_number}"
         changed_time = datetime.now()
         changed_time.replace(microsecond=0)
-        add_href(end_device_href, EndDevice(deviceCategory=device_config.device_category_type.value,
-                                            lFDI=l_fid_bytes,
-                                            RegistrationLink=get_href(reg_link_href),
-                                            DeviceStatusLink=get_href(dev_status_link_href),
-                                            ConfigurationLink=get_href(cfg_link_href),
-                                            PowerStatusLink=get_href(power_status_link_href),
-                                            DeviceInformationLink=get_href(dev_info_link_href),
-                                            # TODO: Do actual sfid rather than lfid.
-                                            sFDI=lfid,
-                                            # file_status_link=file_status_link,
-                                            # subscription_list_link=sub_list_link,
-                                            href=end_device_href,
-                                            DERListLink=get_href(der_list_link_href),
-                                            FunctionSetAssignmentsListLink=get_href(fsa_list_link_href),
-                                            LogEventListLink=get_href(log_event_list_link_href),
-                                            enabled=True,
-                                            changedTime=int(changed_time.timestamp())))
+
+        end_device = EndDevice(deviceCategory=device_config.device_category_type.value,
+                               lFDI=l_fid_bytes,
+                               RegistrationLink=reg_link,
+                               DeviceStatusLink=dev_status_link,
+                               ConfigurationLink=cfg_link,
+                               PowerStatusLink=power_status_link,
+                               DeviceInformationLink=dev_info_link,
+                               # TODO: Do actual sfid rather than lfid.
+                               sFDI=lfid,
+                               # file_status_link=file_status_link,
+                               # subscription_list_link=sub_list_link,
+                               href=end_device_href,
+                               DERListLink=der_list_link,
+                               FunctionSetAssignmentsListLink=fsa_list_link,
+                               LogEventListLink=log_event_list_link,
+                               enabled=True,
+                               changedTime=int(changed_time.timestamp()))
+
+        add_href(end_device_href, end_device)
 
         registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
         add_href(reg_link_href, registration)
 
-        dev_indexer = EndDeviceIndexer(index=new_dev_number, id=device_config.id,
-                                       end_device=get_href(end_device_href), registration=registration)
-
-        self.all_end_devices[new_dev_number] = dev_indexer
-        self._lfid_index_map[Lfid(l_fid_bytes)] = dev_indexer
         return get_href(end_device_href)
 
     def get(self, index: int) -> EndDevice:
