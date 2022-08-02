@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Program Lists</title>
+</head>
+<body>
+    <div id="title">Program Lists</div>
+    <div id="contentwrapper">
+        <ul>
+            {% for pl in program_lists  %}
+            <li>
+                {{ pl.name }}
+                <ul>
+                {% for p in pl.programs  %}
+                <li>
+                    {{  p.mRID  }}, {{ p.description  }}<br/>
+                    <ul>
+                    {% for k, v in p.__dict__.items()  %}
+                    <li>{{ k }} => {{ v }}</li>
+                    {% endfor %}
+                    </ul>
+                </li>
+                {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
+
+        </ul>
+    </div>
+
+
+</body>
+</html>

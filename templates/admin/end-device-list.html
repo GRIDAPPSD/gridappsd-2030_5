@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>End Devices</title>
+</head>
+<body>
+    <h1>End Device List</h1>
+    <ul>
+    {% for index, ed in end_device_list.items() %}
+        <li>{{ index }} {{ ed.lfid }}<br/>
+            <ul>
+            {% for k, v in ed.__dict__.items() %}
+                <li>{{ k }} => {{ v }}</li>
+            {% endfor %}
+            </ul>
+        </li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
