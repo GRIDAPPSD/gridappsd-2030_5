@@ -7,9 +7,11 @@ from datetime import datetime
 from enum import Flag, auto
 from typing import Dict, Optional, List
 
+import werkzeug.exceptions
+
 from ieee_2030_5 import hrefs
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration
+from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration, ProgramList
 from ieee_2030_5.data.indexer import add_href, get_href
 from ieee_2030_5.models import (
     EndDevice,
@@ -21,10 +23,11 @@ from ieee_2030_5.models import (
     DERCurveListLink, Registration, DERListLink, FunctionSetAssignmentsListLink, EndDeviceList, DeviceCategoryType,
     DefaultDERControl, RegistrationLink, ConfigurationLink, DeviceStatusLink, PowerStatusLink, DeviceInformationLink,
     LogEventListLink, SelfDeviceLink, EndDeviceListLink, DERProgramListLink, UsagePointListLink,
-    MirrorUsagePointListLink, TimeLink, DeviceCapability, FunctionSetAssignments, DeviceInformation, DER)
+    MirrorUsagePointListLink, TimeLink, DeviceCapability, FunctionSetAssignments, DeviceInformation, DER,
+    FunctionSetAssignmentsList)
 
 from ieee_2030_5.server.uuid_handler import UUIDHandler
-from ieee_2030_5.types import Lfid
+from ieee_2030_5.types_ import Lfid
 
 _log = logging.getLogger(__name__)
 
@@ -140,6 +143,15 @@ def get_groups() -> Dict[GroupLevel, Group]:
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> EndDevices:
+    """
+    Initialize the 2030.5 server side.  After this function call the following items
+    will be initialized.
+
+    - Curve List
+    - Program Lists
+    If server_mode == "enddevices_create_on_start"
+    - End Devices will be initialized and created
+    """
     _log.debug("Initializing 2030.5")
 
     _log.debug("Update DERCurves' href property")
@@ -164,10 +176,18 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
     _log.debug("Registering EndDevices")
     end_devices = EndDevices()
     if config.server_mode == "enddevices_create_on_start":
+        program_list_names = [x.name for x in config.program_lists]
         for device_config in config.devices:
-            end_device = end_devices.initialize_device(device_config=device_config, lfid=tlsrepo.lfdi(device_config.id))
+            end_device = end_devices.initialize_device(device_config=device_config,
+                                                       lfid=tlsrepo.lfdi(device_config.id),
+                                                       program_lists=config.program_lists)
+
             for fsa in device_config.fsa_list:
+
                 print(fsa)
+            print(end_devices.__all_end_devices__)
+
+    return end_devices
 
 
 @dataclass
@@ -188,8 +208,8 @@ class EndDevices:
     """
     EndDevices contains the server side instances of an
     """
-    all_end_devices: Dict[int, EndDeviceData] = field(default_factory=dict)
-    _lfid_index_map: Dict[Lfid, EndDeviceData] = field(default_factory=dict)
+    __all_end_devices__: Dict[int, EndDeviceData] = field(default_factory=dict)
+    _lfid_index_map: Dict[Lfid, int] = field(default_factory=dict)
 
     # only increasing device_numbers
     _last_device_number: int = field(default=-1)
@@ -201,16 +221,16 @@ class EndDevices:
         """
         non_topo = get_group(level=GroupLevel.NonTopology)
 
-        for index, indexer in self.all_end_devices.items():
+        for index, indexer in self.__all_end_devices__.items():
             indexer.der_programs.append(non_topo.der_program)
 
     @property
     def num_devices(self) -> int:
-        return len(self.all_end_devices)
+        return len(self.__all_end_devices__)
 
     def get_end_devices(self) -> Dict[int, EndDevice]:
         devices: Dict[int, EndDevice] = {}
-        for k, v in self.all_end_devices.items():
+        for k, v in self.__all_end_devices__.items():
             devices[k] = copy(v.end_device)
         return devices
 
@@ -222,48 +242,67 @@ class EndDevices:
         if lfid:
             indexer: EndDeviceData = self._lfid_index_map.get(lfid)
         else:
-            indexer: EndDeviceData = self.all_end_devices.get(edevid)
+            indexer: EndDeviceData = self.__all_end_devices__.get(edevid)
 
         return indexer.function_set_assignments
 
     def get_device_capability(self, lfid: Lfid) -> DeviceCapability:
         if not isinstance(lfid, Lfid):
             lfid = Lfid(lfid)
+        ed: EndDeviceData = self.__get_enddevicedata_by_lfid__(lfid)
+        # if ed.device_capability is None:
+        #     index = self._lfid_index_map[lfid].index
+        #     sdev = SelfDeviceLink(href=hrefs.sdev)
+        #     # TODO Add Aggregator for this
+        #     edll = EndDeviceListLink(href=f"{hrefs.edev}", all=1)
+        #     derp = DERProgramListLink(href=f"{hrefs.derp}", all=2)
+        #     upt = UsagePointListLink(href=f"{hrefs.upt}", all=0)
+        #     mup = MirrorUsagePointListLink(href=f"{hrefs.mup}", all=0)
+        #     poll_rate = self.get_registration(index).pollRate
+        #     timelink = TimeLink(href=f"{hrefs.tm}")
+        #
+        #     dc = DeviceCapability(
+        #         href=hrefs.dcap,
+        #         MirrorUsagePointListLink=mup,
+        #         # SelfDeviceLink=sdev,
+        #         EndDeviceListLink=edll,
+        #         pollRate=poll_rate,
+        #         TimeLink=timelink,
+        #         UsagePointListLink=upt,
+        #         DERProgramListLink=derp
+        #     )
+        #     self._lfid_index_map[lfid].device_capability = dc
 
-        if self._lfid_index_map[lfid].device_capability is None:
-            index = self._lfid_index_map[lfid].index
-            sdev = SelfDeviceLink(href=hrefs.sdev)
-            # TODO Add Aggregator for this
-            edll = EndDeviceListLink(href=f"{hrefs.edev}", all=1)
-            derp = DERProgramListLink(href=f"{hrefs.derp}", all=2)
-            upt = UsagePointListLink(href=f"{hrefs.upt}", all=0)
-            mup = MirrorUsagePointListLink(href=f"{hrefs.mup}", all=0)
-            poll_rate = self.get_registration(index).pollRate
-            timelink = TimeLink(href=f"{hrefs.tm}")
+        return ed.device_capability
 
-            dc = DeviceCapability(
-                href=hrefs.dcap,
-                MirrorUsagePointListLink=mup,
-                # SelfDeviceLink=sdev,
-                EndDeviceListLink=edll,
-                pollRate=poll_rate,
-                TimeLink=timelink,
-                UsagePointListLink=upt,
-                DERProgramListLink=derp
-            )
-            self._lfid_index_map[lfid].device_capability = dc
+    def get_device_by_index(self, index: int) -> EndDevice:
+        return self.__get_enddevice_by_index__(index)
 
-        return self._lfid_index_map[lfid].device_capability
+    def get_device_by_lfid(self, lfid: Lfid) -> EndDevice:
+        index = self.__get_index_by_lfid__(lfid)
+        return self.__get_enddevice_by_index__(index)
 
-    def get_device_by_index(self, index: int) -> Optional[EndDevice]:
-        return self.all_end_devices.get(index)
+    def __get_enddevicedata_by_lfid__(self, lfid: Lfid):
+        index = self.__get_index_by_lfid__(lfid)
+        return self.__all_end_devices__[index]
 
-    def get_device_by_lfid(self, lfid: Lfid) -> Optional[EndDevice]:
+    def __get_index_by_lfid__(self, lfid: Lfid):
         if not isinstance(lfid, Lfid):
             lfid = Lfid(lfid)
-        return self._lfid_index_map.get(lfid).end_device
 
-    def initialize_device(self, device_config: DeviceConfiguration, lfid: Lfid) -> EndDevice:
+        index = self._lfid_index_map.get(lfid)
+        if index is None:
+            raise werkzeug.exceptions.NotFound()
+        return index
+
+    def __get_enddevice_by_index__(self, index: int) -> EndDevice:
+        ed = self.__all_end_devices__.get(index)
+        if ed is None:
+            raise werkzeug.exceptions.NotFound()
+        return ed.end_device
+
+    def initialize_device(self, device_config: DeviceConfiguration, lfid: Lfid,
+                          program_lists: List[ProgramList]) -> EndDevice:
         ts = int(round(datetime.utcnow().timestamp()))
         self._last_device_number += 1
         new_dev_number =self._last_device_number
@@ -300,10 +339,33 @@ class EndDevices:
         log_event_list_link_href = hrefs.extend_url(base_edev_single, suffix="log")
         log_event_list_link = LogEventListLink(href=log_event_list_link_href)
 
+        time_link_href = hrefs.tm
+        time_link = TimeLink(href=time_link_href)
+
         end_device_href = f"{hrefs.edev}/{new_dev_number}"
+        end_device_list_link = EndDeviceListLink(href=hrefs.edev)
+
         changed_time = datetime.now()
         changed_time.replace(microsecond=0)
 
+        program_list_names = [x.name for x in program_lists]
+        found_fsa_item = set()
+        fsa_items: List[FunctionSetAssignments] = []
+        for fsa in device_config.fsa_list:
+            found_program = None
+            for fsa_name in fsa['program_lists']:
+                for program_list in program_lists:
+                    if program_list.name == fsa_name:
+                        found_program = program_list
+            if found_program is None:
+                raise ValueError(f"Invalid fsa: {fsa} not found in program_lists.  Check configuration.")
+
+            fsa_items.append(FunctionSetAssignments(mRID=fsa['mRID'], description=fsa['description'],
+                                                    href=hrefs.extend_url(fsa_list_link_href, len(fsa_items))))
+
+        device_capability_link = hrefs.dcap
+        device_capability = DeviceCapability(href=device_capability_link, TimeLink=time_link,
+                                             EndDeviceListLink=end_device_list_link)
         end_device = EndDevice(deviceCategory=device_config.device_category_type.value,
                                lFDI=l_fid_bytes,
                                RegistrationLink=reg_link,
@@ -316,7 +378,7 @@ class EndDevices:
                                # file_status_link=file_status_link,
                                # subscription_list_link=sub_list_link,
                                href=end_device_href,
-                               DERListLink=der_list_link,
+                               # DERListLink=der_list_link,
                                FunctionSetAssignmentsListLink=fsa_list_link,
                                LogEventListLink=log_event_list_link,
                                enabled=True,
@@ -327,26 +389,29 @@ class EndDevices:
         registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
         add_href(reg_link_href, registration)
         edd = EndDeviceData(index=new_dev_number, mRID=end_device.lFDI,
-                            end_device=end_device, registration=registration)
-        self.all_end_devices[new_dev_number] = edd
+                            end_device=end_device, registration=registration,
+                            function_set_assignments=fsa_items,
+                            device_capability=device_capability)
+        self.__all_end_devices__[new_dev_number] = edd
+        self._lfid_index_map[lfid] = new_dev_number
         return get_href(end_device_href)
 
     def get(self, index: int) -> EndDevice:
-        return self.all_end_devices[index].end_device
+        return self.__all_end_devices__[index].end_device
 
     def get_registration(self, index: int) -> Registration:
-        return self.all_end_devices[index].registration
+        return self.__all_end_devices__[index].registration
 
     def get_der_list(self, index: int) -> DERListLink:
-        return self.all_end_devices[index].end_device.DERListLink
+        return self.__all_end_devices__[index].end_device.DERListLink
 
     def get_fsa(self, index: int) -> FunctionSetAssignmentsListLink:
-        return self.all_end_devices[index].end_device.FunctionSetAssignmentsListLink
+        return self.__all_end_devices__[index].end_device.FunctionSetAssignmentsListLink
 
     def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> EndDeviceList:
         ed = self.get_device_by_lfid(lfid)
         if DeviceCategoryType(ed.deviceCategory) == DeviceCategoryType.AGGREGATOR:
-            devices = [x.end_device for x in self.all_end_devices.values()]
+            devices = [x.end_device for x in self.__all_end_devices__.values()]
         else:
             devices = [ed]
 

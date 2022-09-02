@@ -1,10 +1,13 @@
 import json
 import logging
 from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import List
+from wsgiref.simple_server import WSGIRequestHandler
 
 from flask import Flask, render_template, request, redirect, Response
+from flask_sessions import Session
 import werkzeug.exceptions
 import ssl
 import OpenSSL
@@ -13,14 +16,11 @@ __all__ = ["run_server"]
 
 # templates = Jinja2Templates(directory="templates")
 # from IEEE2030_5.endpoints import dcap, IEEE2030_5Renderer
-from ieee_2030_5 import hrefs
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.data.indexer import Indexer, add_href
-from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
-from ieee_2030_5.server.server_constructs import get_groups
+from ieee_2030_5.server.server_constructs import get_groups, EndDevices
 
 _log = logging.getLogger(__file__)
 
@@ -46,6 +46,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
         peer certificate into the hash. That exposes it to us later in
         the request variable that Flask provides
         """
+        PeerCertWSGIRequestHandler.protocol_version = "HTTP/1.1"
         environ = super(PeerCertWSGIRequestHandler, self).make_environ()
 
         # Assume browser is being hit with things that start with /admin allow
@@ -64,6 +65,8 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
         except OpenSSL.crypto.Error:
             environ['peercert'] = None
 
+        # self.protocol_version = "HTTP/1.1"
+        _log.debug("Making environ")
         return environ
 
 
@@ -96,7 +99,7 @@ def after_request(response: Response) -> Response:
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
 
-    app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath('templates')))
+    app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
     # Debug headers path and request arguments
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.
@@ -129,10 +132,6 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     # change this to ssl.CERT_REQUIRED during deployment.
     # TODO if required we have to have one all the time on the server.
     ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
-
-    # Initialize curve context from configuration file
-    initialize_href_server_context(hrefs.curve, config.curve_list)
-    initialize_href_server_context(hrefs.program, config.program_list)
 
     ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
     AdminEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
@@ -206,7 +205,11 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
         # host and port not available
         host = config.server_hostname
         port = 8443
-
+    # Add session support to the application.
+    Session(app)
+    WSGIRequestHandler.protocol_version = "HTTP/1.1"
+    PeerCertWSGIRequestHandler.protocol_version = "HTTP/1.1"
+    BaseHTTPRequestHandler.protocol_version = "HTTP/1.1"
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=PeerCertWSGIRequestHandler,
@@ -214,12 +217,6 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     #debug=True)
     #,
     #debug=True)
-
-
-def initialize_href_server_context(base_href: str, item_list: List[dataclass]):
-    for index, curve in enumerate(item_list):
-        curve.href = f"{base_href}/{index}"
-        add_href(curve.href, curve)
 
 #
 # # start our webserver!

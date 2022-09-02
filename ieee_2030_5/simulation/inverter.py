@@ -1,23 +1,23 @@
-import sys
+#import sys
 import time
 from argparse import ArgumentParser
-import asyncio
+#import asyncio
 from pathlib import Path
-from typing import List, Optional, Dict
-from threading import Thread
-from threading import Timer
+# from typing import List, Optional, Dict
+# from threading import Thread
+# from threading import Timer
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import subprocess
+# import pandas as pd
+# import matplotlib.pyplot as plt
+#import subprocess
 import pvlib
 import math
 import logging
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
-from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading, ReadingType, Reading
-from ieee_2030_5.utils import serialize_dataclass
+from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading, ReadingType, Reading, DERCurveList, DERProgramList
+# from ieee_2030_5.utils import serialize_dataclass
 
 
 def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
@@ -128,26 +128,34 @@ if __name__ == '__main__':
 
     # Start up a client from the available in the config file.
     client = list(IEEE2030_5_Client.clients)[0]
-    # Device capability provides links to the other resources of interest.
-    dcap = client.device_capability()
+    for i in range(5):
+        # Device capability provides links to the other resources of interest.
+        dcap = client.device_capability()
+        time.sleep(2)
     # Time request for offsets to keep things closely aligned.
     tm = client.time()
     # The device that this class is available for.
     device = client.end_device()
-    print("EndDevice")
-    print(serialize_dataclass(device))
+    # print("EndDevice")
+    # print(serialize_dataclass(device))
+    #
 
-    # Registration to test if we have the correct pin for the client to be sure
-    # that it is talking to the correct server
-    reg = client.registration(device)
-    assert reg.pIN == opts.pin
-
+    # # Registration to test if we have the correct pin for the client to be sure
+    # # that it is talking to the correct server
+    # reg = client.registration(device)
+    # assert reg.pIN == opts.pin
+    #
+    # curve_list: DERCurveList = client.__get_request__("/curves")
+    # curve1 = client.__get_request__(curve_list.DERCurve[0].href)
+    #
+    # global_programs: DERProgramList = client.__get_request__("/programs")
+    # program = client.__get_request__(global_programs.DERProgram[0].href)
+    #
+    #
+    #
     # der_programs = client.der_program_list(device)
     #
     # der_programs = client.der_program_list()
-    #
-    # # Determine the function set assignment for our device.
-    # fsa = client.function_set_assignment()
 
     #print(fsa)
     # edevs = client.end_devices()
@@ -222,9 +230,11 @@ if __name__ == '__main__':
     #     if alive:
     #         break
     #     time.sleep(1)
-    while True:
-        try:
-            time.sleep(0.1)
-        except KeyboardInterrupt:
-            sys.stderr.write("Exiting program\n")
-            sys.exit(0)
+
+
+    # while True:
+    #     try:
+    #         time.sleep(0.1)
+    #     except KeyboardInterrupt:
+    #         sys.stderr.write("Exiting program\n")
+    #         sys.exit(0)

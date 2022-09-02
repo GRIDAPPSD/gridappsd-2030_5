@@ -45,7 +45,10 @@ curve_urls: List = [
 program: str = "/programs"
 program_urls: List = [
     f"{program}",
-    (f"{program}/<int:index>", ("GET",))
+    (f"{program}/<int:index>/actderc", ("GET",)),
+    (f"{program}/<int:index>/dc", ("GET",)),
+    (f"{program}/<int:index>/dderc", ("GET",)),
+    (f"{program}/<int:index>/derc", ("GET",)),
 ]
 
 der: str = "/der"

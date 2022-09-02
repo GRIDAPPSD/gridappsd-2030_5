@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import inspect
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from pathlib import Path
-from typing import List, Literal, Union, Optional, Dict
+from typing import List, Literal, Union, Optional, Dict, Tuple
 
 import yaml
 from dataclasses_json import dataclass_json
@@ -16,11 +16,11 @@ try:
     from gridappsd.field_interface import MessageBusDefinition
 except ImportError as ex:
     sys.stderr.write("Gridappsd integration disabled")
-    pass
 
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData
-from ieee_2030_5.types import Lfid
+from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData, \
+    FunctionSetAssignments
+from ieee_2030_5.types_ import Lfid
 
 from ieee_2030_5.server.exceptions import NotFoundError
 
@@ -38,7 +38,7 @@ class DeviceConfiguration:
     poll_rate: int = 900
     # TODO: Direct control means that only one FSA will be available to the client.
     direct_control: bool = True
-
+    fsa_list: Optional[List[Dict]] = None
     DefaultDERControl: Optional[DefaultDERControl] = None
 
     @classmethod
@@ -59,13 +59,11 @@ class GridappsdConfiguration:
     simulation_id_file: Optional[str] = None
     simulation_id: Optional[str] = None
 
-    # def from_dict(self, **kwargs) -> GridappsdConfiguration:
-    #     schema = marshmallow_dataclass.class_schema(GridappsdConfiguration)
-    #     return schema().load(kwargs)
-        # if kwargs:
-        #     return schema().load(init)
-        # else:
-        #     return GridappsdConfiguration()
+
+@dataclass
+class ProgramList:
+    name: str
+    programs: List[DERProgram]
 
 
 @dataclass
@@ -76,12 +74,18 @@ class ServerConfiguration:
     server_mode: Union[Literal["enddevices_create_on_start"],
                        Literal["enddevices_register_access_only"]]
     devices: List[DeviceConfiguration]
-    program_list: List[DERProgram]
-    curve_list: List[DERCurve]
 
     tls_repository: str
     openssl_cnf: str
 
+    # map into program_lists array for programs for specific
+    # named list.
+    programs_map: Dict[str, int] = field(default_factory=dict)
+    program_lists: List[ProgramList] = field(default_factory=list)
+    fsa_list: List[FunctionSetAssignments] = field(default_factory=list)
+    curve_list: List[DERCurve] = field(default_factory=list)
+
+    proxy_hostname: Optional[str] = None
     gridappsd: Optional[GridappsdConfiguration] = None
     DefaultDERControl: Optional[DefaultDERControl] = None
 
@@ -94,30 +98,33 @@ class ServerConfiguration:
         for d in self.devices:
             d.device_category_type = eval(f"DeviceCategoryType.{d.device_category_type}")
 
-        temp_program_list = self.program_list
-        if isinstance(self.program_list, str):
-            temp_program_list = yaml.safe_load(Path(self.program_list).read_text())
+        temp_program_list = self.program_lists
+        if isinstance(self.program_lists, str):
+            temp_program_list = yaml.safe_load(Path(self.program_lists).read_text())
 
-        self.program_list = []
-        for item in temp_program_list['der_program_lists']:
-            base = None
-            if "DERControlBase" in item:
-                base = DERControlBase()
-                for k in item.get("DERControlBase"):
-                    setattr(base, k, item["DERControlBase"].get(k))
-                del item["DERControlBase"]
-
-            if "default_der_control" in item:
-                del item["default_der_control"]
-
-                self.DefaultDERControl = DefaultDERControl(DERControlBase=base)
-                for k, v in item.items():
-                    setattr(self.DefaultDERControl, k, v)
-            else:
+        self.program_lists = []
+        for program_list in temp_program_list['program_lists']:
+            pl_obj = ProgramList(name=program_list["name"], programs=[])
+            for inter_index, program_obj in enumerate(program_list['programs']):
+                base = None
+                if "DERControlBase" in program_obj:
+                    base = DERControlBase()
+                    for k in program_obj.get("DERControlBase"):
+                        setattr(base, k, program_obj["DERControlBase"].get(k))
+                    del program_obj["DERControlBase"]
+                # TODO Do Something with base so we can retrieve it.
+                # if base:
+                #     self.DefaultDERControl = DefaultDERControl(DERControlBase=base)
+                #     for k, v in program.items():
+                #         setattr(self.DefaultDERControl, k, v)
+                # else:
                 program = DERProgram()
-                self.program_list.append(program)
-                for k, v in item.items():
+
+                for k, v in program_obj.items():
                     setattr(program, k, v)
+
+                pl_obj.programs.append(program)
+            self.program_lists.append(pl_obj)
 
         temp_curve_list = self.curve_list
         if isinstance(self.curve_list, str):
@@ -167,26 +174,3 @@ class ServerConfiguration:
             if test_lfid == int(lfid):
                 return d.pin
         raise NotFoundError(f"The device_id: {lfid} was not found.")
-
-    #
-    # class Config:
-    #     # env_prefix = "IEEE_2030_5_"
-    #     extra = Extra.allow
-    #
-    #     @classmethod
-    #     def customise_sources(
-    #             cls,
-    #             init_settings: SettingsSourceCallable,
-    #             env_settings: SettingsSourceCallable,
-    #             file_secret_settings: SettingsSourceCallable,
-    #     ) -> Tuple[SettingsSourceCallable, ...]:
-    #         # Add load from yml file, change priority and remove file secret option
-    #         return init_settings, yml_config_setting, env_settings
-# class ConfigObj:
-#     def __init__(self, in_dict: dict):
-#         assert isinstance(in_dict, dict)
-#         for key, val in in_dict.items():
-#             if isinstance(val, (list, tuple)):
-#                 setattr(self, key, [ConfigObj(x) if isinstance(x, dict) else x for x in val])
-#             else:
-#                 setattr(self, key, ConfigObj(val) if isinstance(val, dict) else val)

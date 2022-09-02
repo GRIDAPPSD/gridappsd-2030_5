@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -9,14 +9,14 @@ from ieee_2030_5.execute import execute_command
 
 __all__ = ['TLSRepository']
 
-from ieee_2030_5.types import PathStr, Lfid
+from ieee_2030_5.types_ import PathStr, Lfid
 
 _log = logging.getLogger(__name__)
 
 
 class TLSRepository:
 
-    def __init__(self, repo_dir: PathStr, openssl_cnffile: PathStr, serverhost: str, clear=False):
+    def __init__(self, repo_dir: PathStr, openssl_cnffile: PathStr, serverhost: str, proxyhost: str = None, clear=False):
         if isinstance(repo_dir, str):
             repo_dir = Path(repo_dir).expanduser().resolve()
         if isinstance(openssl_cnffile, str):
@@ -29,6 +29,8 @@ class TLSRepository:
         self._combined_dir = repo_dir.joinpath("combined")
         self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile.name)
         self._common_names = {serverhost: serverhost}
+        if proxyhost:
+            self._common_names[proxyhost] = proxyhost
         self._client_common_name_set = set()
 
         if not self._repo_dir.exists() or not self._certs_dir.exists() or \
@@ -69,12 +71,15 @@ class TLSRepository:
         self._ca_key = self._private_dir.joinpath("ca.pem")
         self._ca_cert = self._certs_dir.joinpath("ca.crt")
         self._serverhost = serverhost
+        self._proxyhost = proxyhost
 
         # Create a new ca key if not exists.
         if not Path(self._ca_key).exists():
             self.__create_ca__()
             __openssl_create_private_key__(self.__get_key_file__(self._serverhost))
             self.create_cert(self._serverhost, True)
+            if proxyhost:
+                self.create_cert(self._proxyhost, True)
 
         if not clear:
             for f in self._certs_dir.glob('*.crt'):
@@ -91,6 +96,7 @@ class TLSRepository:
                                                self.__get_combined_file__("ca"))
 
     def create_cert(self, common_name: str, as_server: bool = False):
+
         if not self.__get_key_file__(common_name).exists():
             __openssl_create_private_key__(self.__get_key_file__(common_name))
         __openssl_create_signed_certificate__(common_name, self._openssl_cnf_file, self._ca_key,
@@ -129,6 +135,10 @@ class TLSRepository:
         cert = x509.load_pem_x509_certificate(pem_data, default_backend())
         return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
 
+    def get_file_pair(self, device_id: str) -> Tuple[str, str]:
+        return (self.__get_cert_file__(device_id).as_posix(),
+                self.__get_key_file__(device_id).as_posix())
+
     @property
     def client_list(self) -> List[str]:
         return list(self._client_common_name_set)
@@ -140,6 +150,18 @@ class TLSRepository:
     @property
     def ca_cert_file(self) -> Path:
         return self._ca_cert
+
+    @property
+    def proxy_key_file(self) -> Path:
+        if not self._proxyhost:
+            raise ValueError("No proxy host available")
+        return self.__get_key_file__(self._proxyhost)
+
+    @property
+    def proxy_cert_file(self) -> Path:
+        if not self._proxyhost:
+            raise ValueError("No proxy host available")
+        return self.__get_cert_file__(self._proxyhost)
 
     @property
     def server_key_file(self) -> Path:
@@ -208,10 +230,11 @@ def __openssl_create_ca_certificate__(common_name: str, opensslcnf: Path, privat
 
 def __openssl_create_csr__(common_name: str, opensslcnf: Path, private_key_file: Path,
                            server_csr_file: Path):
+    subject_name = common_name.split(":")[0]
     # openssl req -new -key server.key -out server.csr -sha256
     cmd = [
         "openssl", "req", "-new", "-config",
-        str(opensslcnf), "-subj", f"/C=US/CN={common_name}", "-key",
+        str(opensslcnf), "-subj", f"/C=US/CN={subject_name}", "-key",
         str(private_key_file), "-out",
         str(server_csr_file), "-sha256"
     ]
@@ -225,6 +248,7 @@ def __openssl_create_signed_certificate__(common_name: str,
                                           private_key_file: Path,
                                           cert_file: Path,
                                           as_server: bool = False):
+    subject_name = common_name.split(":")[0]
     csr_file = Path(f"/tmp/{common_name}")
     __openssl_create_csr__(common_name, opensslcnf, private_key_file, csr_file)
     # openssl ca -keyfile /root/tls/private/ec-cakey.pem -cert /root/tls/certs/ec-cacert.pem \
@@ -237,7 +261,7 @@ def __openssl_create_signed_certificate__(common_name: str,
         "-cert",
         str(ca_cert_file),
         "-subj",
-        f"/C=US/CN={common_name}",
+        f"/C=US/CN={subject_name}",
         "-in",
         str(csr_file),
         "-out",

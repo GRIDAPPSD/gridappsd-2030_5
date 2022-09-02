@@ -12,7 +12,7 @@ from ieee_2030_5 import ServerConfiguration
 from ieee_2030_5.__main__ import get_end_devices, get_tls_repository
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.flask_server import run_server
-from ieee_2030_5.models.end_devices import EndDevices
+from ieee_2030_5.server.end_devices import EndDevices
 
 parent_path = Path(__file__).parent.parent
 

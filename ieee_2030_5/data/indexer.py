@@ -3,6 +3,7 @@ from __future__ import annotations
 import pickle
 from copy import deepcopy
 from dataclasses import dataclass, field
+import logging
 
 from datetime import datetime
 from email.utils import format_datetime
@@ -14,6 +15,7 @@ __all__: List[str] = [
     "add_href"
 ]
 
+_log = logging.getLogger(__name__)
 
 @dataclass
 class Index:
@@ -42,7 +44,7 @@ class Indexer:
 
         cached = self.__items__.get(href)
         if cached and cached.item == item:
-            pass
+            _log.debug(f"Item already cached {href}")
         else:
             added = format_datetime(datetime.utcnow())
             serialized_item = pickle.dumps(item)  # serialize_dataclass(item, serialization_type=SerializeType.JSON)

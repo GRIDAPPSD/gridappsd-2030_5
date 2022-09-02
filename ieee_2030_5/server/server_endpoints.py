@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import calendar
 import json
-import time
 from datetime import datetime, timedelta
 import logging
-from typing import Callable, Optional, Dict
+from typing import Optional
 
 import pytz
 import tzlocal
@@ -14,19 +12,18 @@ from werkzeug.exceptions import Forbidden
 
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.data.indexer import add_href, get_href, get_all_filtered
+from ieee_2030_5.data.indexer import get_href, get_all_filtered
 from ieee_2030_5.models import Time, DERCurveList, DERProgramList
-from ieee_2030_5.models.end_devices import EndDevices
+from ieee_2030_5.server.server_constructs import EndDevices
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.server.der_program import DERProgramRequests
 from ieee_2030_5.server.edevrequests import EDevRequests, SDevRequests, DERRequests
-from ieee_2030_5.server.exceptions import AlreadyExistsError
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 
 # module level instance of hrefs class.
 from ieee_2030_5.server.usage_points import MUP, UTP
-from ieee_2030_5.types import TimeType, TimeOffsetType, format_time
+from ieee_2030_5.types_ import TimeOffsetType, format_time
 from ieee_2030_5.utils import dataclass_to_xml
 
 _log = logging.getLogger(__name__)
@@ -110,13 +107,6 @@ class ServerEndpoints:
         self.mimetype = "text/xml"
         self.app: Flask = app
 
-        # internally flask uses the name of the view_func for the removal.
-        # self.remove_endpoint(self._admin.__name__)
-
-        # self.add_endpoint(hrefs.admin,
-        #                   view_func=self._admin, methods=['GET', 'POST'])
-        # app.add_url_rule(hrefs.admin, view_func=self._admin, methods=['GET', 'POST'])
-
         _log.debug(f"Adding rule: {hrefs.uuid_gen} methods: {['GET']}")
         app.add_url_rule(hrefs.uuid_gen, view_func=self._generate_uuid)
         _log.debug(f"Adding rule: {hrefs.dcap} methods: {['GET']}")
@@ -165,9 +155,9 @@ class ServerEndpoints:
 
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
-
-    def _admin(self) -> Response:
-        return Admin(server_endpoints=self).execute()
+    #
+    # def _admin(self) -> Response:
+    #     return Admin(server_endpoints=self).execute()
 
     def _upt(self, index: Optional[int] = None) -> Response:
         return UTP(server_endpoints=self).execute(index=index)
@@ -195,7 +185,8 @@ class ServerEndpoints:
 
     def _curves(self, index: Optional[int] = None) -> Response:
         if index is None:
-            curve_list = DERCurveList(DERCurve=get_all_filtered(href_prefix=hrefs.curve))
+            items = get_all_filtered(hrefs.curve)
+            curve_list = DERCurveList(DERCurve=items, all=len(items), href=request.path, results=len(items))
             response = Response(dataclass_to_xml(curve_list))
         else:
             response = Response(dataclass_to_xml(get_href(request.path)))
@@ -203,7 +194,8 @@ class ServerEndpoints:
 
     def _programs(self, index: Optional[int] = None) -> Response:
         if index is None:
-            program_list = DERProgramList(DERProgram=get_all_filtered(href_prefix=hrefs.program))
+            items = get_all_filtered(href_prefix=hrefs.program)
+            program_list = DERProgramList(DERProgram=items, all=len(items), href=request.path, results=len(items))
             response = Response(dataclass_to_xml(program_list))
         else:
             response = Response(dataclass_to_xml(get_href(request.path)))

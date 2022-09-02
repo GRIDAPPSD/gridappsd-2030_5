@@ -6,6 +6,7 @@ devices:
   - hostname: dev3.me.com
   - hostname: dev4.me.com
 
+
 server_hostname: 0.0.0.0
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"

@@ -21,7 +21,7 @@ class AdminEndpoints:
     def _lfid_lists(self) -> Response:
         items = []
 
-        for k, v in self.end_devices.all_end_devices.items():
+        for k, v in self.end_devices.__all_end_devices__.items():
             items.append({"key": k, "lfid": int(v.end_device.lFDI)})
 
         return Response(json.dumps(items))

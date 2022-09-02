@@ -70,23 +70,44 @@ devices:
   # Define the DefaultDERControl for the inverter if necessary to customize for this specific inverter.
   #
   # default: None (uses the global DefaultDERContorl)
+  fsa_list:
+    - mRID: _def62366-746e-4fcb-b3ee-ebebb90d72d4-fsa
+      description: _def62366-746e-4fcb-b3ee-ebebb90d72d4 fsa description
+      program_lists:
+        - pl1
+        - pl2
 
 
 - device_category_type: PHOTOVOLTAIC_SYSTEM
   id: dev1
   pin: 12345
+  fsa_list:
+    - mRID: dev1-fsa
+      description: dev1 fsa description
+      program_lists:
+        - pl1
+        - pl2
 
 - device_category_type: PHOTOVOLTAIC_SYSTEM
   id: dev2
   pin: 12345
+  fsa_list:
+    - mRID: dev2-fsa
+      description: dev2 fsa description
+      program_lists:
+        - pl1
+        - pl2
 
 openssl_cnf: openssl.cnf
-server_hostname: 0.0.0.0:8443
+# front-end proxy to the server.
+# proxy_hostname -> server_hostname
+proxy_hostname: gridappsd_dev_2004:8443
+server_hostname: 127.0.0.1:8070
 server_mode: enddevices_create_on_start
 tls_repository: ~/tls
 # A file where the der programs are specified or an inline list
 # within this context.
-program_list: program_lists_config.yml
+program_lists: program_lists_config.yml
 curve_list: curves_config.yml
 
 # Contains control mode information to be used if no active DERControl is

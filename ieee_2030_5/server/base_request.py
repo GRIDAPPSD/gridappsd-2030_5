@@ -10,7 +10,7 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
 
-from ieee_2030_5.types import SEP_XML
+from ieee_2030_5.types_ import SEP_XML
 from ieee_2030_5.utils import dataclass_to_xml
 
 _log = logging.getLogger(__name__)

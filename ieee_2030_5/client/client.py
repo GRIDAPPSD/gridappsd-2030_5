@@ -173,7 +173,7 @@ class IEEE2030_5_Client:
 
     def __get_request__(self, url: str, body=None, headers: dict = None):
         if headers is None:
-            headers = {}
+            headers = {"Connection": "keep-alive", "keep-alive": "timeout=30, max=1000"}
 
         if self._debug:
             print(f"----> GET REQUEST")
@@ -181,6 +181,7 @@ class IEEE2030_5_Client:
         self.http_conn.request(method="GET", url=url, body=body, headers=headers)
         response = self._http_conn.getresponse()
         response_data = response.read().decode("utf-8")
+        print(response.headers)
 
         response_obj = None
         try:
@@ -230,6 +231,9 @@ if __name__ == '__main__':
     KEY_FILE = Path("~/tls/private/_def62366-746e-4fcb-b3ee-ebebb90d72d4.pem").expanduser().resolve()
     CERT_FILE = Path("~/tls/certs/_def62366-746e-4fcb-b3ee-ebebb90d72d4.crt").expanduser().resolve()
 
+    headers = {'Connection': 'Keep-Alive',
+               'Keep-Alive': "max=1000,timeout=30"}
+
     h = IEEE2030_5_Client(cafile=SERVER_CA_CERT,
                           server_hostname="gridappsd_dev_2004",
                           server_ssl_port=8443,
@@ -238,13 +242,16 @@ if __name__ == '__main__':
                           hostname='_def62366-746e-4fcb-b3ee-ebebb90d72d4')
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
-
-    dcap = h.device_capability()
+    resp = h.request("/dcap", headers=headers)
+    print(resp)
+    resp = h.request("/dcap", headers=headers)
+    print(resp)
+    #dcap = h.device_capability()
     # get device list
-    dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice
+    #dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice
 
-    ed = h.request(dev_list[0].href)
-    print(ed)
+    #ed = h.request(dev_list[0].href)
+    #print(ed)
     #
     # print(dcap.mirror_usage_point_list_link)
     # # print(h.request(dcap.mirror_usage_point_list_link.href))
