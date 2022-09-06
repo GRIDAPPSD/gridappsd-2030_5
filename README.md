@@ -8,38 +8,71 @@ section 6.1.3 and 6.1.4 respectively.
 
 ## Setup
 
+## Installing from source
+
+The installation requires poetry version 1.2 or greater.  https://python-poetry.org/docs/#installation
+
+ 1. Clone the repository
+ 2. run `poetry install` from the root of the repository directory.
+
 ## Running the server
 
 ```commandline
-usage: python -m ieee_2030_5 [-h] [--no-validate] [--no-create-certs] config
+usage: 2030_5_server [-h] [--no-validate] [--no-create-certs] [--debug] config
 
 positional arguments:
   config             Configuration file for the server.
 
 optional arguments:
   -h, --help         show this help message and exit
-  --no-validate      Allows faster startup since the resolving of addresses is
-                     not done!
-  --no-create-certs  If specified certificates for for client and server will
-                     not be created.
+  --no-validate      Allows faster startup since the resolving of addresses for devices is not done.
+  --no-create-certs  If specified certificates for for client and server will not be created.
+  --debug            Put server in debug mode
+```
+
+### Using the 2030.5 proxy
+
+```commandline
+usage: 2030_5_proxy [-h] [--debug] config
+
+positional arguments:
+  config      Configuration file for the server.
+
+optional arguments:
+  -h, --help  show this help message and exit
+  --debug     Turns debugging on for logging of the proxy.
 ```
 
 ### Configuration
 
-The configuration file that is passed to the main has the following format.
+There are multiple configuration files that are used in this project.  The main file that is passed as a parameter
+to the programs should have the following structure.  Off of this file there are curve_lists, and program_lists files
+holding different curves and programs available for the devices referenced in the main file.
 
 ```yaml
 # path to openssl.cnf that is in the repository
 # do not change this file as it is used as a template
 openssl_cnf: openssl.cnf
 
+# front-end proxy to the server.
+# proxy_hostname -> server_hostname
+
+# Hostname/ip address for the proxy to bind to
+proxy_hostname: gridappsd_dev_2004:8443
+
 # binding ip address for the server
-server_hostname: 0.0.0.0
+server_hostname: 127.0.0.1:8070
+server_mode: enddevices_create_on_start
 
 # Location of certificates to be used/created with the server.
 tls_repository: ~/tls
 
-# devices that are to be registered with the 2030.5 server.  It is expedted
+# A file where the der programs are specified or an inline list
+# within this context.
+program_lists: program_lists_config.yml
+curve_list: curves_config.yml
+
+# devices that are to be registered with the 2030.5 server.  It is expected
 # that a client connects to the server using a certificate available in
 # the tls_repository.
 #

@@ -1,3 +1,15 @@
+openssl_cnf: openssl.cnf
+# front-end proxy to the server.
+# proxy_hostname -> server_hostname
+proxy_hostname: gridappsd_dev_2004:8443
+server_hostname: 127.0.0.1:8070
+server_mode: enddevices_create_on_start
+tls_repository: ~/tls
+# A file where the der programs are specified or an inline list
+# within this context.
+program_lists: program_lists_config.yml
+curve_list: curves_config.yml
+
 # The following are the possible list of programmable
 #     """
 #    DeviceCategoryType defined from 20305-2018_IIEStandardforSmartEnergyProfileApplicationsProtocol.pdf Appendix
@@ -97,18 +109,6 @@ devices:
       program_lists:
         - pl1
         - pl2
-
-openssl_cnf: openssl.cnf
-# front-end proxy to the server.
-# proxy_hostname -> server_hostname
-proxy_hostname: gridappsd_dev_2004:8443
-server_hostname: 127.0.0.1:8070
-server_mode: enddevices_create_on_start
-tls_repository: ~/tls
-# A file where the der programs are specified or an inline list
-# within this context.
-program_lists: program_lists_config.yml
-curve_list: curves_config.yml
 
 # Contains control mode information to be used if no active DERControl is
 # found

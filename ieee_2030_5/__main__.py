@@ -74,29 +74,6 @@ def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices
                 tlsrepo.create_cert(k.id)
     return tlsrepo
 
-#
-# def get_end_devices(cfg: ServerConfiguration, tlsrepo: TLSRepository) -> Tuple[Dict[GroupLevel, Group], EndDevices]:
-#     grps = get_groups()
-#     devices = EndDevices()
-#     # Create the enddevice on the server on startup.
-#     #
-#     # The other option is enddevices_register_access_only which in effect
-#     # becomes a noop as the certificates should already be created for the system
-#     # or added through the web interface.
-#     if cfg.server_mode == "enddevices_create_on_start":
-#         for k in cfg.devices:
-#             device = devices.initialize_device(device_config=k, lfid=tlsrepo.lfdi(k.id))
-#             # TODO: Add the ability to use other groups
-#             # TODO: By default each device will have it's own named group enabling direct communication
-#             # TODO: See Section 5.2.3 of CSIP Implementation Guide.
-#             get_group(level=GroupLevel.NonTopology, name=k.id).add_end_device(device)
-#
-#
-#         devices.initialize_groups()
-#         # TODO: Only valid when we are adding to the subtransmission group.
-#         #assert devices.num_devices == len(get_group(level=GroupLevel.NonTopology).get_devices())
-#     return grps, devices
-
 
 def _main():
     parser = ArgumentParser()
@@ -161,23 +138,7 @@ def _main():
     end_devices = initialize_2030_5(config, tls_repo)
 
     try:
-        run_server(config, tls_repo, enddevices=end_devices, debug=True)
-        # server_process = Process(target=run_server,
-        #                          kwargs=dict(config=config, tlsrepo=tls_repo, enddevices=end_devices, debug=True),
-        #                          daemon=True)
-        # server_process.start()
-        # process = None
-        # if config.proxy_hostname:
-        #     proxy_host = build_address_tuple(config.proxy_hostname)
-        #     server_host = build_address_tuple(config.server_hostname)
-        #     process = Process(target=start_proxy,
-        #                       kwargs=dict(proxy_target=proxy_host, server_address=server_host, tls_repo=tls_repo),
-        #                       daemon=True)
-        #     process.start()
-        #
-        # while True:
-        #     time.sleep(0.1)
-
+        run_server(config, tls_repo, enddevices=end_devices, debug=opts.debug)
     except KeyboardInterrupt as ex:
         print("Shutting down server.")
 
