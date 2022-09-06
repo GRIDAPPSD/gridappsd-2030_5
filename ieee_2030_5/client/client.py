@@ -31,14 +31,12 @@ class IEEE2030_5_Client:
                  server_hostname: str,
                  keyfile: Path,
                  certfile: Path,
-                 hostname: str,
                  server_ssl_port: Optional[int] = 443,
                  debug: bool = True):
 
         assert cafile.exists(), f"cafile doesn't exist ({cafile})"
         assert keyfile.exists(), f"keyfile doesn't exist ({keyfile})"
         assert certfile.exists(), f"certfile doesn't exist ({certfile})"
-        assert hostname, "hostname not specified"
 
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
         self._ssl_context.verify_mode = ssl.CERT_REQUIRED
@@ -57,17 +55,11 @@ class IEEE2030_5_Client:
         self._edev: Optional[EndDeviceListLink] = None
         self._end_devices: Optional[EndDeviceListLink] = None
         self._fsa_list: Optional[FunctionSetAssignmentsListLink] = None
-
-        self._hostname = hostname
         self._debug = debug
         self._dcap_poll_rate: int = 0
         self._dcap_timer: Optional[Timer] = None
 
         IEEE2030_5_Client.clients.add(self)
-
-    @property
-    def hostname(self) -> str:
-        return self._hostname
 
     @property
     def http_conn(self) -> HTTPSConnection:
