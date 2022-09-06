@@ -58,6 +58,7 @@ class IEEE2030_5_Client:
         self._debug = debug
         self._dcap_poll_rate: int = 0
         self._dcap_timer: Optional[Timer] = None
+        self._disconnect: bool = False
 
         IEEE2030_5_Client.clients.add(self)
 
@@ -92,9 +93,10 @@ class IEEE2030_5_Client:
         return fsa_list
 
     def poll_timer(self, fn, args):
-        _log.debug(threading.currentThread().name)
-        fn(args)
-        threading.currentThread().join()
+        if not self._disconnect:
+            _log.debug(threading.currentThread().name)
+            fn(args)
+            threading.currentThread().join()
 
     def device_capability(self, url: str = "/dcap") -> DeviceCapability:
         self._device_cap: DeviceCapability = self.__get_request__(url)
@@ -106,8 +108,8 @@ class IEEE2030_5_Client:
         _log.debug(f"devcap id {id(self._device_cap)}")
         _log.debug(threading.currentThread().name)
         _log.debug(f"DCAP: Poll rate: {self._dcap_poll_rate}")
-        timer = Timer(self._dcap_poll_rate, self.poll_timer, (self.device_capability, url))
-        timer.start()
+        self._dcap_timer = Timer(self._dcap_poll_rate, self.poll_timer, (self.device_capability, url))
+        self._dcap_timer.start()
         return self._device_cap
 
     def time(self) -> Time:
@@ -136,6 +138,11 @@ class IEEE2030_5_Client:
         if self._device_cap is None:
             raise ValueError("Request device capability first")
         return self.__get_request__(url=self._device_cap.TimeLink.href)
+
+    def disconnect(self):
+        self._disconnect = True
+        self._dcap_timer.cancel()
+        IEEE2030_5_Client.clients.remove(self)
 
     def request(self, endpoint: str, body: dict = None, method: str = "GET",
                 headers: dict = None):

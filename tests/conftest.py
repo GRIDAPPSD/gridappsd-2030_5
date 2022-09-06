@@ -26,6 +26,9 @@ if str(parent_path) not in sys.path:
 SERVER_CONFIG_FILE = Path(__file__).parent.joinpath("fixtures/server-config.yml")
 assert SERVER_CONFIG_FILE.exists()
 
+TLS_REPO: TLSRepository
+SERVER_CFG: ServerConfiguration
+
 
 @pytest.fixture(scope="session", autouse=True)
 def create_certs_for_clients():
@@ -48,6 +51,8 @@ def create_certs_for_clients():
 
 @pytest.fixture(scope="module")
 def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
+    global TLS_REPO, SERVER_CFG
+
     def start_server_internal(config_path: str):
         """
         This function will start the server without certificate creation.  It is
@@ -86,7 +91,38 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
 
     time.sleep(2)
 
+    TLS_REPO = tls_repository
+    SERVER_CFG = config_server
+
     yield tls_repository, end_devices, config_server
 
     proc.terminate()
     proc.join(timeout=5)
+
+
+@pytest.fixture()
+def tls_repository() -> TLSRepository:
+    yield TLS_REPO
+
+
+@pytest.fixture()
+def server_config() -> ServerConfiguration:
+    yield SERVER_CFG
+
+
+@pytest.fixture()
+def first_client(server_startup) -> IEEE2030_5_Client:
+    repo, devices, servercfg = server_startup
+
+    host, port = servercfg.server_hostname.split(":")
+    dev = devices.get_end_device_data(0)
+    certfile, keyfile = repo.get_file_pair(dev.mRID)
+    client = IEEE2030_5_Client(server_hostname=host,
+                               server_ssl_port=port,
+                               cafile=repo.ca_cert_file,
+                               keyfile=Path(keyfile),
+                               certfile=Path(certfile))
+
+    yield client
+
+    client.disconnect()

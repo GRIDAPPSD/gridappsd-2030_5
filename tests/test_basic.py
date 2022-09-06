@@ -2,42 +2,21 @@ from typing import Optional
 
 import pytest
 
-from ieee_2030_5 import ServerConfiguration
-from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.client import IEEE2030_5_Client
-
-
-def get_2030_5_client(tls_repo: TLSRepository, server_config: ServerConfiguration, client_device: str) -> Optional[IEEE2030_5_Client]:
-    h = None
-    tries = 0
-    while not h:
-        try:
-            h = IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,
-                                  server_hostname=server_config.server_hostname,
-                                  # need to be better about hard coding the path
-                                  server_ssl_port=8443,
-                                  keyfile=tls_repo.__get_key_file__(client_device),
-                                  certfile=tls_repo.__get_cert_file__(client_device))
-        except ConnectionRefusedError:
-            if tries < 10:
-                print("Refused! sleeping 0.5")
-            else:
-                raise
-
-    return h
-
 
 def test_basic_001():
     pytest.skip("DNS lookup not supported!")
 
 
-def test_basic_002(server_startup):
-    tls_repo, end_devices, server_cfg = server_startup
-
-    dev0_config = server_cfg.devices[0]
-    client = get_2030_5_client(tls_repo, server_cfg, dev0_config.id)
-    dcap = client.device_capability()
-    print(dcap)
+def test_basic_002(first_client):
+    dcap = first_client.device_capability()
+    assert dcap.href
+    assert dcap.pollRate
+    tm = first_client.time()
+    assert tm.localTime
+    assert tm.tzOffset
+    assert tm.dstEndTime
+    assert tm.currentTime
+    assert tm.dstOffset
 
 
 def test_basic_003():
