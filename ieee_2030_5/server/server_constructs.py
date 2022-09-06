@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Flag, auto
@@ -74,7 +74,6 @@ uuid_handler: UUIDHandler = UUIDHandler()
 
 
 def get_group(level: Optional[GroupLevel] = None, name: Optional[str] = None) -> Group:
-
     if not level and not name:
         raise ValueError("level or name must be specified to this function.")
 
@@ -130,7 +129,6 @@ def create_group(level: GroupLevel, name: Optional[str] = None) -> Group:
 for _, lvl in enumerate(GroupLevel):
     create_group(lvl, name=lvl.name)
 
-
 der_program_list = DERProgramList(DERProgram=der_programs)
 
 
@@ -183,7 +181,6 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
                                                        program_lists=config.program_lists)
 
             for fsa in device_config.fsa_list:
-
                 print(fsa)
             print(end_devices.__all_end_devices__)
 
@@ -233,6 +230,13 @@ class EndDevices:
         for k, v in self.__all_end_devices__.items():
             devices[k] = copy(v.end_device)
         return devices
+
+    def get_end_device_data(self, index: int) -> EndDeviceData:
+        data = self.__all_end_devices__.get(index)
+        if not data:
+            raise werkzeug.exceptions.NotFound()
+
+        return deepcopy(data)
 
     def get_fsa_list(self, lfid: Optional[Lfid] = None,
                      edevid: Optional[int] = None) -> List[FunctionSetAssignments] | []:
@@ -305,7 +309,7 @@ class EndDevices:
                           program_lists: List[ProgramList]) -> EndDevice:
         ts = int(round(datetime.utcnow().timestamp()))
         self._last_device_number += 1
-        new_dev_number =self._last_device_number
+        new_dev_number = self._last_device_number
 
         # Manage links to different resources for the device.
         reg_link_href = hrefs.build_edev_registration_link(new_dev_number)
@@ -388,7 +392,7 @@ class EndDevices:
 
         registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
         add_href(reg_link_href, registration)
-        edd = EndDeviceData(index=new_dev_number, mRID=end_device.lFDI,
+        edd = EndDeviceData(index=new_dev_number, mRID=device_config.id,
                             end_device=end_device, registration=registration,
                             function_set_assignments=fsa_items,
                             device_capability=device_capability)
@@ -418,6 +422,7 @@ class EndDevices:
         # TODO Handle start, length list things.
         dl = EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices), href=hrefs.edev, pollRate=900)
         return dl
+
 
 if __name__ == '__main__':
     print(get_groups())
