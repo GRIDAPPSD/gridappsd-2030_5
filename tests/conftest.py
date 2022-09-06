@@ -1,5 +1,7 @@
 import os
+import shutil
 import sys
+import time
 from multiprocessing import Process
 from pathlib import Path
 from typing import Tuple
@@ -11,6 +13,7 @@ import yaml
 
 from ieee_2030_5.__main__ import get_tls_repository
 from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.client import IEEE2030_5_Client
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.server.server_constructs import EndDevices, initialize_2030_5
@@ -22,6 +25,25 @@ if str(parent_path) not in sys.path:
 
 SERVER_CONFIG_FILE = Path(__file__).parent.joinpath("fixtures/server-config.yml")
 assert SERVER_CONFIG_FILE.exists()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def create_certs_for_clients():
+    cfg = yaml.safe_load(Path(SERVER_CONFIG_FILE).read_text())
+    cwd = os.getcwd()
+    os.chdir(str(SERVER_CONFIG_FILE.parent))
+    config = ServerConfiguration(**cfg)
+    os.chdir(cwd)
+    tls_repo = TLSRepository(config.tls_repository,
+                             config.openssl_cnf,
+                             config.server_hostname)
+    pair = tls_repo.get_file_pair("dev1")
+    assert Path(pair[0]).exists()
+    assert Path(pair[1]).exists()
+
+    yield
+
+    shutil.rmtree(config.tls_repository, ignore_errors=True)
 
 
 @pytest.fixture(scope="module")
@@ -62,15 +84,9 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     proc = Process(target=start_server_internal, args=(SERVER_CONFIG_FILE,), daemon=True)
     proc.start()
 
+    time.sleep(2)
+
     yield tls_repository, end_devices, config_server
 
     proc.terminate()
     proc.join(timeout=5)
-
-
-class TestServer:
-    pass
-
-
-class TestClient:
-    pass
