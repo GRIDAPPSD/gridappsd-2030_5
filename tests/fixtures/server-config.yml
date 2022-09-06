@@ -1,89 +1,460 @@
----
-# Group should be set to one of the following
-# System
-# SubTransmission
-# Substation
-# Feeder
-# Segment
-# Transformer
-# ServicePoint
-#
-# If not in this set then assigned to the group
-# named in the group value
-devices:
-- bus: '634'
-  device_category_type: SMART_INVERTER
-  hostname: _def62366-746e-4fcb-b3ee-ebebb90d72d4
-  id: _def62366-746e-4fcb-b3ee-ebebb90d72d4
-  ip: 127.0.0.20
-  ipu: '1.1111111'
-  name: school
-  p: 240000.0
-  phases: ''
-  q: 0.0
-  ratedS: 300000.0
-  ratedU: 480.0
-  resource_id: _15EEE173-CC90-4888-B9B8-43916D56890C
-
-- device_category_type: SMART_INVERTER
-  hostname: dev1
-  group:
-  id: dev1
-  ip: 127.0.0.1
-
-- device_category_type: SMART_INVERTER
-  hostname: dev2
-  id: dev2
-  ip: 127.0.0.2
-
-- device_category_type: SMART_INVERTER
-  hostname: dev3
-  id: dev3
-  ip: 127.0.0.3
-- device_category_type: SMART_INVERTER
-  hostname: dev4
-  id: dev4
-  ip: 127.0.0.4
-- device_category_type: SMART_INVERTER
-  hostname: dev5
-  id: dev5
-  ip: 127.0.0.5
-- device_category_type: SMART_INVERTER
-  hostname: dev6
-  id: dev6
-  ip: 127.0.0.6
-- device_category_type: SMART_INVERTER
-  hostname: dev7
-  id: dev7
-  ip: 127.0.0.7
-- device_category_type: SMART_INVERTER
-  hostname: dev8
-  id: dev8
-  ip: 127.0.0.8
-- device_category_type: SMART_INVERTER
-  hostname: dev9
-  id: dev9
-  ip: 127.0.0.9
-- device_category_type: SMART_INVERTER
-  hostname: dev10
-  id: dev10
-  ip: 127.0.0.10
-- device_category_type: SMART_INVERTER
-  hostname: dev11
-  id: dev11
-  ip: 127.0.0.11
-- device_category_type: SMART_INVERTER
-  hostname: dev12
-  id: dev12
-  ip: 127.0.0.12
-- aggregator: 'agg'
-  hostname: aggregator
-  ip: 127.0.0.3
-  id: _aef62366-746e-4fcb-b3ee-ebebb90d72d8
-  device_category_type: AGGREGATOR
-
-# This is only during test mode not in any other location.
 openssl_cnf: ../openssl.cnf
-server_hostname: gridappsd_dev_2004
+# front-end proxy to the server.
+# proxy_hostname -> server_hostname
+#proxy_hostname: gridappsd_dev_2004:8443
+server_hostname: 127.0.0.1:8070
 server_mode: enddevices_create_on_start
 tls_repository: ~/tls
+# A file where the der programs are specified or an inline list
+# within this context.
+program_lists: program_lists_config.yml
+curve_list: curves_config.yml
+
+# The following are the possible list of programmable
+#     """
+#    DeviceCategoryType defined from 20305-2018_IIEStandardforSmartEnergyProfileApplicationsProtocol.pdf Appendix
+#    B.2.3.4 Types package
+#    """
+#    # The Device category types defined.
+#    # Bit positions SHALL be defined as follows:
+#    PROGRAMMABLE_COMMUNICATING_THERMOSTAT = 0
+#    STRIP_HEATERS = 1
+#    BASEBOARD_HEATERS = 2
+#    WATER_HEATER = 3
+#    POOL_PUMP = 4
+#    SAUNA = 5
+#    HOT_TUB = 6
+#    SMART_APPLIANCE = 7
+#    IRRIGATION_PUMP = 8
+#    MANAGED_COMMERCIAL_AND_INDUSTRIAL_LOADS = 9
+#    SIMPLE_RESIDENTIAL_LOADS = 10   # On/Off loads
+#    EXTERIOR_LIGHTING = 11
+#    INTERIOR_LIGHTING = 12
+#    LOAD_CONTROL_SWITCH = 13
+#    ENERGY_MANAGEMENT_SYSTEM = 14
+#    SMART_ENERGY_MODULE = 15
+#    ELECTRIC_VEHICLE = 16
+#    ELECTRIC_VEHICLE_SUPPLY_EQUIPMENT = 17
+#    VIRTUAL_OR_MIXED_DER = 18
+#    RECIPROCATING_ENGINE = 19  # Synchronous Machine
+#    FUEL_CELL = 20  # Battery
+#    PHOTOVOLTAIC_SYSTEM = 21  # Solar
+#    COMBINED_HEAT_AND_POWER = 22
+#    COMBINED_PV_AND_STORAGE = 23
+#    OTHER_GENERATION_SYSTEMS = 24
+#    OTHER_STORAGE_SYSTEMS = 25
+#
+#    # Additional here for Aggregator
+#    AGGREGATOR = 99
+#    OTHER_CLIENT = 100
+#
+devices:
+- device_category_type: PHOTOVOLTAIC_SYSTEM
+
+  # id used for creating certificates and is used for the host name of the system
+  #
+  # required: Yes
+  id: _def62366-746e-4fcb-b3ee-ebebb90d72d4
+
+  # Poll rate specifies how long a client can go without polling the server for changed information
+  # on the server.
+  #
+  # default: 900
+  # required: No
+  poll_rate: 60
+
+  # For the CSIP Direct Communication scenario, the DER Client SHALL only receive function set assignments for a
+  # single energy connection point reflecting the aggregate capabilities of the plant at its point of
+  # common coupling with the utility.
+  #
+  # default: true
+  direct_communication: true
+
+  # pin number specified so that the client can validate that we are talking to the correct server.  The client
+  # shall know the server and can match to this pin number for verification.
+  #
+  # required: Yes
+  pin: 12345
+
+  # In the absence of scheduled controls, DERs SHALL revert to a default control setting specified by
+  # interconnection tariffs, the utility Interconnection Handbook or as specified by the last DefaultDERControl.
+  #
+  # Define the DefaultDERControl for the inverter if necessary to customize for this specific inverter.
+  #
+  # default: None (uses the global DefaultDERContorl)
+  fsa_list:
+    - mRID: _def62366-746e-4fcb-b3ee-ebebb90d72d4-fsa
+      description: _def62366-746e-4fcb-b3ee-ebebb90d72d4 fsa description
+      program_lists:
+        - pl1
+        - pl2
+
+
+- device_category_type: PHOTOVOLTAIC_SYSTEM
+  id: dev1
+  pin: 12345
+  fsa_list:
+    - mRID: dev1-fsa
+      description: dev1 fsa description
+      program_lists:
+        - pl1
+        - pl2
+
+- device_category_type: PHOTOVOLTAIC_SYSTEM
+  id: dev2
+  pin: 12345
+  fsa_list:
+    - mRID: dev2-fsa
+      description: dev2 fsa description
+      program_lists:
+        - pl1
+        - pl2
+
+# Contains control mode information to be used if no active DERControl is
+# found
+DefaultDERControl:
+  # Distributed Energy Resource (DER) control values.
+  # Required: True
+  DERControlBase:
+    # Set DER as connected (true) or disconnected
+    # (false). Used in conjunction with ramp rate when re-connecting.
+    # Implies galvanic isolation.
+    #
+    # default: True
+    opModConnect: True
+
+    # Set DER as energized (true) or de-energized
+    # (false). Used in conjunction with ramp rate when re-energizing.
+    #
+    # default: True
+    opModEnergize: True
+
+    # The opModFixedPFAbsorbW function
+    # specifies a requested fixed Power Factor (PF) setting for when
+    # active power is being absorbed. The actual displacement SHALL be
+    # within the limits established by setMinPFOverExcited and
+    # setMinPFUnderExcited. If issued simultaneously with other
+    # reactive power controls (e.g. opModFixedVar) the control
+    # resulting in least var magnitude SHOULD take precedence.
+    #
+    # default: null
+    opModFixedPFAbsorbW: 0.9
+
+    # The opModFixedPFInjectW function
+    # specifies a requested fixed Power Factor (PF) setting for when
+    # active power is being injected. The actual displacement SHALL be
+    # within the limits established by setMinPFOverExcited and
+    # setMinPFUnderExcited. If issued simultaneously with other
+    # reactive power controls (e.g. opModFixedVar) the control
+    # resulting in least var magnitude SHOULD take precedence.
+    opModFixedPFInjectW: 0.9
+
+    # The opModFixedVar function specifies the
+    # delivered or received reactive power setpoint.  The context for
+    # the setpoint value is determined by refType and SHALL be one of
+    # %setMaxW, %setMaxVar, or %statVarAvail.  If issued
+    # simultaneously with other reactive power controls (e.g.
+    # opModFixedPFInjectW) the control resulting in least var
+    # magnitude SHOULD take precedence.
+    # opModFixedVar:
+
+    # The opModFixedW function specifies a requested
+    # charge or discharge mode setpoint, in %setMaxChargeRateW if
+    # negative value or %setMaxW or %setMaxDischargeRateW if positive
+    # value (in hundredths).
+    # opModFixedW:
+
+    # Specifies a frequency-watt operation. This
+    # operation limits active power generation or consumption when the
+    # line frequency deviates from nominal by a specified amount.
+    # opModFreqDroop:
+
+    # Specify DERCurveLink for curveType == 0.  The
+    # Frequency-Watt function limits active power generation or
+    # consumption when the line frequency deviates from nominal by a
+    # specified amount. The Frequency-Watt curve is specified as an
+    # array of Frequency-Watt pairs that are interpolated into a
+    # piecewise linear function with hysteresis.  The x value of each
+    # pair specifies a frequency in Hz. The y value specifies a
+    # corresponding active power output in %setMaxW.
+    # opModFreqWatt:
+
+    # Specify DERCurveLink for curveType == 1. The
+    # High Frequency Ride-Through (HFRT) function is specified by one
+    # or two duration-frequency curves that define the operating
+    # region under high frequency conditions. Each HFRT curve is
+    # specified by an array of duration-frequency pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region. The x value of each pair specifies a duration
+    # (time at a given frequency in seconds). The y value of each pair
+    # specifies a frequency, in Hz. This control specifies the "may
+    # trip" region.
+    # opModHFRTMayTrip:
+
+    # Specify DERCurveLink for curveType == 2.
+    # The High Frequency Ride-Through (HFRT) function is specified by
+    # a duration-frequency curve that defines the operating region
+    # under high frequency conditions.  Each HFRT curve is specified
+    # by an array of duration-frequency pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region.  The x value of each pair specifies a duration
+    # (time at a given frequency in seconds). The y value of each pair
+    # specifies a frequency, in Hz. This control specifies the "must
+    # trip" region.
+    # opModHFRTMustTrip:
+
+    # Specify DERCurveLink for curveType == 3. The
+    # High Voltage Ride-Through (HVRT) function is specified by one,
+    # two, or three duration-volt curves that define the operating
+    # region under high voltage conditions. Each HVRT curve is
+    # specified by an array of duration-volt pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region. The x value of each pair specifies a duration
+    # (time at a given voltage in seconds). The y value of each pair
+    # specifies an effective percentage voltage, defined as ((locally
+    # measured voltage - setVRefOfs / setVRef). This control specifies
+    # the "may trip" region.
+    # opModHVRTMayTrip:
+
+    # Specify DERCurveLink for
+    # curveType == 4.  The High Voltage Ride-Through (HVRT) function
+    # is specified by duration-volt curves that define the operating
+    # region under high voltage conditions.  Each HVRT curve is
+    # specified by an array of duration-volt pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region.  The x value of each pair specifies a duration
+    # (time at a given voltage in seconds). The y value of each pair
+    # specifies an effective percent voltage, defined as ((locally
+    # measured voltage - setVRefOfs) / setVRef). This control
+    # specifies the "momentary cessation" region.
+    # opModHVRTMomentaryCessation:
+
+    # Specify DERCurveLink for curveType == 5.
+    # The High Voltage Ride-Through (HVRT) function is specified by
+    # duration-volt curves that define the operating region under high
+    # voltage conditions.  Each HVRT curve is specified by an array of
+    # duration-volt pairs that will be interpolated into a piecewise
+    # linear function that defines an operating region.  The x value
+    # of each pair specifies a duration (time at a given voltage in
+    # seconds). The y value of each pair specifies an effective
+    # percent voltage, defined as ((locally measured voltage -
+    # setVRefOfs) / setVRef). This control specifies the "must trip"
+    # region.
+    # opModHVRTMustTrip
+
+    # Specify DERCurveLink for curveType == 6. The
+    # Low Frequency Ride-Through (LFRT) function is specified by one
+    # or two duration-frequency curves that define the operating
+    # region under low frequency conditions. Each LFRT curve is
+    # specified by an array of duration-frequency pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region. The x value of each pair specifies a duration
+    # (time at a given frequency in seconds). The y value of each pair
+    # specifies a frequency, in Hz. This control specifies the "may
+    # trip" region.
+    # opModLFRTMayTrip:
+
+    # Specify DERCurveLink for curveType == 7.
+    # The Low Frequency Ride-Through (LFRT) function is specified by a
+    # duration-frequency curve that defines the operating region under
+    # low frequency conditions.  Each LFRT curve is specified by an
+    # array of duration-frequency pairs that will be interpolated into
+    # a piecewise linear function that defines an operating region.
+    # The x value of each pair specifies a duration (time at a given
+    # frequency in seconds). The y value of each pair specifies a
+    # frequency, in Hz. This control specifies the "must trip" region.
+    # opModLFRTMustTrip:
+
+    # Specify DERCurveLink for curveType == 8. The
+    # Low Voltage Ride-Through (LVRT) function is specified by one,
+    # two, or three duration-volt curves that define the operating
+    # region under low voltage conditions. Each LVRT curve is
+    # specified by an array of duration-volt pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region. The x value of each pair specifies a duration
+    # (time at a given voltage in seconds). The y value of each pair
+    # specifies an effective percent voltage, defined as ((locally
+    # measured voltage - setVRefOfs) / setVRef). This control
+    # specifies the "may trip" region.
+    # opModLVRTMayTrip:
+
+    # Specify DERCurveLink for
+    # curveType == 9.  The Low Voltage Ride-Through (LVRT) function is
+    # specified by duration-volt curves that define the operating
+    # region under low voltage conditions.  Each LVRT curve is
+    # specified by an array of duration-volt pairs that will be
+    # interpolated into a piecewise linear function that defines an
+    # operating region.  The x value of each pair specifies a duration
+    # (time at a given voltage in seconds). The y value of each pair
+    # specifies an effective percent voltage, defined as ((locally
+    # measured voltage - setVRefOfs) / setVRef). This control
+    # specifies the "momentary cessation" region.
+    # opModLVRTMomentaryCessation:
+
+    # Specify DERCurveLink for curveType == 10.
+    # The Low Voltage Ride-Through (LVRT) function is specified by
+    # duration-volt curves that define the operating region under low
+    # voltage conditions.  Each LVRT curve is specified by an array of
+    # duration-volt pairs that will be interpolated into a piecewise
+    # linear function that defines an operating region.  The x value
+    # of each pair specifies a duration (time at a given voltage in
+    # seconds). The y value of each pair specifies an effective
+    # percent voltage, defined as ((locally measured voltage -
+    # setVRefOfs) / setVRef). This control specifies the "must trip"
+    # region.
+    # opModLVRTMustTrip:
+
+    # The opModMaxLimW function sets the maximum
+    # active power generation level at the electrical coupling point
+    # as a percentage of set capacity (%setMaxW, in hundredths). This
+    # limitation may be met e.g. by reducing PV output or by using
+    # excess PV output to charge associated storage.
+    # opModMaxLimW:
+
+    # Target reactive power, in var. This control is
+    # likely to be more useful for aggregators, as individual DERs may
+    # not be able to maintain a target setting.
+    # opModTargetVar:
+
+    # Target output power, in Watts. This control is
+    # likely to be more useful for aggregators, as individual DERs may
+    # not be able to maintain a target setting.
+    # opModTargetW:
+
+    # opModVoltVar: Specify DERCurveLink for curveType == 11.  The
+    # static volt-var function provides over- or under-excited var
+    # compensation as a function of measured voltage. The volt-var
+    # curve is specified as an array of volt-var pairs that are
+    # interpolated into a piecewise linear function with hysteresis.
+    # The x value of each pair specifies an effective percent voltage,
+    # defined as ((locally measured voltage - setVRefOfs) / setVRef)
+    # and SHOULD support a domain of at least 0 - 135. If VRef is
+    # present in DERCurve, then the x value of each pair is
+    # additionally multiplied by (VRef / 10000). The y value specifies
+    # a target var output interpreted as a signed percentage (-100 to
+    # 100). The meaning of the y value is determined by yRefType and
+    # must be one of %setMaxW, %setMaxVar, or %statVarAvail.
+    # opModVoltVar:
+
+    # Specify DERCurveLink for curveType == 12.  The
+    # Volt-Watt reduces active power output as a function of measured
+    # voltage. The Volt-Watt curve is specified as an array of Volt-
+    # Watt pairs that are interpolated into a piecewise linear
+    # function with hysteresis. The x value of each pair specifies an
+    # effective percent voltage, defined as ((locally measured voltage
+    # - setVRefOfs) / setVRef) and SHOULD support a domain of at least
+    # 0 - 135. The y value specifies an active power output
+    # interpreted as a percentage (0 - 100). The meaning of the y
+    # value is determined by yRefType and must be one of %setMaxW or
+    # %statWAvail.
+    # opModVoltWatt:
+
+    # Specify DERCurveLink for curveType == 13.  The
+    # Watt-PF function varies Power Factor (PF) as a function of
+    # delivered active power. The Watt-PF curve is specified as an
+    # array of Watt-PF coordinates that are interpolated into a
+    # piecewise linear function with hysteresis.  The x value of each
+    # pair specifies a watt setting in %setMaxW, (0 - 100). The PF
+    # output setting is a signed displacement in y value (PF sign
+    # SHALL be interpreted according to the EEI convention, where
+    # unity PF is considered unsigned). These settings are not
+    # expected to be updated very often during the life of the
+    # installation, therefore only a single curve is required.  If
+    # issued simultaneously with other reactive power controls (e.g.
+    # opModFixedPFInjectW) the control resulting in least var
+    # magnitude SHOULD take precedence.
+    # opModWattPF:
+
+    # Specify DERCurveLink for curveType == 14. The
+    # Watt-Var function varies vars as a function of delivered active
+    # power. The Watt-Var curve is specified as an array of Watt-Var
+    # pairs that are interpolated into a piecewise linear function
+    # with hysteresis. The x value of each pair specifies a watt
+    # setting in %setMaxW, (0-100). The y value specifies a target var
+    # output interpreted as a signed percentage (-100 to 100). The
+    # meaning of the y value is determined by yRefType and must be one
+    # of %setMaxW, %setMaxVar, or %statVarAvail.
+    # opModWattVar:
+
+    # Requested ramp time, in hundredths of a second, for
+    # the device to transition from the current DERControl  mode
+    # setting(s) to the new mode setting(s). If absent, use default
+    # ramp rate (setGradW).  Resolution is 1/100 sec.
+    # rampTms:
+
+
+  # Enter service delay, in hundredths of a second.
+  # When present, this value SHALL update the value of the
+  # corresponding setting (DERSettings::setESDelay).
+  #
+  # default: null
+  setESDelay: null
+
+  # Enter service frequency high. Specified in
+  # hundredths of Hz. When present, this value SHALL update the
+  # value of the corresponding setting (DERSettings::setESHighFreq).
+  #
+  # default: null
+  setESHighFreq: null
+
+  # Enter service voltage high. Specified as an
+  # effective percent voltage, defined as (100% * (locally measured
+  # voltage - setVRefOfs) / setVRef), in hundredths of a percent.
+  # When present, this value SHALL update the value of the
+  # corresponding setting (DERSettings::setESHighVolt).
+  #
+  # default: null
+  setESHighVolt: null
+
+  # Enter service frequency low. Specified in
+  # hundredths of Hz. When present, this value SHALL update the
+  # value of the corresponding setting (DERSettings::setESLowFreq).
+  #
+  # default: null
+  setESLowFreq: null
+
+  # Enter service voltage low. Specified as an
+  # effective percent voltage, defined as (100% * (locally measured
+  # voltage - setVRefOfs) / setVRef), in hundredths of a percent.
+  # When present, this value SHALL update the value of the
+  # corresponding setting (DERSettings::setESLowVolt).
+  setESLowVolt: null
+
+  # Enter service ramp time, in hundredths of a
+  # second. When present, this value SHALL update the value of the
+  # corresponding setting (DERSettings::setESRampTms).
+  setESRampTms: null
+
+  # Enter service randomized delay, in
+  # hundredths of a second. When present, this value SHALL update
+  # the value of the corresponding setting
+  # (DERSettings::setESRandomDelay).
+  setESRandomDelay: null
+
+  # Set default rate of change (ramp rate) of active
+  # power output due to command or internal action, defined in
+  # %setWMax / second.  Resolution is in hundredths of a
+  # percent/second. A value of 0 means there is no limit.
+  # Interpreted as a percentage change in output capability limit
+  # per second when used as a default ramp rate. When present, this
+  # value SHALL update the value of the corresponding setting
+  # (DERSettings::setGradW).
+  setGradW: null
+
+
+  # Set soft-start rate of change (soft-start ramp
+  # rate) of active power output due to command or internal action,
+  # defined in %setWMax / second.  Resolution is in hundredths of a
+  # percent/second. A value of 0 means there is no limit.
+  # Interpreted as a percentage change in output capability limit
+  # per second when used as a ramp rate. When present, this value
+  # SHALL update the value of the corresponding setting
+  # (DERSettings::setSoftGradW).
+  setSoftGradW: null
+
+
+
+#gridappsd:
+#  field_bus_config: gridappsd_feeder_config.yml
+#  feeder_id_file: examples/simulation.feeder.txt
+#  simulation_id_file: examples/simulation.id.txt

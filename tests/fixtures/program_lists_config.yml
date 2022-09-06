@@ -1,0 +1,26 @@
+program_lists:
+  - name: pl1
+    programs:
+    - mRID: E0000001
+      description: Default DERC
+      DERControlBase:
+        opModMaxLimW: 10000
+        setGradW: 0
+        setSoftGradW: 0
+    - mRID: E0000002
+      description: Blah blah blah
+      # links to control stuff here??
+      primacy: 89
+
+  - name: pl2
+    programs:
+    - mRID: E0000003
+      description: Default DERC 2
+      DERControlBase:
+        opModMaxLimW: 5000
+        setGradW: 0
+        setSoftGradW: 0
+    - mRID: E0000004
+      description: Yoda was here
+      # links to control stuff here??
+      primacy: 89

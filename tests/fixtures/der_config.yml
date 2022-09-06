@@ -1,0 +1,63 @@
+# Initial list of Distributed energy resources.
+ders:
+  - # modesSupported: Bitmap indicating the DER Controls implemented
+    #        by the device. See DERControlType for values.
+    #        (ieee_2030_5/types/__init__.py)
+    modesSupported: '111111111111111'
+
+    #    :ivar rtgAbnormalCategory: Abnormal operating performance category
+    #        as defined by IEEE 1547-2018. One of: 0 - not specified 1 -
+    #        Category I 2 - Category II 3 - Category III All other values
+    #        reserved.
+    #    :ivar rtgMaxA: Maximum continuous AC current capability of the DER,
+    #        in Amperes (RMS).
+    #    :ivar rtgMaxAh: Usable energy storage capacity of the DER, in
+    #        AmpHours.
+    #    :ivar rtgMaxChargeRateVA: Maximum apparent power charge rating in
+    #        Volt-Amperes. May differ from the maximum apparent power rating.
+    #    :ivar rtgMaxChargeRateW: Maximum rate of energy transfer received by
+    #        the storage DER, in Watts.
+    #    :ivar rtgMaxDischargeRateVA: Maximum apparent power discharge rating
+    #        in Volt-Amperes. May differ from the maximum apparent power
+    #        rating.
+    #    :ivar rtgMaxDischargeRateW: Maximum rate of energy transfer
+    #        delivered by the storage DER, in Watts. Required for combined
+    #        generation/storage DERs (e.g. DERType == 83).
+    #    :ivar rtgMaxV: AC voltage maximum rating.
+    #    :ivar rtgMaxVA: Maximum continuous apparent power output capability
+    #        of the DER, in VA.
+    #    :ivar rtgMaxVar: Maximum continuous reactive power delivered by the
+    #        DER, in var.
+    #    :ivar rtgMaxVarNeg: Maximum continuous reactive power received by
+    #        the DER, in var.  If absent, defaults to negative rtgMaxVar.
+    #    :ivar rtgMaxW: Maximum continuous active power output capability of
+    #        the DER, in watts. Represents combined generation plus storage
+    #        output if DERType == 83.
+    #    :ivar rtgMaxWh: Maximum energy storage capacity of the DER, in
+    #        WattHours.
+    #    :ivar rtgMinPFOverExcited: Minimum Power Factor displacement
+    #        capability of the DER when injecting reactive power (over-
+    #        excited); SHALL be a positive value between 0.0 (typically
+    #        &amp;gt; 0.7) and 1.0. If absent, defaults to unity.
+    #    :ivar rtgMinPFUnderExcited: Minimum Power Factor displacement
+    #        capability of the DER when absorbing reactive power (under-
+    #        excited); SHALL be a positive value between 0.0 (typically
+    #        &amp;gt; 0.7) and 0.9999.  If absent, defaults to
+    #        rtgMinPFOverExcited.
+    #    :ivar rtgMinV: AC voltage minimum rating.
+    #    :ivar rtgNormalCategory: Normal operating performance category as
+    #        defined by IEEE 1547-2018. One of: 0 - not specified 1 -
+    #        Category A 2 - Category B All other values reserved.
+    #    :ivar rtgOverExcitedPF: Specified over-excited power factor.
+    #    :ivar rtgOverExcitedW: Active power rating in Watts at specified
+    #        over-excited power factor (rtgOverExcitedPF). If present,
+    #        rtgOverExcitedPF SHALL be present.
+    #    :ivar rtgReactiveSusceptance: Reactive susceptance that remains
+    #        connected to the Area EPS in the cease to energize and trip
+    #        state.
+    #    :ivar rtgUnderExcitedPF: Specified under-excited power factor.
+    #    :ivar rtgUnderExcitedW: Active power rating in Watts at specified
+    #        under-excited power factor (rtgUnderExcitedPF). If present,
+    #        rtgUnderExcitedPF SHALL be present.
+  #    :ivar rtgVNom: AC voltage nominal rating.
+  #    :ivar type: Type of DER; see DERType object
