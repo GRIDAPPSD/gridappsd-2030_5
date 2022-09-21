@@ -39,21 +39,40 @@
 # -------------------------------------------------------------------------------
 
 import os
+import threading
 
 from argparse import ArgumentParser
 import logging
 from pathlib import Path
 import socket
 import sys
-from typing import Dict, Tuple
-from urllib.parse import urlparse
+from time import sleep
 
 import yaml
+from werkzeug.serving import BaseWSGIServer
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.flask_server import run_server
+from ieee_2030_5.flask_server import build_server
 from ieee_2030_5.server.server_constructs import initialize_2030_5
+
+
+_log = logging.getLogger()
+
+
+class ServerThread(threading.Thread):
+
+    def __init__(self, server: BaseWSGIServer):
+        threading.Thread.__init__(self, daemon=True)
+        self.server = server
+
+    def run(self):
+        _log.info('starting server')
+        self.server.serve_forever()
+
+    def shutdown(self):
+        _log.info("shutting down server")
+        self.server.shutdown()
 
 
 def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices: bool = True) -> TLSRepository:
@@ -73,6 +92,27 @@ def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices
                 already_represented.add(k)
                 tlsrepo.create_cert(k.id)
     return tlsrepo
+
+
+def _shutdown():
+    make_stop_file()
+    sleep(1)
+    remove_stop_file()
+
+
+def should_stop():
+    return Path('server.stop').exists()
+
+
+def make_stop_file():
+    with open('server.stop', 'w') as w:
+        pass
+
+
+def remove_stop_file():
+    pth = Path('server.stop')
+    if pth.exists():
+        os.remove(pth)
 
 
 def _main():
@@ -137,11 +177,21 @@ def _main():
 
     end_devices = initialize_2030_5(config, tls_repo)
 
+    thread = None
     try:
-        run_server(config, tls_repo, enddevices=end_devices, debug=opts.debug)
+        remove_stop_file()
+        server = build_server(config, tls_repo, enddevices=end_devices)
+        thread = ServerThread(server)
+        thread.start()
+        while not should_stop():
+            sleep(0.5)
     except KeyboardInterrupt as ex:
-        print("Shutting down server.")
+        pass
+    finally:
+        if thread:
+            thread.shutdown()
+            thread.join()
 
 
-if __name__ == '__main__':
-    _main()
+# if __name__ == '__main__':
+#     _main()

@@ -11,11 +11,11 @@ import pytest
 # should now be at root
 import yaml
 
-from ieee_2030_5.__main__ import get_tls_repository
+from ieee_2030_5.__main__ import get_tls_repository, ServerThread
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.flask_server import run_server
+from ieee_2030_5.flask_server import build_server
 from ieee_2030_5.server.server_constructs import EndDevices, initialize_2030_5
 
 parent_path = Path(__file__).parent.parent
@@ -73,7 +73,7 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
                                      clear=False)
             ed = initialize_2030_5(config, tls_repo)
 
-            run_server(config, tls_repo, enddevices=ed)
+            build_server(config, tls_repo, enddevices=ed)
         except KeyboardInterrupt as ex:
             print("Shutting down server.")
 
@@ -86,18 +86,27 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     tls_repository = get_tls_repository(config_server)
     end_devices = initialize_2030_5(config_server, tls_repository)
 
-    proc = Process(target=start_server_internal, args=(SERVER_CONFIG_FILE,), daemon=True)
-    proc.start()
-
-    time.sleep(2)
-
+    server = build_server(config=config_server,
+                          tlsrepo=tls_repository,
+                          enddevices=end_devices)
+    #
+    # proc = Process(target=start_server_internal, args=(SERVER_CONFIG_FILE,), daemon=True)
+    # proc.start()
+    #
+    # time.sleep(2)
+    #
     TLS_REPO = tls_repository
     SERVER_CFG = config_server
 
+    thread = ServerThread(server)
+    thread.start()
+
     yield tls_repository, end_devices, config_server
 
-    proc.terminate()
-    proc.join(timeout=5)
+    thread.shutdown()
+    thread.join(timeout=5)
+    thread = None
+    print("After join")
 
 
 @pytest.fixture()

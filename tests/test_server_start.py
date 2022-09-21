@@ -5,6 +5,7 @@ from ieee_2030_5.client import IEEE2030_5_Client
 
 def test_starting_server_using_fixture(server_startup):
     tls_repo, end_devices, server_config = server_startup
+
     assert tls_repo
     assert end_devices
     assert server_config
@@ -21,12 +22,4 @@ def test_starting_server_using_fixture(server_startup):
 
     dcap = client.device_capability()
     assert dcap.pollRate > 0
-
-
-
-
-
-
-
-
-    # assert server_config.server_hostname.strip() == Path("/etc/hostname").read_text().strip()
+    client.disconnect()

@@ -1,4 +1,4 @@
-openssl_cnf: ../openssl.cnf
+openssl_cnf: openssl.cnf
 # front-end proxy to the server.
 # proxy_hostname -> server_hostname
 #proxy_hostname: gridappsd_dev_2004:8443

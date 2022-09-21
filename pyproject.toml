@@ -56,4 +56,5 @@ split_before_logical_operator = true
 
 [tool.poetry.scripts]
 2030_5_server = 'ieee_2030_5.__main__:_main'
+2030_5_shutdown = 'ieee_2030_5.__main__:_shutdown'
 2030_5_proxy = 'ieee_2030_5.basic_proxy:_main'

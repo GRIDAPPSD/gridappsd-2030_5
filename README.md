@@ -8,6 +8,24 @@ section 6.1.3 and 6.1.4 respectively.
 
 ## Setup
 
+## Installing from pypi
+
+The recommended way to install this project from pypi is in a virtual environment.  Create environment and install
+2030.5 server as follows.
+
+```commandline
+# creates an environment 'env' in the current directory
+python3 -m venv env
+
+# Activate the environment in the current shell
+source env/bin/activate
+
+# Install 2030.5 server
+pip install gridappsd_2030_5
+```
+
+See the [Configuration][] on creating configuration files for the server.
+
 ## Installing from source
 
 The installation requires poetry version 1.2 or greater.  https://python-poetry.org/docs/#installation
@@ -27,7 +45,7 @@ optional arguments:
   -h, --help         show this help message and exit
   --no-validate      Allows faster startup since the resolving of addresses for devices is not done.
   --no-create-certs  If specified certificates for for client and server will not be created.
-  --debug            Put server in debug mode
+  --debug            Put server in debug mode (more logging)
 ```
 
 ### Using the 2030.5 proxy

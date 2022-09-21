@@ -1,19 +1,16 @@
-
 import json
 import logging
-from dataclasses import dataclass
+import ssl
 from http.server import BaseHTTPRequestHandler
-from pathlib import Path
-from typing import List
 from wsgiref.simple_server import WSGIRequestHandler
 
+import OpenSSL
+import werkzeug.exceptions
 from flask import Flask, render_template, request, redirect, Response
 from flask_sessions import Session
-import werkzeug.exceptions
-import ssl
-import OpenSSL
+from werkzeug.serving import make_server, BaseWSGIServer
 
-__all__ = ["run_server"]
+__all__ = ["build_server"]
 
 # templates = Jinja2Templates(directory="templates")
 # from IEEE2030_5.endpoints import dcap, IEEE2030_5Renderer
@@ -98,8 +95,9 @@ def after_request(response: Response) -> Response:
     return response
 
 
-def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices, **kwargs):
-
+def build_server(config: ServerConfiguration,
+                 tlsrepo: TLSRepository,
+                 enddevices: EndDevices, **kwargs) -> BaseWSGIServer:
     app = Flask(__name__, template_folder="/repos/gridappsd-2030_5/templates")
     # Debug headers path and request arguments
     app.before_request(before_request)
@@ -128,11 +126,11 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     ssl_context.load_cert_chain(
         certfile=server_cert_file,
         keyfile=server_key_file,
-    # password=app_key_password
+        # password=app_key_password
     )
     # change this to ssl.CERT_REQUIRED during deployment.
     # TODO if required we have to have one all the time on the server.
-    ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
+    ssl_context.verify_mode = ssl.CERT_OPTIONAL  # ssl.CERT_REQUIRED
 
     ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
     AdminEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
@@ -154,7 +152,7 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     @app.route("/admin/clients")
     def admin_clients():
         clients = tlsrepo.client_list
-        return json.dumps(clients) #  render_template("admin/clients.html", registered=clients, connected=[])
+        return json.dumps(clients)  # render_template("admin/clients.html", registered=clients, connected=[])
 
     @app.route("/admin/groups")
     def admin_groups():
@@ -172,33 +170,6 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
             routes += f"<li>{p.rule}</li>"
         routes += "</ul>"
         return Response(f"{routes}")
-    # @app.route("/admin" + hrefs.dcap)
-    # def admin_dcap():
-    #     return Response(serialize_dataclass(enddevices.get_end_device_list(0, enddevices.num_devices)),
-    #                     mimetype="text/xml")
-    #
-    #
-    # @app.route(hrefs.dcap)
-    # def dcap():
-    #     return Response(serialize_dataclass(enddevices.get_end_device_list(0, enddevices.num_devices))
-    #
-    # @app.route("/dcap", methods=['GET'])
-    # def route_dcap():
-    #
-    #     # all routes for 2030.5 should have a peercert so they
-    #     # can be authenticated by the server.
-    #     if not request.environ['peercert']:
-    #         raise werkzeug.exceptions.Forbidden()
-    #
-    #     return dcap()
-
-    # @app.route("/dcap/edev", defaults={'index': None, 'part': None})
-    # @app.route("/dcap/edev/<index>", defaults={'part': None})
-    # @app.route("/dcap/edev/<index>/<part>")
-    # #@app.route("/dcap/edev/")
-    # def route_edev(index: int, part: str):
-    #     args = request.args.to_dict()
-    #     return {"args": args, "index": index, "part": part}
 
     try:
         host, port = config.server_hostname.split(":")
@@ -208,18 +179,9 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
         port = 8443
     # Add session support to the application.
     Session(app)
-    WSGIRequestHandler.protocol_version = "HTTP/1.1"
-    PeerCertWSGIRequestHandler.protocol_version = "HTTP/1.1"
-    BaseHTTPRequestHandler.protocol_version = "HTTP/1.1"
-    app.run(host=host,
-            ssl_context=ssl_context,
-            request_handler=PeerCertWSGIRequestHandler,
-            port=port, **kwargs)
-    #debug=True)
-    #,
-    #debug=True)
 
-#
-# # start our webserver!
-# if __name__ == "__main__":
-#     app.run(host="0.0.0.0", ssl_context=ssl_context, request_handler=PeerCertWSGIRequestHandler, port=8000)
+    return make_server(app=app,
+                       host=host,
+                       ssl_context=ssl_context,
+                       request_handler=PeerCertWSGIRequestHandler,
+                       port=port, **kwargs)

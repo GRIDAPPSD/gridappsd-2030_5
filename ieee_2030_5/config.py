@@ -15,7 +15,7 @@ __all__ = ["ServerConfiguration"]
 try:
     from gridappsd.field_interface import MessageBusDefinition
 except ImportError as ex:
-    sys.stderr.write("Gridappsd integration disabled")
+    pass
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData, \
