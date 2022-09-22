@@ -193,5 +193,5 @@ def _main():
             thread.join()
 
 
-# if __name__ == '__main__':
-#     _main()
+if __name__ == '__main__':
+    _main()

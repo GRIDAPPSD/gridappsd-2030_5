@@ -28,36 +28,17 @@ TLS_REPO: TLSRepository
 SERVER_CFG: ServerConfiguration
 
 
-@pytest.fixture(scope="session")
-def create_certificates():
-    root = Path(__file__).parent.parent
-    cfg = yaml.safe_load(Path(SERVER_CONFIG_FILE).read_text())
-    cwd = os.getcwd()
-    os.chdir(str(root))
-    config = ServerConfiguration(**cfg)
-    tls_repo = TLSRepository(config.tls_repository,
-                             config.openssl_cnf,
-                             config.server_hostname)
-    pair = tls_repo.get_file_pair("dev1")
-    assert Path(pair[0]).exists()
-    assert Path(pair[1]).exists()
-
-    yield
-
-    os.chdir(cwd)
-    shutil.rmtree(config.tls_repository, ignore_errors=True)
-
-
 @pytest.fixture(scope="module")
-def server_startup(create_certificates) -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
+def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     global TLS_REPO, SERVER_CFG
 
     cfg_out = yaml.safe_load(SERVER_CONFIG_FILE.read_text())
 
     cwd = os.getcwd()
-    os.chdir(str(SERVER_CONFIG_FILE.parent))
+    root = Path(__file__).parent.parent
+    os.chdir(str(root))
     config_server = ServerConfiguration(**cfg_out)
-    os.chdir(cwd)
+
     tls_repository = get_tls_repository(config_server)
     end_devices = initialize_2030_5(config_server, tls_repository)
 
@@ -76,6 +57,8 @@ def server_startup(create_certificates) -> Tuple[TLSRepository, EndDevices, Serv
     thread.shutdown()
     thread.join(timeout=5)
     thread = None
+    os.chdir(cwd)
+    shutil.rmtree(config_server.tls_repository, ignore_errors=True)
 
 
 @pytest.fixture()

@@ -67,7 +67,7 @@ class TLSRepository:
             serial.write_text("01")
 
         new_contents = openssl_cnffile_template.read_text().replace("dir             = /home/gridappsd/tls",
-                                                           f"dir = {repo_dir}")
+                                                                    f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
         self._ca_key = self._private_dir.joinpath("ca.pem")
         self._ca_cert = self._certs_dir.joinpath("ca.crt")
