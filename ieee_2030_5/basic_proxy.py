@@ -162,7 +162,7 @@ def _main():
     config = ServerConfiguration(**cfg_dict)
 
     tls_repo = TLSRepository(repo_dir=config.tls_repository,
-                             openssl_cnffile=config.openssl_cnf,
+                             openssl_cnffile_template=config.openssl_cnf,
                              serverhost=config.server_hostname,
                              proxyhost=config.proxy_hostname,
                              clear=False)
