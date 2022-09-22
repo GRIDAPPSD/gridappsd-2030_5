@@ -6,7 +6,7 @@ openssl_cnf: openssl.cnf
 #proxy_hostname: gridappsd_dev_2004:8443
 server_hostname: 127.0.0.1:8070
 server_mode: enddevices_create_on_start
-tls_repository: ~/tls
+tls_repository: /tmp/tls
 
 # A file where the der programs are specified or an inline list
 # within this context.

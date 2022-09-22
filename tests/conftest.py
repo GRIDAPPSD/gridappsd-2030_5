@@ -28,8 +28,8 @@ TLS_REPO: TLSRepository
 SERVER_CFG: ServerConfiguration
 
 
-@pytest.fixture(scope="session", autouse=True)
-def create_certs_for_clients():
+@pytest.fixture(scope="session")
+def create_certificates():
     root = Path(__file__).parent.parent
     cfg = yaml.safe_load(Path(SERVER_CONFIG_FILE).read_text())
     cwd = os.getcwd()
@@ -43,37 +43,14 @@ def create_certs_for_clients():
     assert Path(pair[1]).exists()
 
     yield
+
     os.chdir(cwd)
     shutil.rmtree(config.tls_repository, ignore_errors=True)
 
 
 @pytest.fixture(scope="module")
-def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
+def server_startup(create_certificates) -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     global TLS_REPO, SERVER_CFG
-
-    def start_server_internal(config_path: str):
-        """
-        This function will start the server without certificate creation.  It is
-        assumed that the outer function will do that before calling this function
-        via the multiprocess.Process call.
-        """
-        import logging
-        logging.basicConfig(filename="servertest.log", level=logging.DEBUG)
-        try:
-            cfg = yaml.safe_load(Path(config_path).read_text())
-            cwd = os.getcwd()
-            os.chdir(str(SERVER_CONFIG_FILE.parent))
-            config = ServerConfiguration(**cfg)
-            os.chdir(cwd)
-            tls_repo = TLSRepository(config.tls_repository,
-                                     config.openssl_cnf,
-                                     config.server_hostname,
-                                     clear=False)
-            ed = initialize_2030_5(config, tls_repo)
-
-            build_server(config, tls_repo, enddevices=ed)
-        except KeyboardInterrupt as ex:
-            print("Shutting down server.")
 
     cfg_out = yaml.safe_load(SERVER_CONFIG_FILE.read_text())
 
@@ -87,12 +64,7 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     server = build_server(config=config_server,
                           tlsrepo=tls_repository,
                           enddevices=end_devices)
-    #
-    # proc = Process(target=start_server_internal, args=(SERVER_CONFIG_FILE,), daemon=True)
-    # proc.start()
-    #
-    # time.sleep(2)
-    #
+
     TLS_REPO = tls_repository
     SERVER_CFG = config_server
 
@@ -104,7 +76,6 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     thread.shutdown()
     thread.join(timeout=5)
     thread = None
-    print("After join")
 
 
 @pytest.fixture()
@@ -136,7 +107,7 @@ def first_client(server_startup) -> IEEE2030_5_Client:
 
 
 @pytest.fixture
-def tls_repo() -> TLSRepository:
+def new_tls_repository() -> TLSRepository:
     root = Path(__file__).parent
     tmp = mkdtemp(prefix="/tmp/tmpcerts")
     assert Path(tmp).exists()
@@ -153,4 +124,4 @@ def tls_repo() -> TLSRepository:
         yield tls
 
     finally:
-        pass  # shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(tmp)

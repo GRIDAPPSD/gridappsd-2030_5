@@ -110,13 +110,13 @@ if __name__ == '__main__':
     repo_dir = Path(opts.tls_repo).expanduser().resolve(strict=True)
     if not repo_dir.exists():
         raise ValueError(f"Invalid repo directory {str(repo_dir)}")
-    tls_repo = TLSRepository(repo_dir=repo_dir, openssl_cnffile=path,
+    tls_repo = TLSRepository(repo_dir=repo_dir, openssl_cnffile_template=path,
                              serverhost="gridappsd_dev_2004", clear=False)
 
     if opts.device_id not in tls_repo.client_list:
         raise ValueError(f"device_id: ({opts.device_id}) not in tls repository")
 
-    # print(tls_repo.client_list)
+    # print(new_tls_repository.client_list)
     for p in tls_repo.client_list:
         if p == opts.device_id:
             IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,

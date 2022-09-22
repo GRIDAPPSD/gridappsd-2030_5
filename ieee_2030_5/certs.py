@@ -16,18 +16,19 @@ _log = logging.getLogger(__name__)
 
 class TLSRepository:
 
-    def __init__(self, repo_dir: PathStr, openssl_cnffile: PathStr, serverhost: str, proxyhost: str = None, clear=False):
+    def __init__(self, repo_dir: PathStr, openssl_cnffile_template: PathStr, serverhost: str, proxyhost: str = None,
+                 clear=False):
         if isinstance(repo_dir, str):
             repo_dir = Path(repo_dir).expanduser().resolve()
-        if isinstance(openssl_cnffile, str):
-            openssl_cnffile = Path(openssl_cnffile).expanduser().resolve()
-            if not openssl_cnffile.exists():
-                raise ValueError(f"openssl_cnffile does not exist {openssl_cnffile}")
+        if isinstance(openssl_cnffile_template, str):
+            openssl_cnffile_template = Path(openssl_cnffile_template).expanduser().resolve()
+            if not openssl_cnffile_template.exists():
+                raise ValueError(f"openssl_cnffile does not exist {openssl_cnffile_template}")
         self._repo_dir = repo_dir
         self._certs_dir = repo_dir.joinpath("certs")
         self._private_dir = repo_dir.joinpath("private")
         self._combined_dir = repo_dir.joinpath("combined")
-        self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile.name)
+        self._openssl_cnf_file = self._repo_dir.joinpath(openssl_cnffile_template.name)
         self._common_names = {serverhost: serverhost}
         if proxyhost:
             self._common_names[proxyhost] = proxyhost
@@ -65,7 +66,7 @@ class TLSRepository:
         if not serial.exists():
             serial.write_text("01")
 
-        new_contents = openssl_cnffile.read_text().replace("dir             = /home/gridappsd/tls",
+        new_contents = openssl_cnffile_template.read_text().replace("dir             = /home/gridappsd/tls",
                                                            f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
         self._ca_key = self._private_dir.joinpath("ca.pem")

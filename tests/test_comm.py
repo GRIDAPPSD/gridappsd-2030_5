@@ -2,26 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from IEEE2030_5.client import IEEE2030_5_Client
 
-SERVER_CA_CERT = Path("~/tls/certs/ca.crt").expanduser().resolve()
-CLIENT_KEYFILE = Path("~/tls/private/dev1.me.com.pem").expanduser().resolve()
-CLIENT_CERTFILE = Path("~/tls/certs/dev1.me.com.crt").expanduser().resolve()
+def test_comm_002(first_client):
+    capability = first_client.device_capability()
 
-
-@pytest.fixture()
-def client() -> IEEE2030_5_Client:
-    yield IEEE2030_5_Client(server_hostname="me.com",
-                            cafile=SERVER_CA_CERT,
-                            ssl_port=8000,
-                            keyfile=CLIENT_KEYFILE,
-                            certfile=CLIENT_CERTFILE)
-
-
-def test_comm_002(client):
-    capability = client.device_capability()
-
-    edev = client.request_edev_list()
+    edev = first_client.end_devices()
+    assert edev
 
     #time = client.request(capability.TimeLink.href)
     #assert time
