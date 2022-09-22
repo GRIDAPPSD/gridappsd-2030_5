@@ -1,28 +1,4 @@
-import shutil
 from pathlib import Path
-from tempfile import mkdtemp
-
-import pytest
-
-from IEEE2030_5.certs import TLSRepository
-
-
-@pytest.fixture
-def tls_repo() -> TLSRepository:
-    tmp = mkdtemp(prefix="/tmp/tmpcerts")
-    assert Path(tmp).exists()
-
-    try:
-        tls = TLSRepository(
-            repo_dir=tmp,
-        # Default openssl.cnf is two directories up from this test.
-            openssl_cnffile=Path(__file__).parent.parent.joinpath("openssl.cnf"),
-            serverhost="serverhostname")
-
-        yield tls
-
-    finally:
-        pass    #shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_tls_creates_ca_and_server_keys(tls_repo):

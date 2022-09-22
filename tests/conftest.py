@@ -4,6 +4,7 @@ import sys
 import time
 from multiprocessing import Process
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import Tuple
 
 import OpenSSL.crypto
@@ -32,20 +33,20 @@ SERVER_CFG: ServerConfiguration
 
 @pytest.fixture(scope="session", autouse=True)
 def create_certs_for_clients():
+    root = Path(__file__).parent.parent
     cfg = yaml.safe_load(Path(SERVER_CONFIG_FILE).read_text())
     cwd = os.getcwd()
-    os.chdir(str(SERVER_CONFIG_FILE.parent))
+    os.chdir(str(root))
     config = ServerConfiguration(**cfg)
-    os.chdir(cwd)
     tls_repo = TLSRepository(config.tls_repository,
                              config.openssl_cnf,
                              config.server_hostname)
+    os.chdir(cwd)
     pair = tls_repo.get_file_pair("dev1")
     assert Path(pair[0]).exists()
     assert Path(pair[1]).exists()
 
     yield
-
     shutil.rmtree(config.tls_repository, ignore_errors=True)
 
 
@@ -135,3 +136,24 @@ def first_client(server_startup) -> IEEE2030_5_Client:
     yield client
 
     client.disconnect()
+
+
+@pytest.fixture
+def tls_repo() -> TLSRepository:
+    root = Path(__file__).parent
+    tmp = mkdtemp(prefix="/tmp/tmpcerts")
+    assert Path(tmp).exists()
+
+    print(Path(__file__).parent.parent.joinpath("openssl.cnf"))
+
+    try:
+        tls = TLSRepository(
+            repo_dir=tmp,
+            # Default openssl.cnf is two directories up from this test.
+            openssl_cnffile_template=Path(__file__).parent.parent.joinpath("openssl.cnf"),
+            serverhost="serverhostname")
+
+        yield tls
+
+    finally:
+        pass    #shutil.rmtree(tmp, ignore_errors=True)
