@@ -41,12 +41,12 @@ def create_certs_for_clients():
     tls_repo = TLSRepository(config.tls_repository,
                              config.openssl_cnf,
                              config.server_hostname)
-    os.chdir(cwd)
     pair = tls_repo.get_file_pair("dev1")
     assert Path(pair[0]).exists()
     assert Path(pair[1]).exists()
 
     yield
+    os.chdir(cwd)
     shutil.rmtree(config.tls_repository, ignore_errors=True)
 
 
