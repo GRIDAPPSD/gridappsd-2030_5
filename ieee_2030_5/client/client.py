@@ -27,19 +27,24 @@ class IEEE2030_5_Client:
 
     # noinspection PyUnresolvedReferences
     def __init__(self,
-                 cafile: Path,
+                 cafile: PathLike,
                  server_hostname: str,
-                 keyfile: Path,
-                 certfile: Path,
+                 keyfile: PathLike,
+                 certfile: PathLike,
                  server_ssl_port: Optional[int] = 443,
                  debug: bool = True):
+
+        cafile = cafile if isinstance(cafile, PathLike) else Path(cafile)
+        keyfile = keyfile if isinstance(keyfile, PathLike) else Path(keyfile)
+        certfile = certfile if isinstance(certfile, PathLike) else Path(certfile)
 
         assert cafile.exists(), f"cafile doesn't exist ({cafile})"
         assert keyfile.exists(), f"keyfile doesn't exist ({keyfile})"
         assert certfile.exists(), f"certfile doesn't exist ({certfile})"
 
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
-        self._ssl_context.verify_mode = ssl.CERT_REQUIRED
+        self._ssl_context.verify_mode = ssl.CERT_OPTIONAL  #  ssl.CERT_REQUIRED
+        self._ssl_context.verify_mode = ssl.CERT_NONE
         self._ssl_context.load_verify_locations(cafile=cafile)
 
         # Loads client information from the passed cert and key files. For
@@ -67,6 +72,10 @@ class IEEE2030_5_Client:
         if self._http_conn.sock is None:
             self._http_conn.connect()
         return self._http_conn
+
+    def is_end_device_registered(self, end_device: EndDevice, pin: str) -> bool:
+        reg = self.registration(end_device)
+        return reg.pIN == pin
 
     def new_uuid(self, url: str = "/uuid") -> str:
         res = self.__get_request__(url)
@@ -108,8 +117,8 @@ class IEEE2030_5_Client:
         _log.debug(f"devcap id {id(self._device_cap)}")
         _log.debug(threading.currentThread().name)
         _log.debug(f"DCAP: Poll rate: {self._dcap_poll_rate}")
-        self._dcap_timer = Timer(self._dcap_poll_rate, self.poll_timer, (self.device_capability, url))
-        self._dcap_timer.start()
+        # self._dcap_timer = Timer(self._dcap_poll_rate, self.poll_timer, (self.device_capability, url))
+        # self._dcap_timer.start()
         return self._device_cap
 
     def time(self) -> Time:
