@@ -38,14 +38,13 @@
 # UNITED STATES DEPARTMENT OF ENERGY under Contract DE-AC05-76RL01830
 # -------------------------------------------------------------------------------
 
-import os
-import threading
-
-from argparse import ArgumentParser
 import logging
-from pathlib import Path
+import os
 import socket
 import sys
+import threading
+from argparse import ArgumentParser
+from pathlib import Path
 from time import sleep
 
 import yaml
@@ -55,7 +54,6 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import build_server
 from ieee_2030_5.server.server_constructs import initialize_2030_5
-
 
 _log = logging.getLogger()
 
@@ -67,7 +65,7 @@ class ServerThread(threading.Thread):
         self.server = server
 
     def run(self):
-        _log.info('starting server')
+        _log.info(f'starting server on {self.server.host}:{self.server.port}')
         self.server.serve_forever()
 
     def shutdown(self):
@@ -75,7 +73,8 @@ class ServerThread(threading.Thread):
         self.server.shutdown()
 
 
-def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices: bool = True) -> TLSRepository:
+def get_tls_repository(cfg: ServerConfiguration,
+                       create_certificates_for_devices: bool = True) -> TLSRepository:
     tlsrepo = TLSRepository(cfg.tls_repository,
                             cfg.openssl_cnf,
                             cfg.server_hostname,
