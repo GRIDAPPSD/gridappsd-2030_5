@@ -52,7 +52,7 @@ from werkzeug.serving import BaseWSGIServer
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.flask_server import build_server
+from ieee_2030_5.flask_server import build_server, run_server
 from ieee_2030_5.server.server_constructs import initialize_2030_5
 
 _log = logging.getLogger()
@@ -130,6 +130,8 @@ def _main():
         action="store_true",
         help="Debug level of the server"
     )
+    parser.add_argument("--production", action="store_true", default=False,
+                        help="Run the server in a threaded environment.")
     opts = parser.parse_args()
 
     logging_level = logging.DEBUG if opts.debug else logging.INFO
@@ -176,20 +178,28 @@ def _main():
 
     end_devices = initialize_2030_5(config, tls_repo)
 
-    thread = None
-    try:
-        remove_stop_file()
+    if not opts.production:
+        try:
+            run_server(config, tls_repo, end_devices, debug=opts.debug, use_reloader=False,
+                       use_debugger=True, threaded=False)
+        except KeyboardInterrupt:
+            _log.info("Shutting down server")
+    else:
         server = build_server(config, tls_repo, enddevices=end_devices)
-        thread = ServerThread(server)
-        thread.start()
-        while not should_stop():
-            sleep(0.5)
-    except KeyboardInterrupt as ex:
-        pass
-    finally:
-        if thread:
-            thread.shutdown()
-            thread.join()
+
+        thread = None
+        try:
+            remove_stop_file()
+            thread = ServerThread(server)
+            thread.start()
+            while not should_stop():
+                sleep(0.5)
+        except KeyboardInterrupt as ex:
+            _log.info("Exiting program.")
+        finally:
+            if thread:
+                thread.shutdown()
+                thread.join()
 
 
 if __name__ == '__main__':
