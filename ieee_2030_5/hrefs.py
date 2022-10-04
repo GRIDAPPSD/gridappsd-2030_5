@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Optional, List
 
 DEFAULT_DCAP_ROOT = "/dcap"
@@ -9,7 +10,43 @@ DEFAULT_SELF_ROOT = "/sdev"
 DEFAULT_MESSAGE_ROOT = "/msg"
 
 
-dcap: str = f"{DEFAULT_DCAP_ROOT}"
+@lru_cache()
+def get_enddevice_list_href() -> str:
+    return DEFAULT_EDEV_ROOT
+
+
+@lru_cache()
+def get_enddevice_href(index: int) -> str:
+    return "/".join([DEFAULT_EDEV_ROOT, f"{index}"])
+
+
+@lru_cache()
+def get_registration_href(index: int) -> str:
+    return "/".join([DEFAULT_EDEV_ROOT, f"{index}", "reg"])
+
+
+@lru_cache()
+def get_configuration_href(index: int) -> str:
+    return "/".join([DEFAULT_EDEV_ROOT, f"{index}", "cfg"])
+
+
+@lru_cache()
+def get_time_href() -> str:
+    return f"{DEFAULT_DCAP_ROOT}/tm"
+
+
+@lru_cache()
+def get_dcap_href() -> str:
+    return f"{DEFAULT_DCAP_ROOT}"
+
+
+def get_program_href(index: int, subref: str = None):
+    if subref is not None:
+        ref = f"program/{index}/{subref}"
+    else:
+        ref = f"program/{index}"
+    return ref
+
 # TimeLink
 tm: str = f"{DEFAULT_DCAP_ROOT}/tm"
 # ResponseSetListLink

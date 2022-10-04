@@ -12,10 +12,13 @@ from ieee_2030_5.persistance.points import set_point, get_point
 
 __all__: List[str] = [
     "get_href",
-    "add_href"
+    "add_href",
+    "get_href_all",
+    "get_href_filtered"
 ]
 
 _log = logging.getLogger(__name__)
+
 
 @dataclass
 class Index:
@@ -82,5 +85,9 @@ def get_href(href: str) -> dataclass:
     return __indexer__.get(href)
 
 
-def get_all_filtered(href_prefix: str) -> List[dataclass] | []:
+def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
     return [v.item for k, v in __indexer__.__items__.items() if k.startswith(href_prefix)]
+
+
+def get_href_all():
+    return list(__indexer__.__items__.keys())
