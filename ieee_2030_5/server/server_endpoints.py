@@ -12,7 +12,7 @@ from werkzeug.exceptions import Forbidden
 
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.data.indexer import get_href, get_all_filtered
+from ieee_2030_5.data.indexer import get_href, get_href_filtered
 from ieee_2030_5.models import Time, DERCurveList, DERProgramList
 from ieee_2030_5.server.server_constructs import EndDevices
 import ieee_2030_5.hrefs as hrefs
@@ -109,10 +109,10 @@ class ServerEndpoints:
 
         _log.debug(f"Adding rule: {hrefs.uuid_gen} methods: {['GET']}")
         app.add_url_rule(hrefs.uuid_gen, view_func=self._generate_uuid)
-        _log.debug(f"Adding rule: {hrefs.dcap} methods: {['GET']}")
-        app.add_url_rule(hrefs.dcap, view_func=self._dcap)
-        _log.debug(f"Adding rule: {hrefs.tm} methods: {['GET']}")
-        app.add_url_rule(hrefs.tm, view_func=self._tm)
+        _log.debug(f"Adding rule: {hrefs.get_dcap_href()} methods: {['GET']}")
+        app.add_url_rule(hrefs.get_dcap_href(), view_func=self._dcap)
+        _log.debug(f"Adding rule: {hrefs.get_time_href()} methods: {['GET']}")
+        app.add_url_rule(hrefs.get_time_href(), view_func=self._tm)
         _log.debug(f"Adding rule: {hrefs.sdev} methods: {['GET']}")
         app.add_url_rule(hrefs.sdev, view_func=self._sdev)
         _log.debug(f"Adding rule: {hrefs.derp} methods: {['GET']}")
@@ -185,7 +185,7 @@ class ServerEndpoints:
 
     def _curves(self, index: Optional[int] = None) -> Response:
         if index is None:
-            items = get_all_filtered(hrefs.curve)
+            items = get_href_filtered(hrefs.curve)
             curve_list = DERCurveList(DERCurve=items, all=len(items), href=request.path, results=len(items))
             response = Response(dataclass_to_xml(curve_list))
         else:
@@ -194,7 +194,7 @@ class ServerEndpoints:
 
     def _programs(self, index: Optional[int] = None) -> Response:
         if index is None:
-            items = get_all_filtered(href_prefix=hrefs.program)
+            items = get_href_filtered(href_prefix=hrefs.program)
             program_list = DERProgramList(DERProgram=items, all=len(items), href=request.path, results=len(items))
             response = Response(dataclass_to_xml(program_list))
         else:

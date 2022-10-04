@@ -24,7 +24,7 @@ if __name__ == '__main__':
                         help="The 2030.5 server to connect to")
     parser.add_argument("--port", default=443, type=int,
                         help="The port to connect to the 2030.5 server on. (Default 443)")
-    parser.add_argument("--pin", required=True,
+    parser.add_argument("--pin", required=True, type=int,
                         help="PIN to validate that the client is registered with the server.")
 
     opts = parser.parse_args()
@@ -48,13 +48,19 @@ if __name__ == '__main__':
                                server_ssl_port=int(opts.port))
 
     dcap = client.device_capability()
-    devices = client.end_devices()
+    # There should be only a single device, unless this is an aggregator, which this
+    # would give the first response in the list.
+    end_device = client.end_device()
 
-    if not client.is_end_device_registered(devices.EndDevice[0], opts.pin):
+    # Check the first end device in the list to see if it is the same as the pin
+    # passed to the client script.  If not then exit the program with a note to
+    # check the pin.
+    if not client.is_end_device_registered(end_device, opts.pin):
         print(f"End device ({x509.get_subject().CN}) not registered on server.  Check pin.")
         sys.exit(0)
 
-    print(devices.EndDevice[0])
+    fsa = client.function_set_assignment()
+    print(fsa)
 
 
 

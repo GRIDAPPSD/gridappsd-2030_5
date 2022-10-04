@@ -20,11 +20,14 @@ from ieee_2030_5.models import (
     ActiveDERControlListLink,
     DefaultDERControlLink,
     DERControlListLink,
-    DERCurveListLink, Registration, DERListLink, FunctionSetAssignmentsListLink, EndDeviceList, DeviceCategoryType,
-    DefaultDERControl, RegistrationLink, ConfigurationLink, DeviceStatusLink, PowerStatusLink, DeviceInformationLink,
+    DERCurveListLink, Registration, DERListLink, FunctionSetAssignmentsListLink, EndDeviceList,
+    DeviceCategoryType,
+    DefaultDERControl, RegistrationLink, ConfigurationLink, DeviceStatusLink, PowerStatusLink,
+    DeviceInformationLink,
     LogEventListLink, SelfDeviceLink, EndDeviceListLink, DERProgramListLink, UsagePointListLink,
-    MirrorUsagePointListLink, TimeLink, DeviceCapability, FunctionSetAssignments, DeviceInformation, DER,
-    FunctionSetAssignmentsList)
+    MirrorUsagePointListLink, TimeLink, DeviceCapability, FunctionSetAssignments, DeviceInformation,
+    DER,
+    FunctionSetAssignmentsList, Link)
 
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import Lfid
@@ -151,6 +154,9 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
     - End Devices will be initialized and created
     """
     _log.debug("Initializing 2030.5")
+    _log.debug("Adding server level urls to cache")
+    add_href(hrefs.get_time_href(), TimeLink(href=hrefs.get_time_href()))
+    add_href(hrefs.get_enddevice_list_href(), EndDeviceListLink(hrefs.get_enddevice_list_href()))
 
     _log.debug("Update DERCurves' href property")
     # Create curves for der controls.
@@ -163,26 +169,32 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
     # locations for active, default, curve and control lists.
     for program_list in config.program_lists:
         for index, program in enumerate(program_list.programs):
-            program.href = f"{hrefs.program}/{index}"
-            program.ActiveDERControlListLink = ActiveDERControlListLink(href=f"{program.href}/actderc", all=0)
-            program.DERCurveListLink = DERCurveListLink(href=f"{program.href}/dc", all=0)
-            program.DefaultDERControlLink = DefaultDERControlLink(href=f"{program.href}/dderc")
-            program.DERControlListLink = DERControlListLink(href=f"{program.href}/derc", all=0)
+            program.href = hrefs.get_program_href(index)
+            program.ActiveDERControlListLink = ActiveDERControlListLink(
+                href=hrefs.get_program_href(index, "actderc"), all=0)
+            program.DERCurveListLink = DERCurveListLink(
+                href=hrefs.get_program_href(index, "dc"), all=0)
+            program.DefaultDERControlLink = DefaultDERControlLink(
+                href=hrefs.get_program_href(index, "dderc"))
+            program.DERControlListLink = DERControlListLink(
+                href=hrefs.get_program_href(index, "derc"), all=0)
 
             add_href(program.href, program)
 
     _log.debug("Registering EndDevices")
     end_devices = EndDevices()
+    # Initialize all of the enddevices on startup or load them
+    # from storage if available
     if config.server_mode == "enddevices_create_on_start":
-        program_list_names = [x.name for x in config.program_lists]
+        # TODO load from storage if available.
         for device_config in config.devices:
-            end_device = end_devices.initialize_device(device_config=device_config,
-                                                       lfid=tlsrepo.lfdi(device_config.id),
-                                                       program_lists=config.program_lists)
-
+            end_devices.initialize_device(device_config=device_config,
+                                          lfid=tlsrepo.lfdi(device_config.id),
+                                          program_lists=config.program_lists)
             for fsa in device_config.fsa_list:
                 print(fsa)
             print(end_devices.__all_end_devices__)
+
 
     return end_devices
 
@@ -205,7 +217,7 @@ class EndDevices:
     """
     EndDevices contains the server side instances of an
     """
-    __all_end_devices__: Dict[int, EndDeviceData] = field(default_factory=dict)
+    __all_end_devices__: Dict[int, EndDevice] = field(default_factory=dict)
     _lfid_index_map: Dict[Lfid, int] = field(default_factory=dict)
 
     # only increasing device_numbers
@@ -253,7 +265,17 @@ class EndDevices:
     def get_device_capability(self, lfid: Lfid) -> DeviceCapability:
         if not isinstance(lfid, Lfid):
             lfid = Lfid(lfid)
-        ed: EndDeviceData = self.__get_enddevicedata_by_lfid__(lfid)
+
+        index = self._lfid_index_map[lfid]
+        dc = DeviceCapability(href=hrefs.get_dcap_href())
+
+        # TODO if aggregator then count number of devices
+        # Use get_href to retrieve the already constructed object from cache.
+        dc.EndDeviceListLink = get_href(hrefs.get_enddevice_list_href())
+        dc.TimeLink = get_href(hrefs.get_time_href())
+        # dc.pollRate = self.get_registration(index).pollRate
+        
+        # ed: EndDeviceData = self.__get_enddevicedata_by_lfid__(lfid)
         # if ed.device_capability is None:
         #     index = self._lfid_index_map[lfid].index
         #     sdev = SelfDeviceLink(href=hrefs.sdev)
@@ -277,7 +299,7 @@ class EndDevices:
         #     )
         #     self._lfid_index_map[lfid].device_capability = dc
 
-        return ed.device_capability
+        return dc
 
     def get_device_by_index(self, index: int) -> EndDevice:
         return self.__get_enddevice_by_index__(index)
@@ -303,108 +325,139 @@ class EndDevices:
         ed = self.__all_end_devices__.get(index)
         if ed is None:
             raise werkzeug.exceptions.NotFound()
-        return ed.end_device
+        return ed
 
     def initialize_device(self, device_config: DeviceConfiguration, lfid: Lfid,
                           program_lists: List[ProgramList]) -> EndDevice:
+        """
+        Create a new EndDevice object from the passed DeviceConfiguration.  Each time
+        the method is called it will increase the number of a device such that the
+        hrefs from the EndDevice will be unique across the server.
+
+        Notes:
+            Adds EndDevice to the object store
+            Adds Registration to the object store
+
+        Args:
+            device_config:
+            lfid:
+            program_lists:
+
+        Returns:
+            An instantiated EndDevice.
+
+        """
         ts = int(round(datetime.utcnow().timestamp()))
         self._last_device_number += 1
         new_dev_number = self._last_device_number
 
-        # Manage links to different resources for the device.
-        reg_link_href = hrefs.build_edev_registration_link(new_dev_number)
-        reg_link = RegistrationLink(href=reg_link_href)
+        enddevice_href = hrefs.get_enddevice_href(new_dev_number)
+        end_device = EndDevice(
+            href=enddevice_href,
+            deviceCategory=device_config.device_category_type.value,
+            lFDI=str(lfid).encode('utf-8'),
+            RegistrationLink=RegistrationLink(hrefs.get_registration_href(new_dev_number)),
+            ConfigurationLink=ConfigurationLink(hrefs.get_configuration_href(new_dev_number))
+        )
 
-        cfg_link_href = hrefs.build_edev_config_link(new_dev_number)
-        cfg_link = ConfigurationLink(cfg_link_href)
-
-        dev_status_link_href = hrefs.build_edev_status_link(new_dev_number)
-        dev_status_link = DeviceStatusLink(href=dev_status_link_href)
-
-        power_status_link_href = hrefs.build_edev_power_status_link(new_dev_number)
-        power_status_link = PowerStatusLink(href=power_status_link_href)
-
-        # file_status_link = FileStatusLink(href=hrefs.edev_file_status_fmt.format(
-        #     index=new_dev_number))
-        dev_info_link_href = hrefs.build_edev_info_link(new_dev_number)
-        dev_info_link = DeviceInformationLink(href=dev_info_link_href)
-
-        # sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
-        #     index=new_dev_number))
-        l_fid_bytes = str(lfid).encode('utf-8')
-
-        base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
-        der_list_link_href = hrefs.build_der_link(new_dev_number)
-        der_list_link = DERListLink(href=der_list_link_href)
-
-        fsa_list_link_href = hrefs.extend_url(base_edev_single, suffix="fsa")
-        fsa_list_link = FunctionSetAssignmentsListLink(href=fsa_list_link_href)
-
-        log_event_list_link_href = hrefs.extend_url(base_edev_single, suffix="log")
-        log_event_list_link = LogEventListLink(href=log_event_list_link_href)
-
-        time_link_href = hrefs.tm
-        time_link = TimeLink(href=time_link_href)
-
-        end_device_href = f"{hrefs.edev}/{new_dev_number}"
-        end_device_list_link = EndDeviceListLink(href=hrefs.edev)
-
-        changed_time = datetime.now()
-        changed_time.replace(microsecond=0)
-
-        program_list_names = [x.name for x in program_lists]
-        found_fsa_item = set()
-        fsa_items: List[FunctionSetAssignments] = []
-        for fsa in device_config.fsa_list:
-            found_program = None
-            for fsa_name in fsa['program_lists']:
-                for program_list in program_lists:
-                    if program_list.name == fsa_name:
-                        found_program = program_list
-            if found_program is None:
-                raise ValueError(f"Invalid fsa: {fsa} not found in program_lists.  Check configuration.")
-
-            fsa_items.append(FunctionSetAssignments(mRID=fsa['mRID'], description=fsa['description'],
-                                                    href=hrefs.extend_url(fsa_list_link_href, len(fsa_items))))
-
-        device_capability_link = hrefs.dcap
-        device_capability = DeviceCapability(href=device_capability_link, TimeLink=time_link,
-                                             EndDeviceListLink=end_device_list_link)
-        end_device = EndDevice(deviceCategory=device_config.device_category_type.value,
-                               lFDI=l_fid_bytes,
-                               RegistrationLink=reg_link,
-                               DeviceStatusLink=dev_status_link,
-                               ConfigurationLink=cfg_link,
-                               PowerStatusLink=power_status_link,
-                               DeviceInformationLink=dev_info_link,
-                               # TODO: Do actual sfid rather than lfid.
-                               sFDI=lfid,
-                               # file_status_link=file_status_link,
-                               # subscription_list_link=sub_list_link,
-                               href=end_device_href,
-                               # DERListLink=der_list_link,
-                               FunctionSetAssignmentsListLink=fsa_list_link,
-                               LogEventListLink=log_event_list_link,
-                               enabled=True,
-                               changedTime=int(changed_time.timestamp()))
-
-        add_href(end_device_href, end_device)
-
-        registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
-        add_href(reg_link_href, registration)
-        edd = EndDeviceData(index=new_dev_number, mRID=device_config.id,
-                            end_device=end_device, registration=registration,
-                            function_set_assignments=fsa_items,
-                            device_capability=device_capability)
-        self.__all_end_devices__[new_dev_number] = edd
+        add_href(enddevice_href, end_device)
+        add_href(hrefs.get_registration_href(new_dev_number),
+                 Registration(pIN=device_config.pin,
+                              pollRate=device_config.poll_rate))
+        self.__all_end_devices__[new_dev_number] = end_device
         self._lfid_index_map[lfid] = new_dev_number
-        return get_href(end_device_href)
+
+        return get_href(enddevice_href)
+        # cfg_link_href = hrefs.build_edev_config_link(new_dev_number)
+        # cfg_link = ConfigurationLink(cfg_link_href)
+        #
+        # dev_status_link_href = hrefs.build_edev_status_link(new_dev_number)
+        # dev_status_link = DeviceStatusLink(href=dev_status_link_href)
+        #
+        # power_status_link_href = hrefs.build_edev_power_status_link(new_dev_number)
+        # power_status_link = PowerStatusLink(href=power_status_link_href)
+        #
+        # # file_status_link = FileStatusLink(href=hrefs.edev_file_status_fmt.format(
+        # #     index=new_dev_number))
+        # dev_info_link_href = hrefs.build_edev_info_link(new_dev_number)
+        # dev_info_link = DeviceInformationLink(href=dev_info_link_href)
+        #
+        # # sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
+        # #     index=new_dev_number))
+        # l_fid_bytes = str(lfid).encode('utf-8')
+
+        # base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
+        # der_list_link_href = hrefs.build_der_link(new_dev_number)
+        # der_list_link = DERListLink(href=der_list_link_href)
+        #
+        # fsa_list_link_href = hrefs.extend_url(base_edev_single, suffix="fsa")
+        # fsa_list_link = FunctionSetAssignmentsListLink(href=fsa_list_link_href)
+        #
+        # log_event_list_link_href = hrefs.extend_url(base_edev_single, suffix="log")
+        # log_event_list_link = LogEventListLink(href=log_event_list_link_href)
+        #
+        # time_link_href = hrefs.tm
+        # time_link = TimeLink(href=time_link_href)
+        #
+        # end_device_href = f"{hrefs.edev}/{new_dev_number}"
+        # end_device_list_link = EndDeviceListLink(href=hrefs.edev)
+        #
+        # changed_time = datetime.now()
+        # changed_time.replace(microsecond=0)
+        #
+        # program_list_names = [x.name for x in program_lists]
+        # found_fsa_item = set()
+        # fsa_items: List[FunctionSetAssignments] = []
+        # for fsa in device_config.fsa_list:
+        #     found_program = None
+        #     for fsa_name in fsa['program_lists']:
+        #         for program_list in program_lists:
+        #             if program_list.name == fsa_name:
+        #                 found_program = program_list
+        #     if found_program is None:
+        #         raise ValueError(f"Invalid fsa: {fsa} not found in program_lists.  Check configuration.")
+        #
+        #     fsa_items.append(FunctionSetAssignments(mRID=fsa['mRID'], description=fsa['description'],
+        #                                             href=hrefs.extend_url(fsa_list_link_href, len(fsa_items))))
+        #
+        # device_capability_link = hrefs.dcap
+        # device_capability = DeviceCapability(href=device_capability_link, TimeLink=time_link,
+        #                                      EndDeviceListLink=end_device_list_link)
+        # end_device = EndDevice(deviceCategory=device_config.device_category_type.value,
+        #                        lFDI=l_fid_bytes,
+        #                        RegistrationLink=reg_link,
+        #                        DeviceStatusLink=dev_status_link,
+        #                        ConfigurationLink=cfg_link,
+        #                        PowerStatusLink=power_status_link,
+        #                        DeviceInformationLink=dev_info_link,
+        #                        # TODO: Do actual sfid rather than lfid.
+        #                        sFDI=lfid,
+        #                        # file_status_link=file_status_link,
+        #                        # subscription_list_link=sub_list_link,
+        #                        href=end_device_href,
+        #                        # DERListLink=der_list_link,
+        #                        FunctionSetAssignmentsListLink=fsa_list_link,
+        #                        LogEventListLink=log_event_list_link,
+        #                        enabled=True,
+        #                        changedTime=int(changed_time.timestamp()))
+        #
+        # add_href(end_device_href, end_device)
+        #
+        # registration = Registration(dateTimeRegistered=ts, pollRate=device_config.poll_rate, pIN=device_config.pin)
+        # add_href(reg_link_href, registration)
+        # edd = EndDeviceData(index=new_dev_number, mRID=device_config.id,
+        #                     end_device=end_device, registration=registration,
+        #                     function_set_assignments=fsa_items,
+        #                     device_capability=device_capability)
+        # self.__all_end_devices__[new_dev_number] = edd
+        # self._lfid_index_map[lfid] = new_dev_number
+#        return get_href(end_device_href)
 
     def get(self, index: int) -> EndDevice:
-        return self.__all_end_devices__[index].end_device
+        return get_href(hrefs.get_enddevice_href(index))
 
     def get_registration(self, index: int) -> Registration:
-        return self.__all_end_devices__[index].registration
+        return get_href(hrefs.get_registration_href(index))
 
     def get_der_list(self, index: int) -> DERListLink:
         return self.__all_end_devices__[index].end_device.DERListLink
@@ -415,12 +468,13 @@ class EndDevices:
     def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> EndDeviceList:
         ed = self.get_device_by_lfid(lfid)
         if DeviceCategoryType(ed.deviceCategory) == DeviceCategoryType.AGGREGATOR:
-            devices = [x.end_device for x in self.__all_end_devices__.values()]
+            devices = [x for x in self.__all_end_devices__.values()]
         else:
             devices = [ed]
 
         # TODO Handle start, length list things.
-        dl = EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices), href=hrefs.edev, pollRate=900)
+        dl = EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices),
+                           href=hrefs.get_enddevice_list_href(), pollRate=900)
         return dl
 
 

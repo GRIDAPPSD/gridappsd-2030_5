@@ -73,7 +73,7 @@ class IEEE2030_5_Client:
             self._http_conn.connect()
         return self._http_conn
 
-    def is_end_device_registered(self, end_device: EndDevice, pin: str) -> bool:
+    def is_end_device_registered(self, end_device: EndDevice, pin: int) -> bool:
         reg = self.registration(end_device)
         return reg.pIN == pin
 
@@ -98,7 +98,7 @@ class IEEE2030_5_Client:
         return self.__get_request__(self._device_cap.SelfDeviceLink.href)
 
     def function_set_assignment(self) -> FunctionSetAssignmentsListLink:
-        fsa_list = self.__get_request__(self.self_device().FunctionSetAssignmentsListLink.href)
+        fsa_list = self.__get_request__(self.end_device().FunctionSetAssignmentsListLink.href)
         return fsa_list
 
     def poll_timer(self, fn, args):
@@ -246,8 +246,7 @@ if __name__ == '__main__':
                           server_hostname="gridappsd_dev_2004",
                           server_ssl_port=8443,
                           keyfile=KEY_FILE,
-                          certfile=CERT_FILE,
-                          hostname='_def62366-746e-4fcb-b3ee-ebebb90d72d4')
+                          certfile=CERT_FILE)
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
     resp = h.request("/dcap", headers=headers)
