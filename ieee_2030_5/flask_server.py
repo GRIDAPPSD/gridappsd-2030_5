@@ -32,6 +32,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
     in the application.
     """
     tlsrepo: TLSRepository
+    debug_device: str
 
     def make_environ(self):
         """
@@ -58,7 +59,15 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
 
         except OpenSSL.crypto.Error:
-            environ['peercert'] = None
+            # Only if we have a debug_device do we want to expose this device through the admin page.
+            if self.debug_device:
+                cert_file, key_file = self.tlsrepo.get_file_pair(self.debug_device)
+                x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, Path(cert_file).read_bytes())
+                environ['ieee_2030_5_peercert'] = x509
+                environ['ieee_2030_5_subject'] = x509.get_subject().CN
+                environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
+            else:
+                environ['peercert'] = None
 
         return environ
 
@@ -199,6 +208,8 @@ def run_server(config: ServerConfiguration,
         host = config.server_hostname
         port = 8443
 
+    PeerCertWSGIRequestHandler.debug_device = config.debug_device
+    PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=PeerCertWSGIRequestHandler,

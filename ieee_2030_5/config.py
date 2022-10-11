@@ -85,6 +85,7 @@ class ServerConfiguration:
     fsa_list: List[FunctionSetAssignments] = field(default_factory=list)
     curve_list: List[DERCurve] = field(default_factory=list)
 
+    debug_device: Optional[str] = None
     proxy_hostname: Optional[str] = None
     gridappsd: Optional[GridappsdConfiguration] = None
     DefaultDERControl: Optional[DefaultDERControl] = None
@@ -165,6 +166,14 @@ class ServerConfiguration:
                 _log.info("no simulation id")
             _log.info("x" * 80)
 
+        if self.debug_device:
+            found = False
+            for d in self.devices:
+                if self.debug_device == d.id:
+                    found = True
+                    break
+            if not found:
+                raise ValueError("debug_device must be one of the devices available.")
         # if self.field_bus_config:
         #     self.field_bus_def = MessageBusDefinition.load(self.field_bus_config)
 

@@ -1,15 +1,25 @@
 ---
-# Device names available for control
-devices:
-  - hostname: dev1.me.com
-  - hostname: dev2.me.com
-  - hostname: dev3.me.com
-  - hostname: dev4.me.com
-
-
 server_hostname: 0.0.0.0
+
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
+server_mode: enddevices_create_on_start
+
+debug_device: dev1
+
+# File for programs for inverters etc.
+program_lists: program_lists_config.yml
+
+# File for program curves
+curve_list: curves_config.yml
+
+# Device names available for control
+devices:
+  - id: dev1
+    # DeviceCategoryType from ieee_2030_5.models.device_category
+    device_category_type: FUEL_CELL
+    pin: 12345
+
 
 #{
 #    "devices": [

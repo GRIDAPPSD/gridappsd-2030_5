@@ -3,16 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <head>
+        <script>
+            function httpGet(path) {
+                if (path.charAt(0) !== '/') {
+                    path = '/' + path
+                }
+                let theUrl = window.location.origin + path;
+                let xmlHttpReq = new XMLHttpRequest();
+                xmlHttpReq.open("GET", theUrl, false);
+                xmlHttpReq.send(null);
+                return xmlHttpReq.responseText;
+            }
+            function hideElement(button, element) {
+                element.style.display = "none";
+                button.style.display = "none"
+            }
+            function loadElementFromRequest(button, path, element) {
+                let response = httpGet(path);
+                element = document.getElementById(element)
+                button = document.getElementById(button)
+                element.style.display = "block"
+                element.value = response;
+                button.style.display = "block"
+            }
+        </script>
+    </head>
 </head>
 <body>
-    <h1>Resource List</h1>
-    <ul>
+<h1>Resource List</h1>
+<ul>
     {% for href in resource_urls %}
         <li><a href="/admin/resources?rurl={{ href }}">{{ href }}</a>
-            {% if href == href_shown %}<ul><li>{{ object }}</li></ul>{% endif %}
+            <button onclick="loadElementFromRequest(
+                '{{ href.replace('/', '_') }}button',
+                    '{{ href }}',
+                    '{{ href.replace('/', '_') }}'); return false;">Get</button>
+            <button id="{{ href.replace('/', '_') }}button" style="display: none"
+                    onclick="hideElement(this, {{ href.replace('/', '_') }}); return false;">Hide</button>
+            <textarea id="{{ href.replace('/', '_') }}" cols="80" rows="10" style="display: none"></textarea>
+            {% if href == href_shown %}
+                <ul>
+                    <li>{{ object }}</li>
+                </ul>{% endif %}
         </li>
 
     {% endfor %}
-    </ul>
+</ul>
 </body>
 </html>

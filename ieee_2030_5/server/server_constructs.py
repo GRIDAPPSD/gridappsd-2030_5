@@ -191,8 +191,9 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
             end_devices.initialize_device(device_config=device_config,
                                           lfid=tlsrepo.lfdi(device_config.id),
                                           program_lists=config.program_lists)
-            for fsa in device_config.fsa_list:
-                print(fsa)
+            if device_config.fsa_list:
+                for fsa in device_config.fsa_list:
+                    print(fsa)
             print(end_devices.__all_end_devices__)
 
 

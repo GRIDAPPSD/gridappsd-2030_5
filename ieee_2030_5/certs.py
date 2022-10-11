@@ -137,6 +137,7 @@ class TLSRepository:
         return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
 
     def get_file_pair(self, device_id: str) -> Tuple[str, str]:
+        """ Get cert, key from the repository based on passed device_id"""
         return (self.__get_cert_file__(device_id).as_posix(),
                 self.__get_key_file__(device_id).as_posix())
 
