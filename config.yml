@@ -20,6 +20,18 @@ devices:
     device_category_type: FUEL_CELL
     pin: 12345
 
+    # In the absence of scheduled controls, DERs SHALL revert to a default control setting specified by
+    # interconnection tariffs, the utility Interconnection Handbook or as specified by the last DefaultDERControl.
+    #
+    # Define the DefaultDERControl for the inverter if necessary to customize for this specific inverter.
+    #
+    # default: None (uses the global DefaultDERContorl)
+    fsa_list:
+      - mRID: _def62366-746e-4fcb-b3ee-ebebb90d72d4-fsa
+        description: _def62366-746e-4fcb-b3ee-ebebb90d72d4 fsa description
+        program_lists:
+          - pl1
+          - pl2
 
 #{
 #    "devices": [

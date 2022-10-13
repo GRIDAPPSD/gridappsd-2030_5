@@ -13,7 +13,7 @@ from ieee_2030_5.persistance.points import set_point, get_point
 __all__: List[str] = [
     "get_href",
     "add_href",
-    "get_href_all",
+    "get_href_all_names",
     "get_href_filtered"
 ]
 
@@ -89,5 +89,5 @@ def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
     return [v.item for k, v in __indexer__.__items__.items() if k.startswith(href_prefix)]
 
 
-def get_href_all():
+def get_href_all_names():
     return list(__indexer__.__items__.keys())

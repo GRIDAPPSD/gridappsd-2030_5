@@ -9,6 +9,7 @@ import pytz
 import tzlocal
 from flask import Flask, Response, request
 from werkzeug.exceptions import Forbidden
+from werkzeug.routing import BaseConverter
 
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
@@ -98,6 +99,13 @@ class ServerList(RequestOp):
         return response
 
 
+class RegexConverter(BaseConverter):
+    def __init__(self, url_map, *items):
+        super(RegexConverter, self).__init__(url_map)
+        self.regex = items[0]
+        _log.debug(f"regex is {self.regex}")
+
+
 class ServerEndpoints:
 
     def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration):
@@ -106,6 +114,7 @@ class ServerEndpoints:
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
         self.app: Flask = app
+        self.app.url_map.converters['regex'] = RegexConverter
 
         _log.debug(f"Adding rule: {hrefs.uuid_gen} methods: {['GET']}")
         app.add_url_rule(hrefs.uuid_gen, view_func=self._generate_uuid)
@@ -118,9 +127,10 @@ class ServerEndpoints:
         _log.debug(f"Adding rule: {hrefs.derp} methods: {['GET']}")
         app.add_url_rule(hrefs.derp, view_func=self._derp)
 
+        app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>", view_func=self._edev)
         rulers = (
             (hrefs.der_urls, self._der),
-            (hrefs.edev_urls, self._edev),
+            #(hrefs.edev_urls, self._edev),
             (hrefs.mup_urls, self._mup),
             (hrefs.curve_urls, self._curves),
             (hrefs.program_urls, self._programs)
@@ -153,6 +163,8 @@ class ServerEndpoints:
         #     self.add_endpoint(hrefs.edev + f"/{index}", view_func=self._edev)
         #     self.add_endpoint(hrefs.mup + f"/{index}", view_func=self._mup)
 
+    def _foo(self, bar):
+        return Response("Foo Response")
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
     #
@@ -171,8 +183,10 @@ class ServerEndpoints:
     def _dcap(self) -> Response:
         return Dcap(server_endpoints=self).execute()
 
-    def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
-        return EDevRequests(server_endpoints=self).execute(index=index, category=category)
+    def _edev(self, path) -> Response:
+        return EDevRequests(server_endpoints=self).execute(path=path)
+    # def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
+    #     return EDevRequests(server_endpoints=self).execute(index=index, category=category)
 
     def _sdev(self) -> Response:
         return SDevRequests(server_endpoints=self).execute()

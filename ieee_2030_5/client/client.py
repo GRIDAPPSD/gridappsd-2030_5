@@ -42,9 +42,9 @@ class IEEE2030_5_Client:
         assert keyfile.exists(), f"keyfile doesn't exist ({keyfile})"
         assert certfile.exists(), f"certfile doesn't exist ({certfile})"
 
-        self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+        self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        self._ssl_context.check_hostname = False
         self._ssl_context.verify_mode = ssl.CERT_OPTIONAL  #  ssl.CERT_REQUIRED
-        self._ssl_context.verify_mode = ssl.CERT_NONE
         self._ssl_context.load_verify_locations(cafile=cafile)
 
         # Loads client information from the passed cert and key files. For
@@ -236,23 +236,26 @@ atexit.register(__release_clients__)
 
 if __name__ == '__main__':
     SERVER_CA_CERT = Path("~/tls/certs/ca.crt").expanduser().resolve()
-    KEY_FILE = Path("~/tls/private/_def62366-746e-4fcb-b3ee-ebebb90d72d4.pem").expanduser().resolve()
-    CERT_FILE = Path("~/tls/certs/_def62366-746e-4fcb-b3ee-ebebb90d72d4.crt").expanduser().resolve()
+    KEY_FILE = Path("~/tls/private/dev1.pem").expanduser().resolve()
+    CERT_FILE = Path("~/tls/certs/dev1.crt").expanduser().resolve()
 
     headers = {'Connection': 'Keep-Alive',
                'Keep-Alive': "max=1000,timeout=30"}
 
     h = IEEE2030_5_Client(cafile=SERVER_CA_CERT,
-                          server_hostname="gridappsd_dev_2004",
+                          server_hostname="127.0.0.1",
                           server_ssl_port=8443,
                           keyfile=KEY_FILE,
-                          certfile=CERT_FILE)
+                          certfile=CERT_FILE,
+                          debug=True)
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
-    resp = h.request("/dcap", headers=headers)
-    print(resp)
-    resp = h.request("/dcap", headers=headers)
-    print(resp)
+    dcap = h.device_capability()
+    ed = h.end_devices()[0]
+    # resp = h.request("/dcap", headers=headers)
+    # print(resp)
+    # resp = h.request("/dcap", headers=headers)
+    # print(resp)
     #dcap = h.device_capability()
     # get device list
     #dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice

@@ -1,13 +1,24 @@
 from functools import lru_cache
 from typing import Optional, List
 
-DEFAULT_DCAP_ROOT = "/dcap"
-DEFAULT_EDEV_ROOT = "/edev"
-DEFAULT_UPT_ROOT = "/utp"
-DEFAULT_MUP_ROOT = "/mup"
-DEFAULT_DRP_ROOT = "/drp"
-DEFAULT_SELF_ROOT = "/sdev"
-DEFAULT_MESSAGE_ROOT = "/msg"
+EDEV = "edev"
+DCAP = "dcap"
+UTP = "utp"
+MUP = "mup"
+DRP = "drp"
+SDEV = "sdev"
+MSG = "msg"
+
+DEFAULT_DCAP_ROOT = f"/{DCAP}"
+DEFAULT_EDEV_ROOT = f"/{EDEV}"
+DEFAULT_UPT_ROOT = f"/{UTP}"
+DEFAULT_MUP_ROOT = f"/{MUP}"
+DEFAULT_DRP_ROOT = f"/{DRP}"
+DEFAULT_SELF_ROOT = f"/{SDEV}"
+DEFAULT_MESSAGE_ROOT = f"/{MSG}"
+
+SEP = "_"
+MATCH_REG = "[a-zA-Z0-9_]*"
 
 
 @lru_cache()
@@ -15,24 +26,40 @@ def get_enddevice_list_href() -> str:
     return DEFAULT_EDEV_ROOT
 
 
+def get_fsa_href(fsa_list_href: str, index: int) -> str:
+    return SEP.join([fsa_list_href, str(index)])
+
+
+def get_der_program_list(fsa_href: str) -> str:
+    return SEP.join([fsa_href, "der"])
+
+
+def get_dr_program_list(fsa_href: str) -> str:
+    return SEP.join([fsa_href, "dr"])
+
+
+def get_fsa_list_href(end_device_href: str) -> str:
+    return SEP.join([end_device_href, "fsa"])
+
+
 @lru_cache()
 def get_enddevice_href(index: int) -> str:
-    return "/".join([DEFAULT_EDEV_ROOT, f"{index}"])
+    return SEP.join([DEFAULT_EDEV_ROOT, f"{index}"])
 
 
 @lru_cache()
 def get_registration_href(index: int) -> str:
-    return "/".join([DEFAULT_EDEV_ROOT, f"{index}", "reg"])
+    return SEP.join([DEFAULT_EDEV_ROOT, f"{index}", "reg"])
 
 
 @lru_cache()
 def get_configuration_href(index: int) -> str:
-    return "/".join([DEFAULT_EDEV_ROOT, f"{index}", "cfg"])
+    return SEP.join([DEFAULT_EDEV_ROOT, f"{index}", "cfg"])
 
 
 @lru_cache()
 def get_time_href() -> str:
-    return f"{DEFAULT_DCAP_ROOT}/tm"
+    return f"{DEFAULT_DCAP_ROOT}{SEP}tm"
 
 
 @lru_cache()
@@ -42,15 +69,15 @@ def get_dcap_href() -> str:
 
 def get_program_href(index: int, subref: str = None):
     if subref is not None:
-        ref = f"program/{index}/{subref}"
+        ref = f"program{SEP}{index}{SEP}{subref}"
     else:
-        ref = f"program/{index}"
+        ref = f"program{SEP}{index}"
     return ref
 
 # TimeLink
-tm: str = f"{DEFAULT_DCAP_ROOT}/tm"
+tm: str = f"{DEFAULT_DCAP_ROOT}{SEP}tm"
 # ResponseSetListLink
-rsps: str = f"{DEFAULT_DCAP_ROOT}/rsps"
+rsps: str = f"{DEFAULT_DCAP_ROOT}{SEP}rsps"
 # UsagePointListLink
 upt: str = DEFAULT_UPT_ROOT
 
@@ -60,10 +87,11 @@ derp: str = "/derp"
 # EndDeviceListLink
 edev: str = DEFAULT_EDEV_ROOT
 edev_urls: List = [
-    edev,
-    f"{edev}/<int:index>",
-    f"{edev}/<int:index>/<category>",
-    f"{edev}/<int:index>/<category>/<sub_index>"
+    f"/<regex('{edev}[0-9a-zA-Z\-]*'):path>",
+    # f"{edev}/<path:fullpath>"
+    # ,
+    # f"{edev}/<int:index>",
+    # f"{edev}/<int:index>/<category>"
 ]
 
 # MirrorUsagePointListLink

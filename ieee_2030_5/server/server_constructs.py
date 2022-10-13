@@ -27,7 +27,7 @@ from ieee_2030_5.models import (
     LogEventListLink, SelfDeviceLink, EndDeviceListLink, DERProgramListLink, UsagePointListLink,
     MirrorUsagePointListLink, TimeLink, DeviceCapability, FunctionSetAssignments, DeviceInformation,
     DER,
-    FunctionSetAssignmentsList, Link)
+    FunctionSetAssignmentsList, Link, DemandResponseProgramListLink)
 
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import Lfid
@@ -360,8 +360,29 @@ class EndDevices:
             RegistrationLink=RegistrationLink(hrefs.get_registration_href(new_dev_number)),
             ConfigurationLink=ConfigurationLink(hrefs.get_configuration_href(new_dev_number))
         )
-
         add_href(enddevice_href, end_device)
+
+        if device_config.fsa_list:
+            fsa_link_href = hrefs.get_fsa_list_href(end_device.href)
+            end_device.FunctionSetAssignmentsListLink = FunctionSetAssignmentsListLink(href=fsa_link_href,
+                                                                                       all=len(device_config.fsa_list))
+            fsa_list = FunctionSetAssignmentsList(href=fsa_link_href, all=len(device_config.fsa_list))
+            for fsa_index, fsa_config in enumerate(device_config.fsa_list):
+                fsa_href = hrefs.get_fsa_href(fsa_list.href, fsa_index)
+                fsa = FunctionSetAssignments(href=fsa_href,
+                                             mRID=fsa_config.get("mRID"),
+                                             description=fsa_config.get("description"))
+
+                # TODO: Load other programs
+                fsa.DERProgramListLink = DERProgramListLink(href=hrefs.get_der_program_list(fsa_href))
+                fsa.DemandResponseProgramListLink = DemandResponseProgramListLink(href=hrefs.get_dr_program_list(fsa_href))
+                # for pl in program_lists:
+                #     fsa.Pro
+                #     _log.debug(pl)
+                add_href(fsa_href, fsa)
+                fsa_list.FunctionSetAssignments.append(fsa)
+            add_href(fsa_link_href, fsa_list)
+
         add_href(hrefs.get_registration_href(new_dev_number),
                  Registration(pIN=device_config.pin,
                               pollRate=device_config.poll_rate))
@@ -464,7 +485,8 @@ class EndDevices:
         return self.__all_end_devices__[index].end_device.DERListLink
 
     def get_fsa(self, index: int) -> FunctionSetAssignmentsListLink:
-        return self.__all_end_devices__[index].end_device.FunctionSetAssignmentsListLink
+        return get_href(hrefs.get_fsa_list_href())
+        # return self.__all_end_devices__[index].end_device.FunctionSetAssignmentsListLink
 
     def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> EndDeviceList:
         ed = self.get_device_by_lfid(lfid)

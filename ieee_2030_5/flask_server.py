@@ -13,7 +13,7 @@ __all__ = ["build_server"]
 # templates = Jinja2Templates(directory="templates")
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.data.indexer import get_href_all, get_href
+from ieee_2030_5.data.indexer import get_href_all_names, get_href
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups, EndDevices
@@ -161,13 +161,14 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
     def admin_resource_list():
         resource = request.args.get("rurl")
         obj = get_href(resource)
+        all_resources = sorted(get_href_all_names())
         if obj:
             return render_template("admin/resource_list.html",
-                                   resource_urls=get_href_all(),
+                                   resource_urls=all_resources,
                                    href_shown=resource,
                                    object=obj)
         else:
-            return render_template("admin/resource_list.html", resource_urls=get_href_all())
+            return render_template("admin/resource_list.html", resource_urls=all_resources)
 
     @app.route("/admin/clients")
     def admin_clients():
