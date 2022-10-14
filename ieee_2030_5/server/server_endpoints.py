@@ -124,33 +124,43 @@ class ServerEndpoints:
         app.add_url_rule(hrefs.get_time_href(), view_func=self._tm)
         _log.debug(f"Adding rule: {hrefs.sdev} methods: {['GET']}")
         app.add_url_rule(hrefs.sdev, view_func=self._sdev)
-        _log.debug(f"Adding rule: {hrefs.derp} methods: {['GET']}")
-        app.add_url_rule(hrefs.derp, view_func=self._derp)
+        # _log.debug(f"Adding rule: {hrefs.derp} methods: {['GET']}")
+        # app.add_url_rule(hrefs.derp, view_func=self._derp)
 
-        app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>", view_func=self._edev)
-        rulers = (
-            (hrefs.der_urls, self._der),
-            #(hrefs.edev_urls, self._edev),
-            (hrefs.mup_urls, self._mup),
-            (hrefs.curve_urls, self._curves),
-            (hrefs.program_urls, self._programs)
-        )
-
-        for endpoints, view_func in rulers:
-            # Item should either be a single rule or a rule with a second element having the methods
-            # in it.
-            # edev = [
-            #   /edev,
-            #   (f"/edev/<int: index>", ["GET", "POST"])
-            # ]
-            for item in endpoints:
-                try:
-                    rule, methods = item
-                except ValueError:
-                    rule = item
-                    methods = ["GET"]
-                _log.debug(f"Adding rule: {rule} methods: {methods}")
-                app.add_url_rule(rule, view_func=view_func, methods=methods)
+        # All of the energy devices
+        app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._edev, methods=["GET"])
+        app.add_url_rule(f"/<regex('{hrefs.DER}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._der, methods=["GET"])
+        app.add_url_rule(f"/<regex('{hrefs.MUP}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._mup, methods=["GET"])
+        app.add_url_rule(f"/<regex('{hrefs.CURVE}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._curves, methods=["GET"])
+        app.add_url_rule(f"/<regex('{hrefs.PROGRAM}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._programs, methods=["GET"])
+        # rulers = (
+        #     (hrefs.der_urls, self._der),
+        #     #(hrefs.edev_urls, self._edev),
+        #     (hrefs.mup_urls, self._mup),
+        #     (hrefs.curve_urls, self._curves),
+        #     (hrefs.program_urls, self._programs)
+        # )
+        #
+        # for endpoints, view_func in rulers:
+        #     # Item should either be a single rule or a rule with a second element having the methods
+        #     # in it.
+        #     # edev = [
+        #     #   /edev,
+        #     #   (f"/edev/<int: index>", ["GET", "POST"])
+        #     # ]
+        #     for item in endpoints:
+        #         try:
+        #             rule, methods = item
+        #         except ValueError:
+        #             rule = item
+        #             methods = ["GET"]
+        #         _log.debug(f"Adding rule: {rule} methods: {methods}")
+        #         app.add_url_rule(rule, view_func=view_func, methods=methods)
         #
         # self.add_endpoint(hrefs.dcap, view_func=self._dcap)
         # self.add_endpoint(hrefs.edev, view_func=self._edev)
@@ -165,20 +175,21 @@ class ServerEndpoints:
 
     def _foo(self, bar):
         return Response("Foo Response")
+
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
     #
     # def _admin(self) -> Response:
     #     return Admin(server_endpoints=self).execute()
 
-    def _upt(self, index: Optional[int] = None) -> Response:
-        return UTP(server_endpoints=self).execute(index=index)
+    def _upt(self, path) -> Response:
+        return UTP(server_endpoints=self).execute(path=path)
 
-    def _mup(self, index: Optional[int] = None) -> Response:
-        return MUP(server_endpoints=self).execute(index=index)
+    def _mup(self, path) -> Response:
+        return MUP(server_endpoints=self).execute(path=path)
 
-    def _der(self, edev_id: int, id: Optional[int] = None) -> Response:
-        return DERRequests(server_endpoints=self).execute(edev_id=edev_id, id=id)
+    def _der(self, path) -> Response:
+        return DERRequests(server_endpoints=self).execute(path=path)
 
     def _dcap(self) -> Response:
         return Dcap(server_endpoints=self).execute()
@@ -194,23 +205,28 @@ class ServerEndpoints:
     def _tm(self) -> Response:
         return TimeRequest(server_endpoints=self).execute()
 
-    def _derp(self) -> Response:
-        return DERProgramRequests(server_endpoints=self).execute()
+    def _derp(self, path) -> Response:
+        return DERProgramRequests(server_endpoints=self).execute(path=path)
 
-    def _curves(self, index: Optional[int] = None) -> Response:
-        if index is None:
-            items = get_href_filtered(hrefs.curve)
-            curve_list = DERCurveList(DERCurve=items, all=len(items), href=request.path, results=len(items))
-            response = Response(dataclass_to_xml(curve_list))
-        else:
-            response = Response(dataclass_to_xml(get_href(request.path)))
-        return response
+    def _curves(self, path) -> Response:
+        pth = request.environ['PATH_INFO']
+        obj = get_href(pth)
+        # if index is None:
+        #     items = get_href_filtered(hrefs.curve)
+        #     curve_list = DERCurveList(DERCurve=items, all=len(items), href=request.path, results=len(items))
+        #     response = Response(dataclass_to_xml(curve_list))
+        # else:
+        #     response = Response(dataclass_to_xml(get_href(request.path)))
+        return RequestOp(server_endpoints=self).build_response_from_dataclass(obj)
 
-    def _programs(self, index: Optional[int] = None) -> Response:
-        if index is None:
-            items = get_href_filtered(href_prefix=hrefs.program)
-            program_list = DERProgramList(DERProgram=items, all=len(items), href=request.path, results=len(items))
-            response = Response(dataclass_to_xml(program_list))
-        else:
-            response = Response(dataclass_to_xml(get_href(request.path)))
-        return response
+    def _programs(self, path) -> Response:
+        pth = request.environ['PATH_INFO']
+        obj = get_href(pth)
+        return RequestOp(server_endpoints=self).build_response_from_dataclass(obj)
+        # if index is None:
+        #     items = get_href_filtered(href_prefix=hrefs.program)
+        #     program_list = DERProgramList(DERProgram=items, all=len(items), href=request.path, results=len(items))
+        #     response = Response(dataclass_to_xml(program_list))
+        # else:
+        #     response = Response(dataclass_to_xml(get_href(request.path)))
+        # return response

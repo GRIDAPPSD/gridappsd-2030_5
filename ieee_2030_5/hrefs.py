@@ -8,6 +8,9 @@ MUP = "mup"
 DRP = "drp"
 SDEV = "sdev"
 MSG = "msg"
+DER = "der"
+CURVE = "curve"
+PROGRAM = "program"
 
 DEFAULT_DCAP_ROOT = f"/{DCAP}"
 DEFAULT_EDEV_ROOT = f"/{EDEV}"
@@ -16,6 +19,9 @@ DEFAULT_MUP_ROOT = f"/{MUP}"
 DEFAULT_DRP_ROOT = f"/{DRP}"
 DEFAULT_SELF_ROOT = f"/{SDEV}"
 DEFAULT_MESSAGE_ROOT = f"/{MSG}"
+DEFAULT_DER_ROOT = f"/{DER}"
+DEFAULT_CURVE_ROOT = f"/{CURVE}"
+DEFAULT_PROGRAM_ROOT = f"/{PROGRAM}"
 
 SEP = "_"
 MATCH_REG = "[a-zA-Z0-9_]*"
@@ -24,6 +30,10 @@ MATCH_REG = "[a-zA-Z0-9_]*"
 @lru_cache()
 def get_enddevice_list_href() -> str:
     return DEFAULT_EDEV_ROOT
+
+
+def get_curve_href(index: int) -> str:
+    return SEP.join([DEFAULT_CURVE_ROOT, str(index)])
 
 
 def get_fsa_href(fsa_list_href: str, index: int) -> str:
@@ -69,66 +79,66 @@ def get_dcap_href() -> str:
 
 def get_program_href(index: int, subref: str = None):
     if subref is not None:
-        ref = f"program{SEP}{index}{SEP}{subref}"
+        ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}{SEP}{subref}"
     else:
-        ref = f"program{SEP}{index}"
+        ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}"
     return ref
 
 # TimeLink
-tm: str = f"{DEFAULT_DCAP_ROOT}{SEP}tm"
-# ResponseSetListLink
-rsps: str = f"{DEFAULT_DCAP_ROOT}{SEP}rsps"
-# UsagePointListLink
-upt: str = DEFAULT_UPT_ROOT
-
+# tm: str = f"{DEFAULT_DCAP_ROOT}{SEP}tm"
+# # ResponseSetListLink
+# rsps: str = f"{DEFAULT_DCAP_ROOT}{SEP}rsps"
+# # UsagePointListLink
+# upt: str = DEFAULT_UPT_ROOT
+#
 # DERProgramListLink
-derp: str = "/derp"
-
-# EndDeviceListLink
-edev: str = DEFAULT_EDEV_ROOT
-edev_urls: List = [
-    f"/<regex('{edev}[0-9a-zA-Z\-]*'):path>",
-    # f"{edev}/<path:fullpath>"
-    # ,
-    # f"{edev}/<int:index>",
-    # f"{edev}/<int:index>/<category>"
-]
-
-# MirrorUsagePointListLink
-mup: str = DEFAULT_MUP_ROOT
-mup_urls: List = [
-    (mup, ('GET', 'POST')),
-    f"{mup}/<int:index>"
-]
-
-curve: str = "/curves"
-curve_urls: List = [
-    f"{curve}",
-    (f"{curve}/<int:index>", ("GET",))
-]
-
-program: str = "/programs"
-program_urls: List = [
-    f"{program}",
-    (f"{program}/<int:index>/actderc", ("GET",)),
-    (f"{program}/<int:index>/dc", ("GET",)),
-    (f"{program}/<int:index>/dderc", ("GET",)),
-    (f"{program}/<int:index>/derc", ("GET",)),
-]
-
-der: str = "/der"
-der_urls: List = [
-    (f"{der}/<int:edev_id>", ('GET', 'POST')),
-    (f"{der}/<int:edev_id>/<int:id>", ('GET', 'PUT', 'DELETE')),
-    (f"{der}/<int:edev_id>/<int:id>/upt", ('GET', 'DELETE')),
-    (f"{der}/<int:edev_id>/<int:id>/derp", ('GET', 'POST')),
-    (f"{der}/<int:edev_id>/<int:id>/cdp", ('GET', 'DELETE')),
-    (f"{der}/<int:edev_id>/<int:id>/derg", ('GET', 'PUT')),
-    (f"{der}/<int:edev_id>/<int:id>/ders", ('GET', 'PUT')),
-    (f"{der}/<int:edev_id>/<int:id>/dera", ('GET', 'PUT')),
-    (f"{der}/<int:edev_id>/<int:id>/dercap", ('GET', 'PUT')),
-]
-
+# derp: str = "/derp"
+#
+# # EndDeviceListLink
+# edev: str = DEFAULT_EDEV_ROOT
+# edev_urls: List = [
+#     f"/<regex('{edev}[0-9a-zA-Z\-]*'):path>",
+#     # f"{edev}/<path:fullpath>"
+#     # ,
+#     # f"{edev}/<int:index>",
+#     # f"{edev}/<int:index>/<category>"
+# ]
+#
+# # MirrorUsagePointListLink
+# mup: str = DEFAULT_MUP_ROOT
+# mup_urls: List = [
+#     (mup, ('GET', 'POST')),
+#     f"{mup}/<int:index>"
+# ]
+#
+# curve: str = "/curves"
+# curve_urls: List = [
+#     f"{curve}",
+#     (f"{curve}/<int:index>", ("GET",))
+# ]
+#
+# program: str = "/programs"
+# program_urls: List = [
+#     f"{program}",
+#     (f"{program}/<int:index>/actderc", ("GET",)),
+#     (f"{program}/<int:index>/dc", ("GET",)),
+#     (f"{program}/<int:index>/dderc", ("GET",)),
+#     (f"{program}/<int:index>/derc", ("GET",)),
+# ]
+#
+# der: str = "/der"
+# der_urls: List = [
+#     (f"{der}/<int:edev_id>", ('GET', 'POST')),
+#     (f"{der}/<int:edev_id>/<int:id>", ('GET', 'PUT', 'DELETE')),
+#     (f"{der}/<int:edev_id>/<int:id>/upt", ('GET', 'DELETE')),
+#     (f"{der}/<int:edev_id>/<int:id>/derp", ('GET', 'POST')),
+#     (f"{der}/<int:edev_id>/<int:id>/cdp", ('GET', 'DELETE')),
+#     (f"{der}/<int:edev_id>/<int:id>/derg", ('GET', 'PUT')),
+#     (f"{der}/<int:edev_id>/<int:id>/ders", ('GET', 'PUT')),
+#     (f"{der}/<int:edev_id>/<int:id>/dera", ('GET', 'PUT')),
+#     (f"{der}/<int:edev_id>/<int:id>/dercap", ('GET', 'PUT')),
+# ]
+#
 sdev: str = DEFAULT_SELF_ROOT
 
 

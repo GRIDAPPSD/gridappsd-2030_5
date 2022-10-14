@@ -24,8 +24,8 @@ _log = logging.getLogger(__name__)
 class Index:
     href: str
     item: object
-    added: str  #  Optional[Union[datetime | str]]
-    last_written: str  #   Optional[Union[datetime | str]]
+    added: str  # Optional[Union[datetime | str]]
+    last_written: str  # Optional[Union[datetime | str]]
     last_hash: Optional[int]
 
 
@@ -55,15 +55,15 @@ class Indexer:
             # serialized_obj = serialize_dataclass(obj, serialization_type=SerializeType.JSON)
 
             # note storing Index object.
-            set_point(href, pickle.dumps(obj))  #  serialize_dataclass(obj, serialization_type=SerializeType.JSON))
+            set_point(href, pickle.dumps(obj))  # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
             self.__items__[href] = obj
 
     def get(self, href) -> dataclass:
         self.init()
         if href in self.__items__:
-            index = pickle.loads(get_point(href)) # pickle.loads(get_point(href))
+            index = pickle.loads(get_point(href))  # pickle.loads(get_point(href))
             # index = pickle.loads(self.__items__.get(href))
-            #index = deserialize_dataclass(data, SerializeType.JSON)
+            # index = deserialize_dataclass(data, SerializeType.JSON)
             data = index.item
         else:
             data = None
@@ -86,8 +86,10 @@ def get_href(href: str) -> dataclass:
 
 
 def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
-    return [v.item for k, v in __indexer__.__items__.items() if k.startswith(href_prefix)]
+    return [v.item for k, v in __indexer__.__items__.items()
+            if k.startswith(href_prefix) and v.item is not None]
 
 
 def get_href_all_names():
-    return list(__indexer__.__items__.keys())
+    return [x for x in __indexer__.__items__.keys()
+            if __indexer__.__items__[x] is not None]

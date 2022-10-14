@@ -12,5 +12,6 @@ class DERProgramRequests(RequestOp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get(self, edev_id: Optional[int] = None, id: Optional[int] = None) -> Response:
-        return Response("Foo")
+    def get(self, path: str) -> Response:
+        obj = self.get_path("foo")
+        return self.build_response_from_dataclass(obj)

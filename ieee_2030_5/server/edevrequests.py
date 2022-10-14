@@ -40,12 +40,12 @@ class EDevRequests(RequestOp):
         """
         pth = request.environ['PATH_INFO']
 
-        if not pth.startswith(hrefs.edev):
+        if not pth.startswith(hrefs.DEFAULT_EDEV_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
 
         # top level /edev should return specific end device list based upon
         # the lfid of the connection.
-        if pth == hrefs.edev:
+        if pth == hrefs.DEFAULT_EDEV_ROOT:
             retval = self._end_devices.get_end_device_list(self.lfid)
         else:
             retval = get_href(pth)
