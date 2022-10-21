@@ -27,7 +27,7 @@ class EDevRequests(RequestOp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get(self, path) -> Response:
+    def get(self, path: Optional[str] = None) -> Response:
         """
         Supports the get request for end_devices(EDev) and end_device_list_link.
 
@@ -44,9 +44,9 @@ class EDevRequests(RequestOp):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
 
         # top level /edev should return specific end device list based upon
-        # the lfid of the connection.
+        # the lfdi of the connection.
         if pth == hrefs.DEFAULT_EDEV_ROOT:
-            retval = self._end_devices.get_end_device_list(self.lfid)
+            retval = self._end_devices.get_end_device_list(self.lfdi)
         else:
             retval = get_href(pth)
 
@@ -68,5 +68,5 @@ class SDevRequests(RequestOp):
             /sdev
 
         """
-        end_device = self._end_devices.get_end_device_list(self.lfid).EndDevice[0]
+        end_device = self._end_devices.get_end_device_list(self.lfdi).EndDevice[0]
         return self.build_response_from_dataclass(end_device)

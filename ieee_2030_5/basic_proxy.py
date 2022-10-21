@@ -15,6 +15,8 @@ import yaml
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 
+_log = logging.getLogger(__name__)
+
 
 @dataclass
 class ContextWithPaths:
@@ -43,48 +45,62 @@ class RequestForwarder(BaseHTTPRequestHandler):
             context.load_cert_chain(certfile=cert_file, keyfile=key_file)
         return ContextWithPaths(context=context, certpath=cert_file, keypath=key_file)
 
-    def do_GET(self):
+    def __start_request__(self) -> HTTPSConnection:
         ccp = self.get_context_cert_pair()
 
         host, port = self.server.proxy_target
         conn = HTTPSConnection(host=host, port=port,
                                context=ccp.context)
         conn.connect()
+        return conn
 
-        headers = {}
-        for k, v in self.headers.items():
-            headers[k] = v
+    def __handle_response__(self, conn: HTTPSConnection):
 
-        conn.request(method="GET",
-                     url=self.path,
-                     headers=headers,
-                     encode_chunked=True)
         response = conn.getresponse()
         data = response.read()
+
+        _log.debug(f"Response from server:\n{data}")
         self.wfile.write(f'HTTP/1.1 {response.status}\n'.encode('utf-8'))
 
         for k, v in response.headers.items():
-            print(f"Key is: {k}")
+
             if k not in ('Connection',):
                 if k == 'Content-Length':
-                    print(k, v)
-                    print(k, len(data))
                     self.send_header(k, str(len(data)))
                 else:
-                    print(f"header is: {k}")
                     self.send_header(k, v)
         self.end_headers()
 
-        print(data)
         # self.wfile.write(data)
         # self.send_response(response.status, data.decode("utf-8"))
         self.wfile.write(data)
         self.close_connection = False
-        # self.wfile.write(response.read())
-        # self.wfile.flush()
+
+    def do_GET(self):
+        _log.info(f"GET {self.path} Content-Length: {self.headers.get('Content-Length')}")
+
+        conn = self.__start_request__()
+
+        conn.request(method="GET",
+                     url=self.path,
+                     headers=self.headers,
+                     encode_chunked=True)
+
+        self.__handle_response__(conn)
 
     def do_POST(self):
-        print("Handling Post")
+        _log.info(f"POST {self.path} Content-Length: {self.headers.get('Content-Length')}")
+
+        conn = self.__start_request__()
+        read_data = self.rfile.read(int(self.headers.get('Content-Length')))
+
+        conn.request(method="POST",
+                     url=self.path,
+                     headers=self.headers,
+                     body=read_data,
+                     encode_chunked=True)
+
+        self.__handle_response__(conn)
 
 
 class ProxyServer(HTTPServer):
@@ -133,12 +149,12 @@ def build_address_tuple(hostname: str) -> Tuple[str, int]:
 
     :param: hostname
     """
-    hostname = urlparse(hostname)
+    parsed = urlparse(hostname)
 
-    if hostname.scheme:
-        hostname = (hostname.hostname, hostname.port)
+    if parsed.hostname:
+        hostname = (parsed.hostname, parsed.port)
     else:
-        hostname = hostname.path.split(":")
+        hostname = hostname.split(":")
         hostname = (hostname[0], int(hostname[1]))
     return hostname
 
@@ -169,6 +185,9 @@ def _main():
 
     proxy_host = build_address_tuple(config.proxy_hostname)
     server_host = build_address_tuple(config.server_hostname)
+
+    _log.debug(f"Proxy host tuple: {proxy_host}")
+    _log.debug(f"Server host tuple: {server_host}")
 
     start_proxy(server_address=(proxy_host[0], int(proxy_host[1])),
                 tls_repo=tls_repo,

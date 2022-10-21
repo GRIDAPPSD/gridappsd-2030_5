@@ -15,14 +15,14 @@ class AdminEndpoints:
 
         app.add_url_rule("/admin/end-device-list", view_func=self._end_device_list)
         app.add_url_rule("/admin/program-lists", view_func=self._program_lists)
-        app.add_url_rule("/admin/lfid", endpoint="admin/lfid", view_func=self._lfid_lists)
+        app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
         app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._edev_fsa)
 
-    def _lfid_lists(self) -> Response:
+    def _lfdi_lists(self) -> Response:
         items = []
 
         for k, v in self.end_devices.__all_end_devices__.items():
-            items.append({"key": k, "lfid": int(v.end_device.lFDI)})
+            items.append({"key": k, "lfdi": int(v.end_device.lFDI)})
 
         return Response(json.dumps(items))
 

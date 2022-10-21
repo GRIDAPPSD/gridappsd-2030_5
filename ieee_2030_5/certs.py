@@ -9,7 +9,7 @@ from ieee_2030_5.execute import execute_command
 
 __all__ = ['TLSRepository']
 
-from ieee_2030_5.types_ import PathStr, Lfid
+from ieee_2030_5.types_ import PathStr, Lfdi
 
 _log = logging.getLogger(__name__)
 
@@ -109,19 +109,33 @@ class TLSRepository:
 
         self._common_names[common_name] = common_name
 
-    def lfdi(self, device_id: str) -> Lfid:
+    def lfdi(self, device_id: str) -> Lfdi:
+        """
+        Using the fingerprint of the certifcate return the left truncation of 160 bits with no check digit.
+        Example:
+          From:
+            3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A
+          Return:
+            3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5
+            as an integer.
+        """
+        # 160 / 4 == 40
         fp = self.fingerprint(device_id, True)
-        return Lfid(int(fp[:16], 16))
+        lfdi = Lfdi(fp[:40].encode('ascii'))
+        return Lfdi(fp[:40].encode('ascii'))
+
+    def sfdi_from_lfdi(self, lfdi: Lfdi) -> int:
+        print(len(lfdi))
+        assert len(lfdi) == 40, "lfdi must be 160-bits (40 hex characters) long."
+        hex_str = str(int(lfdi[:9], 16))
+        check_bit = 1
+        while not (int(hex_str[-2:]) + check_bit) % 10 == 0:
+            check_bit += 1
+        return int(hex_str + str(check_bit))
 
     def sfdi(self, device_id: str):
-        lfdi_: int = self.lfdi(device_id)
-        bit_left_truncation_len = 36
-        # truncate the lFDI
-        sfdi_no_sod_checksum = lfdi_ >> (lfdi_.bit_length() - bit_left_truncation_len)
-        # calculate sum-of-digits checksum digit
-        sod_checksum = 10 - sum([int(digit) for digit in str(sfdi_no_sod_checksum)]) % 10
-        # right concatenate the checksum digit and return
-        return str(sfdi_no_sod_checksum) + str(sod_checksum)
+        lfdi_ = self.lfdi(device_id)
+        return self.sfdi_from_lfdi(lfdi_)
 
     def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
         value = __openssl_fingerprint__(self.__get_cert_file__(device_id))
@@ -291,3 +305,35 @@ def __openssl_fingerprint__(cert_file: Path, algorithm: str = "sha1"):
     cmd = ["openssl", "x509", "-in", str(cert_file), "-noout", "-fingerprint", algorithm]
     ret_value = execute_command(cmd)
     return ret_value
+
+
+if __name__ == '__main__':
+
+    logging.basicConfig(level=logging.DEBUG)
+    tlsrepo = TLSRepository(repo_dir="~/tls",
+                            openssl_cnffile_template="../openssl.cnf",
+                            clear=False,
+                            serverhost="gridappsd_dev_2004:8443")
+    fingerprint = tlsrepo.fingerprint("dev1")
+    # fingerprint = "3F4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213B".replace("-", "")
+    print(len(fingerprint))
+    print("my lfdi: ", fingerprint[:40])
+    tlsrepo.sfdi_from_lfdi(fingerprint[:40].encode("ascii"))
+    # Each char is 4 bits so 9*4 == 36
+    print("left 36 bits: ", fingerprint[:9])
+    print("to int from fingerprint", int(fingerprint[:9], 16))
+    interum = str(int(fingerprint[:9], 16))
+    print(int(interum[-2:]))
+    add_value = 1
+    while not (int(interum[-2:]) + add_value) % 10 == 0:
+        add_value += 1
+
+    print(add_value)
+    interum = interum + str(add_value)
+    print(f"sfdi = ", interum)
+
+    print(f" our sfdi: {tlsrepo.sfdi('dev1')}")
+
+    _log.debug(f"fingerprint: {tlsrepo.fingerprint('dev1', False)}")
+
+    _log.debug(f"dev1 lfdi: {tlsrepo.lfdi('dev1')}, sfdi: {tlsrepo.sfdi('dev1')}")

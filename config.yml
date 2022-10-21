@@ -1,9 +1,11 @@
 ---
-server_hostname: 0.0.0.0
+server_hostname: 127.0.0.1:8070
+proxy_hostname: 0.0.0.0:8443
 
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
-server_mode: enddevices_create_on_start
+server_mode: enddevices_register_access_only
+# server_mode: enddevices_create_on_start
 
 debug_device: dev1
 

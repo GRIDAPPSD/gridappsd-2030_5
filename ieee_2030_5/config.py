@@ -20,7 +20,7 @@ except ImportError as ex:
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData, \
     FunctionSetAssignments
-from ieee_2030_5.types_ import Lfid
+from ieee_2030_5.types_ import Lfdi
 
 from ieee_2030_5.server.exceptions import NotFoundError
 
@@ -177,9 +177,9 @@ class ServerConfiguration:
         # if self.field_bus_config:
         #     self.field_bus_def = MessageBusDefinition.load(self.field_bus_config)
 
-    def get_device_pin(self, lfid: Lfid, tls_repo: TLSRepository) -> int:
+    def get_device_pin(self, lfdi: Lfdi, tls_repo: TLSRepository) -> int:
         for d in self.devices:
-            test_lfid = tls_repo.lfdi(d.id)
-            if test_lfid == int(lfid):
+            test_lfdi = tls_repo.lfdi(d.id)
+            if test_lfdi == int(lfdi):
                 return d.pin
-        raise NotFoundError(f"The device_id: {lfid} was not found.")
+        raise NotFoundError(f"The device_id: {lfdi} was not found.")

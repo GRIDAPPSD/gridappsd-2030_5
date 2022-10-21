@@ -9,6 +9,7 @@ from flask import request, Response
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
+import ieee_2030_5.server.server_endpoints as eps
 
 from ieee_2030_5.types_ import SEP_XML
 from ieee_2030_5.utils import dataclass_to_xml
@@ -54,7 +55,7 @@ class ServerOperation:
 
 
 class RequestOp(ServerOperation):
-    def __init__(self, server_endpoints: ServerEndpoints):
+    def __init__(self, server_endpoints: eps.ServerEndpoints):
         super().__init__()
         self._end_devices = server_endpoints.end_devices
         self._tls_repository = server_endpoints.tls_repo
@@ -69,7 +70,7 @@ class RequestOp(ServerOperation):
         return self._server_endpoints.config
 
     @property
-    def lfid(self):
+    def lfdi(self):
         return self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
 
     @property
@@ -98,7 +99,7 @@ class RequestOp(ServerOperation):
 
     @property
     def is_admin_client(self) -> bool:
-        ed = self._end_devices.get_device_by_lfid(self.lfid)
+        ed = self._end_devices.get_device_by_lfdi(self.lfdi)
         return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
 
     def build_response_from_dataclass(self, obj: dataclass) -> Response:

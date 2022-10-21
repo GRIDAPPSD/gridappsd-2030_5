@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Flag, auto
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Set
 
 import werkzeug.exceptions
 
@@ -16,7 +16,7 @@ from ieee_2030_5.data.indexer import add_href, get_href
 import ieee_2030_5.models as m
 
 from ieee_2030_5.server.uuid_handler import UUIDHandler
-from ieee_2030_5.types_ import Lfid
+from ieee_2030_5.types_ import Lfdi
 
 _log = logging.getLogger(__name__)
 
@@ -48,10 +48,10 @@ class Group:
         self._end_devices[end_device.lFDI] = end_device
 
     def remove_end_device(self, end_device: m.EndDevice):
-        self.remove_end_device_by_lfid(end_device.lFDI)
+        self.remove_end_device_by_lfdi(end_device.lFDI)
 
-    def remove_end_device_by_lfid(self, lfid: bytes):
-        del self._end_devices[lfid]
+    def remove_end_device_by_lfdi(self, lfdi: bytes):
+        del self._end_devices[lfdi]
 
     def get_devices(self):
         return list(self._end_devices.values())
@@ -151,7 +151,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
         add_href(curve.href, curve)
 
     _log.debug("Update m.DERPrograms' adding links to the different program pieces.")
-    # Initialize "global" m.DERPrograms href lists, including all of the different links to
+    # Initialize "global" m.DERPrograms href lists, including all the different links to
     # locations for active, default, curve and control lists.
     for program_list in config.program_lists:
         for index, program in enumerate(program_list.programs):
@@ -169,19 +169,23 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
 
     _log.debug("Registering EndDevices")
     end_devices = EndDevices()
-    # Initialize all of the enddevices on startup or load them
+    # Initialize all the enddevices on startup or load them
     # from storage if available
     if config.server_mode == "enddevices_create_on_start":
         # TODO load from storage if available.
         for device_config in config.devices:
             end_devices.initialize_device(device_config=device_config,
-                                          lfid=tlsrepo.lfdi(device_config.id),
+                                          lfdi=tlsrepo.lfdi(device_config.id),
                                           program_lists=config.program_lists)
             if device_config.fsa_list:
                 for fsa in device_config.fsa_list:
                     print(fsa)
             print(end_devices.__all_end_devices__)
 
+    else:
+        # Initialize allowed connection only.
+        for cfg in config.devices:
+            end_devices.add_connectable(lfdi=tlsrepo.lfdi(cfg.id))
 
     return end_devices
 
@@ -205,10 +209,23 @@ class EndDevices:
     EndDevices contains the server side instances of an
     """
     __all_end_devices__: Dict[int, m.EndDevice] = field(default_factory=dict)
-    _lfid_index_map: Dict[Lfid, int] = field(default_factory=dict)
+    _lfdi_index_map: Dict[Lfdi, int] = field(default_factory=dict)
+    _lfdi_connection_allowed: Set[Lfdi] = field(default_factory=set)
 
     # only increasing device_numbers
     _last_device_number: int = field(default=-1)
+
+    def allowed_to_connect(self, lfdi: Lfdi) -> bool:
+        """
+        Determine if the passed lfdi is within the tls repository of acceptable credentials.
+
+        Args:
+            lfdi: generated from fingerprint of the tls certificate
+
+        Returns:
+            True if connection is allowed.
+        """
+        return lfdi in self._lfdi_connection_allowed
 
     def initialize_groups(self):
         """
@@ -237,73 +254,68 @@ class EndDevices:
 
         return deepcopy(data)
 
-    def get_fsa_list(self, lfid: Optional[Lfid] = None,
+    def get_fsa_list(self, lfdi: Optional[Lfdi] = None,
                      edevid: Optional[int] = None) -> List[m.FunctionSetAssignments] | []:
-        if not ((lfid is not None) ^ edevid is not None):
-            raise ValueError("Either lfid or edevid must be passed not both.")
+        if not ((lfdi is not None) ^ edevid is not None):
+            raise ValueError("Either lfdi or edevid must be passed not both.")
 
-        if lfid:
-            indexer: EndDeviceData = self._lfid_index_map.get(lfid)
+        if lfdi:
+            indexer: EndDeviceData = self._lfdi_index_map.get(lfdi)
         else:
             indexer: EndDeviceData = self.__all_end_devices__.get(edevid)
 
         return indexer.function_set_assignments
 
-    def get_device_capability(self, lfid: Lfid) -> m.DeviceCapability:
-        if not isinstance(lfid, Lfid):
-            lfid = Lfid(lfid)
+    def get_device_capability(self, lfdi: Lfdi) -> Optional[m.DeviceCapability]:
+        """
 
-        index = self._lfid_index_map[lfid]
+        Args:
+            lfdi:
+
+        Returns:
+
+        """
+        if not isinstance(lfdi, Lfdi):
+            lfdi = Lfdi(lfdi)
+
+        if not self.allowed_to_connect(lfdi):
+            return None
+
         dc = m.DeviceCapability(href=hrefs.get_dcap_href())
-
         # TODO if aggregator then count number of devices
         # Use get_href to retrieve the already constructed object from cache.
         dc.EndDeviceListLink = get_href(hrefs.get_enddevice_list_href())
         dc.TimeLink = get_href(hrefs.get_time_href())
-        # dc.pollRate = self.get_registration(index).pollRate
-        
-        # ed: EndDeviceData = self.__get_enddevicedata_by_lfid__(lfid)
-        # if ed.device_capability is None:
-        #     index = self._lfid_index_map[lfid].index
-        #     sdev = SelfDeviceLink(href=hrefs.sdev)
-        #     # TODO Add Aggregator for this
-        #     edll = EndDeviceListLink(href=f"{hrefs.edev}", all=1)
-        #     derp = m.DERProgramListLink(href=f"{hrefs.derp}", all=2)
-        #     upt = UsagePointListLink(href=f"{hrefs.upt}", all=0)
-        #     mup = MirrorUsagePointListLink(href=f"{hrefs.mup}", all=0)
-        #     poll_rate = self.get_registration(index).pollRate
-        #     timelink = TimeLink(href=f"{hrefs.tm}")
-        #
-        #     dc = DeviceCapability(
-        #         href=hrefs.dcap,
-        #         MirrorUsagePointListLink=mup,
-        #         # SelfDeviceLink=sdev,
-        #         EndDeviceListLink=edll,
-        #         pollRate=poll_rate,
-        #         TimeLink=timelink,
-        #         UsagePointListLink=upt,
-        #         m.DERProgramListLink=derp
-        #     )
-        #     self._lfid_index_map[lfid].device_capability = dc
 
         return dc
 
     def get_device_by_index(self, index: int) -> m.EndDevice:
         return self.__get_enddevice_by_index__(index)
 
-    def get_device_by_lfid(self, lfid: Lfid) -> m.EndDevice:
-        index = self.__get_index_by_lfid__(lfid)
-        return self.__get_enddevice_by_index__(index)
+    def get_device_by_lfdi(self, lfdi: Lfdi) -> Optional[m.EndDevice]:
+        """
 
-    def __get_enddevicedata_by_lfid__(self, lfid: Lfid):
-        index = self.__get_index_by_lfid__(lfid)
+        Args:
+            lfdi:
+
+        Returns:
+
+        """
+        retvalue = None
+        if lfdi in self.__all_end_devices__:
+            index = self.__get_index_by_lfdi__(lfdi)
+            retvalue = self.__get_enddevice_by_index__(index)
+        return retvalue
+
+    def __get_enddevicedata_by_lfdi__(self, lfdi: Lfdi):
+        index = self.__get_index_by_lfdi__(lfdi)
         return self.__all_end_devices__[index]
 
-    def __get_index_by_lfid__(self, lfid: Lfid):
-        if not isinstance(lfid, Lfid):
-            lfid = Lfid(lfid)
+    def __get_index_by_lfdi__(self, lfdi: Lfdi):
+        if not isinstance(lfdi, Lfdi):
+            lfdi = Lfdi(lfdi)
 
-        index = self._lfid_index_map.get(lfid)
+        index = self._lfdi_index_map.get(lfdi)
         if index is None:
             raise werkzeug.exceptions.NotFound()
         return index
@@ -314,7 +326,7 @@ class EndDevices:
             raise werkzeug.exceptions.NotFound()
         return ed
 
-    def initialize_device(self, device_config: DeviceConfiguration, lfid: Lfid,
+    def initialize_device(self, device_config: DeviceConfiguration, lfdi: Lfdi,
                           program_lists: List[ProgramList]) -> m.EndDevice:
         """
         Create a new EndDevice object from the passed DeviceConfiguration.  Each time
@@ -327,7 +339,7 @@ class EndDevices:
 
         Args:
             device_config:
-            lfid:
+            lfdi:
             program_lists:
 
         Returns:
@@ -342,7 +354,7 @@ class EndDevices:
         end_device = m.EndDevice(
             href=enddevice_href,
             deviceCategory=device_config.device_category_type.value,
-            lFDI=str(lfid).encode('utf-8'),
+            lFDI=str(lfdi).encode('utf-8'),
             RegistrationLink=m.RegistrationLink(hrefs.get_registration_href(new_dev_number)),
             ConfigurationLink=m.ConfigurationLink(hrefs.get_configuration_href(new_dev_number))
         )
@@ -371,9 +383,9 @@ class EndDevices:
 
         add_href(hrefs.get_registration_href(new_dev_number),
                  m.Registration(pIN=device_config.pin,
-                              pollRate=device_config.poll_rate))
+                                pollRate=device_config.poll_rate))
         self.__all_end_devices__[new_dev_number] = end_device
-        self._lfid_index_map[lfid] = new_dev_number
+        self._lfdi_index_map[lfdi] = new_dev_number
 
         return get_href(enddevice_href)
         # cfg_link_href = hrefs.build_edev_config_link(new_dev_number)
@@ -392,7 +404,7 @@ class EndDevices:
         #
         # # sub_list_link = SubscriptionListLink(href=hrefs.edev_sub_list_fmt.format(
         # #     index=new_dev_number))
-        # l_fid_bytes = str(lfid).encode('utf-8')
+        # l_fid_bytes = str(lfdi).encode('utf-8')
 
         # base_edev_single = hrefs.extend_url(hrefs.edev, new_dev_number)
         # der_list_link_href = hrefs.build_der_link(new_dev_number)
@@ -438,8 +450,8 @@ class EndDevices:
         #                        ConfigurationLink=cfg_link,
         #                        PowerStatusLink=power_status_link,
         #                        DeviceInformationLink=dev_info_link,
-        #                        # TODO: Do actual sfid rather than lfid.
-        #                        sFDI=lfid,
+        #                        # TODO: Do actual sfdi rather than lfdi.
+        #                        sFDI=lfdi,
         #                        # file_status_link=file_status_link,
         #                        # subscription_list_link=sub_list_link,
         #                        href=end_device_href,
@@ -458,7 +470,7 @@ class EndDevices:
         #                     function_set_assignments=fsa_items,
         #                     device_capability=device_capability)
         # self.__all_end_devices__[new_dev_number] = edd
-        # self._lfid_index_map[lfid] = new_dev_number
+        # self._lfdi_index_map[lfdi] = new_dev_number
 #        return get_href(end_device_href)
 
     def get(self, index: int) -> m.EndDevice:
@@ -474,8 +486,18 @@ class EndDevices:
         return get_href(hrefs.get_fsa_list_href())
         # return self.__all_end_devices__[index].end_device.FunctionSetAssignmentsListLink
 
-    def get_end_device_list(self, lfid: Lfid, start: int = 0, length: int = 1) -> m.EndDeviceList:
-        ed = self.get_device_by_lfid(lfid)
+    def get_end_device_list(self, lfdi: Lfdi, start: int = 0, length: int = 1) -> m.EndDeviceList:
+        """
+
+        Args:
+            lfdi:
+            start:
+            length:
+
+        Returns:
+
+        """
+        ed = self.get_device_by_lfdi(lfdi)
         if m.DeviceCategoryType(ed.deviceCategory) == m.DeviceCategoryType.AGGREGATOR:
             devices = [x for x in self.__all_end_devices__.values()]
         else:
@@ -485,6 +507,9 @@ class EndDevices:
         dl = m.EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices),
                            href=hrefs.get_enddevice_list_href(), pollRate=900)
         return dl
+
+    def add_connectable(self, lfdi: Lfdi):
+        self._lfdi_connection_allowed.add(lfdi)
 
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ from typing import Optional
 
 import pytz
 import tzlocal
+import werkzeug.exceptions
 from flask import Flask, Response, request
 from werkzeug.exceptions import Forbidden
 from werkzeug.routing import BaseConverter
@@ -48,7 +49,10 @@ class Dcap(RequestOp):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        return self.build_response_from_dataclass(self._end_devices.get_device_capability(self.lfid))
+        if not self._end_devices.allowed_to_connect(self.lfdi):
+            raise werkzeug.exceptions.Unauthorized()
+
+        return self.build_response_from_dataclass(self._end_devices.get_device_capability(self.lfdi))
 
 
 class TimeRequest(RequestOp):
@@ -91,7 +95,7 @@ class ServerList(RequestOp):
     def get(self) -> Response:
         response = None
         if self._list_type == 'EndDevice':
-            response = self._end_devices.get_end_device_list(self.lfid)
+            response = self._end_devices.get_end_device_list(self.lfdi)
 
         if response:
             response = dataclass_to_xml(response)
@@ -127,7 +131,9 @@ class ServerEndpoints:
         # _log.debug(f"Adding rule: {hrefs.derp} methods: {['GET']}")
         # app.add_url_rule(hrefs.derp, view_func=self._derp)
 
-        # All of the energy devices
+        # All the energy devices
+        app.add_url_rule(f"/{hrefs.EDEV}", methods=["GET", "POST"],
+                         view_func=self._edev)
         app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>",
                          view_func=self._edev, methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.DER}{hrefs.MATCH_REG}'):path>",
@@ -194,7 +200,7 @@ class ServerEndpoints:
     def _dcap(self) -> Response:
         return Dcap(server_endpoints=self).execute()
 
-    def _edev(self, path) -> Response:
+    def _edev(self, path: Optional[str] = None) -> Response:
         return EDevRequests(server_endpoints=self).execute(path=path)
     # def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
     #     return EDevRequests(server_endpoints=self).execute(index=index, category=category)

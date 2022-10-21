@@ -137,8 +137,6 @@ def _main():
     logging_level = logging.DEBUG if opts.debug else logging.INFO
     logging.basicConfig(level=logging_level)
 
-    _log = logging.getLogger(__name__)
-
     os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
         Path(opts.config).expanduser().resolve(strict=True))
 
