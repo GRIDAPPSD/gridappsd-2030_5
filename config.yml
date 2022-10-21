@@ -1,6 +1,7 @@
 ---
-server_hostname: 127.0.0.1:8070
-proxy_hostname: 0.0.0.0:8443
+#server_hostname: 127.0.0.1:8070
+#proxy_hostname: 0.0.0.0:8443
+server_hostname: 0.0.0.0:8443
 
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"

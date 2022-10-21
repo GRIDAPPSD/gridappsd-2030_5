@@ -10,6 +10,7 @@ from ieee_2030_5.execute import execute_command
 __all__ = ['TLSRepository']
 
 from ieee_2030_5.types_ import PathStr, Lfdi
+from ieee_2030_5.utils.tls_wrapper import TLSWrap, OpensslWrapper
 
 _log = logging.getLogger(__name__)
 
@@ -74,10 +75,12 @@ class TLSRepository:
         self._serverhost = serverhost
         self._proxyhost = proxyhost
 
+        self._tls: TLSWrap = OpensslWrapper(self._openssl_cnf_file)
+
         # Create a new ca key if not exists.
         if not Path(self._ca_key).exists():
             self.__create_ca__()
-            __openssl_create_private_key__(self.__get_key_file__(self._serverhost))
+            self._tls.tls_create_private_key(self.__get_key_file__(self._serverhost))
             self.create_cert(self._serverhost, True)
             if proxyhost:
                 self.create_cert(self._proxyhost, True)
@@ -90,22 +93,22 @@ class TLSRepository:
                     self._client_common_name_set.add(cn)
 
     def __create_ca__(self):
-        __openssl_create_private_key__(self._ca_key)
-        __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key,
-                                          self._ca_cert)
-        __openssl_create_pkcs23_pem_and_cert__(self._ca_key, self._ca_cert,
-                                               self.__get_combined_file__("ca"))
+        self._tls.tls_create_private_key(self._ca_key)
+        self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
+        self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert, self.__get_combined_file__("ca"))
 
     def create_cert(self, common_name: str, as_server: bool = False):
 
         if not self.__get_key_file__(common_name).exists():
-            __openssl_create_private_key__(self.__get_key_file__(common_name))
-        __openssl_create_signed_certificate__(common_name, self._openssl_cnf_file, self._ca_key,
-                                              self._ca_cert, self.__get_key_file__(common_name),
-                                              self.__get_cert_file__(common_name), as_server)
+            self._tls.tls_create_private_key(self.__get_key_file__(common_name))
 
-        __openssl_create_pkcs23_pem_and_cert__(self.__get_key_file__(common_name), self.__get_cert_file__(common_name),
-                                               self.__get_combined_file__(common_name))
+        self._tls.tls_create_signed_certificate(common_name, self._ca_key,
+                                                self._ca_cert, self.__get_key_file__(common_name),
+                                                self.__get_cert_file__(common_name), as_server)
+
+        self._tls.tls_create_pkcs23_pem_and_cert(self.__get_key_file__(common_name),
+                                                 self.__get_cert_file__(common_name),
+                                                 self.__get_combined_file__(common_name))
 
         self._common_names[common_name] = common_name
 
@@ -138,7 +141,7 @@ class TLSRepository:
         return self.sfdi_from_lfdi(lfdi_)
 
     def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
-        value = __openssl_fingerprint__(self.__get_cert_file__(device_id))
+        value = self._tls.tls_get_fingerprint_from_cert(self.__get_cert_file__(device_id))
         if without_colan:
             value = value.replace(":", "")
         if "=" in value:
@@ -195,116 +198,6 @@ class TLSRepository:
 
     def __get_combined_file__(self, common_name: str) -> Path:
         return self._combined_dir.joinpath(f"{common_name}-combined.pem")
-
-
-def __openssl_create_pkcs23_pem_and_cert__(private_key_file: Path, cert_file: Path, combined_file: Path):
-    # openssl pkcs12 -export -in certificate.pem -inkey privatekey.pem -out cert-and-key.pfx
-    tmpfile = Path("/tmp/tmp.p12")
-    tmpfile2 = Path("/tmp/all.pem")
-    tmpfile.unlink(missing_ok=True)
-    cmd = ["openssl", "pkcs12", "-export", "-in", str(cert_file), "-inkey", str(private_key_file), "-out", str(tmpfile), "-passout", "pass:"]
-    execute_command(cmd)
-
-    # openssl pkcs12 -in path.p12 -out newfile.pem -nodes
-    cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(tmpfile2), "-nodes", "-passin", "pass:"]
-    #cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(combined_file), "-clcerts", "-nokeys", "-passin", "pass:"]
-    # -clcerts -nokeys
-    execute_command(cmd)
-
-    with open(combined_file, "w") as fp:
-        in_between = False
-        for line in tmpfile2.read_text().split("\n"):
-            if not in_between:
-                if "BEGIN" in line:
-                    fp.write(f"{line}\n")
-                    in_between = True
-            else:
-                fp.write(f"{line}\n")
-                if "END" in line:
-                    in_between = False
-
-
-def __openssl_create_private_key__(file_path: Path):
-    # openssl ecparam -out private/ec-cakey.pem -name prime256v1 -genkey
-    cmd = ["openssl", "ecparam", "-out", str(file_path), "-name", "prime256v1", "-genkey"]
-    return execute_command(cmd)
-
-
-def __openssl_create_ca_certificate__(common_name: str, opensslcnf: Path, private_key_file: Path,
-                                      ca_cert_file: Path):
-    # openssl req -new -x509 -days 3650 -config openssl.cnf \
-    #   -extensions v3_ca -key private/ec-cakey.pem -out certs/ec-cacert.pem
-    cmd = [
-        "openssl", "req", "-new", "-x509", "-days", "3650", "-subj", f"/C=US/CN={common_name}",
-        "-config",
-        str(opensslcnf), "-extensions", "v3_ca", "-key",
-        str(private_key_file), "-out",
-        str(ca_cert_file)
-    ]
-    return execute_command(cmd)
-
-
-def __openssl_create_csr__(common_name: str, opensslcnf: Path, private_key_file: Path,
-                           server_csr_file: Path):
-    subject_name = common_name.split(":")[0]
-    # openssl req -new -key server.key -out server.csr -sha256
-    cmd = [
-        "openssl", "req", "-new", "-config",
-        str(opensslcnf), "-subj", f"/C=US/CN={subject_name}", "-key",
-        str(private_key_file), "-out",
-        str(server_csr_file), "-sha256"
-    ]
-    return execute_command(cmd)
-
-
-def __openssl_create_signed_certificate__(common_name: str,
-                                          opensslcnf: Path,
-                                          ca_key_file: Path,
-                                          ca_cert_file: Path,
-                                          private_key_file: Path,
-                                          cert_file: Path,
-                                          as_server: bool = False):
-    subject_name = common_name.split(":")[0]
-    csr_file = Path(f"/tmp/{common_name}")
-    __openssl_create_csr__(common_name, opensslcnf, private_key_file, csr_file)
-    # openssl ca -keyfile /root/tls/private/ec-cakey.pem -cert /root/tls/certs/ec-cacert.pem \
-    #   -in server.csr -out server.crt -config /root/tls/openssl.cnf
-    cmd = [
-        "openssl",
-        "ca",
-        "-keyfile",
-        str(ca_key_file),
-        "-cert",
-        str(ca_cert_file),
-        "-subj",
-        f"/C=US/CN={subject_name}",
-        "-in",
-        str(csr_file),
-        "-out",
-        str(cert_file),
-        "-config",
-        str(opensslcnf),
-    # For no prompt use -batch
-        "-batch"
-    ]
-    # if as_server:
-    #     "-server"
-    # print(" ".join(cmd))
-    ret_value = execute_command(cmd)
-    csr_file.unlink()
-    return ret_value
-
-
-def __openssl_fingerprint__(cert_file: Path, algorithm: str = "sha1"):
-
-    if algorithm == "sha1":
-        algorithm = "-sha1"
-    else:
-        raise NotImplementedError()
-
-    cmd = ["openssl", "x509", "-in", str(cert_file), "-noout", "-fingerprint", algorithm]
-    ret_value = execute_command(cmd)
-    return ret_value
 
 
 if __name__ == '__main__':
