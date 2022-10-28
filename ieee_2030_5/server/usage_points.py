@@ -13,7 +13,7 @@ from ieee_2030_5.models import MirrorUsagePointList, MirrorUsagePoint, MirrorRea
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5 import hrefs
-from ieee_2030_5.utils import dataclass_to_xml, parse_xml
+from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
 class Error(Exception):
     pass
@@ -155,7 +155,7 @@ class MUP(RequestOp):
 
     def post(self, index: Optional[int] = None) -> Response:
         xml = request.data.decode('utf-8')
-        data = parse_xml(request.data.decode('utf-8'))
+        data = xml_to_dataclass(request.data.decode('utf-8'))
         data_type = type(data)
         if data_type not in (MirrorUsagePoint, MirrorReadingSet):
             raise BadRequest()

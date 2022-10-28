@@ -49,8 +49,9 @@ class Dcap(RequestOp):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        if not self._end_devices.allowed_to_connect(self.lfdi):
-            raise werkzeug.exceptions.Unauthorized()
+        # TODO: Test for allowed dcap here.
+        # if not self._end_devices.allowed_to_connect(self.lfdi):
+        #     raise werkzeug.exceptions.Unauthorized()
 
         return self.build_response_from_dataclass(self._end_devices.get_device_capability(self.lfdi))
 

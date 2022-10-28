@@ -28,7 +28,7 @@ def serialize_dataclass(obj: dataclass) -> str:
     return __serializer__.render(obj, ns_map=__ns_map__)
 
 
-def parse_xml(xml: str, type: Optional[Type] = None) -> dataclass:
+def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:
     """
     Parse the xml passed and return result from loaded classes.
     """
@@ -52,6 +52,7 @@ def get_lfdi_from_cert(path: Path) -> t.Lfdi:
 
     # 160 / 4 == 40
     fp = tls.OpensslWrapper.tls_get_fingerprint_from_cert(path)
+    fp = fp.replace(":", "")
     lfdi = t.Lfdi(fp[:40].encode('ascii'))
     return t.Lfdi(fp[:40].encode('ascii'))
 

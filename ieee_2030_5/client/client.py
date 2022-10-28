@@ -11,6 +11,7 @@ from typing import Optional, Dict, Tuple
 import xml.dom.minidom
 from threading import Timer
 
+import werkzeug.middleware.lint
 import xsdata
 
 import ieee_2030_5.models as m
@@ -76,9 +77,16 @@ class IEEE2030_5_Client:
             self._http_conn.connect()
         return self._http_conn
 
-    def register_end_device(self):
+    def register_end_device(self) -> str:
         lfid = u.get_lfdi_from_cert(self._cert)
         sfid = u.get_sfdi_from_lfdi(lfid)
+        response = self.__post__(dcap.EndDeviceListLink.href, data=u.dataclass_to_xml(m.EndDevice(sFDI=sfid)))
+        print(response)
+
+        if response.status in (200, 201):
+            return response.headers.get("Location")
+
+        raise werkzeug.exceptions.Forbidden()
 
 
 
@@ -203,7 +211,7 @@ class IEEE2030_5_Client:
 
         response_obj = None
         try:
-            response_obj = parse_xml(response_data)
+            response_obj = u.xml_to_dataclass(response_data)
             resp_xml = xml.dom.minidom.parseString(response_data)
             if resp_xml and self._debug:
                 print(f"<---- GET RESPONSE")
@@ -254,14 +262,22 @@ if __name__ == '__main__':
 
     h = IEEE2030_5_Client(cafile=SERVER_CA_CERT,
                           server_hostname="127.0.0.1",
-                          server_ssl_port=8443,
+                          server_ssl_port=8070,
                           keyfile=KEY_FILE,
                           certfile=CERT_FILE,
                           debug=True)
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
     dcap = h.device_capability()
-    ed = h.end_devices()[0]
+    end_devices = h.end_devices()
+
+    if not end_devices.all > 0:
+        print("registering end device.")
+        ed_href = h.register_end_device()
+    my_ed = h.end_devices()
+
+
+    # ed = h.end_devices()[0]
     # resp = h.request("/dcap", headers=headers)
     # print(resp)
     # resp = h.request("/dcap", headers=headers)

@@ -10,7 +10,7 @@ from typing import Dict, Optional, List, Set
 import werkzeug.exceptions
 
 from ieee_2030_5 import hrefs
-from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.certs import TLSRepository, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration, ProgramList
 from ieee_2030_5.data.indexer import add_href, get_href
 import ieee_2030_5.models as m
@@ -278,8 +278,9 @@ class EndDevices:
         if not isinstance(lfdi, Lfdi):
             lfdi = Lfdi(lfdi)
 
-        if not self.allowed_to_connect(lfdi):
-            return None
+        # Allowed to connect
+        # if not self.allowed_to_connect(lfdi):
+        #     return None
 
         dc = m.DeviceCapability(href=hrefs.get_dcap_href())
         # TODO if aggregator then count number of devices
@@ -302,9 +303,12 @@ class EndDevices:
 
         """
         retvalue = None
-        if lfdi in self.__all_end_devices__:
-            index = self.__get_index_by_lfdi__(lfdi)
-            retvalue = self.__get_enddevice_by_index__(index)
+
+        index = self._lfdi_index_map.get(lfdi)
+        if index is not None:
+            retvalue = self.__all_end_devices__.get(index)
+            if retvalue.lFDI != lfdi:
+                print("It doesn't match")
         return retvalue
 
     def __get_enddevicedata_by_lfdi__(self, lfdi: Lfdi):
@@ -325,6 +329,21 @@ class EndDevices:
         if ed is None:
             raise werkzeug.exceptions.NotFound()
         return ed
+
+    def __next_id__(self) -> int:
+        self._last_device_number += 1
+        return self._last_device_number
+
+    def add_end_device(self, end_device: m.EndDevice) -> str:
+        assert end_device.lFDI
+        assert end_device.sFDI
+
+        new_id = self.__next_id__()
+        self.__all_end_devices__[new_id] = end_device
+        self._lfdi_index_map[end_device.lFDI] = new_id
+        end_device.href = hrefs.get_enddevice_href(new_id)
+        add_href(end_device.href, end_device)
+        return end_device.href
 
     def initialize_device(self, device_config: DeviceConfiguration, lfdi: Lfdi,
                           program_lists: List[ProgramList]) -> m.EndDevice:
@@ -347,14 +366,14 @@ class EndDevices:
 
         """
         ts = int(round(datetime.utcnow().timestamp()))
-        self._last_device_number += 1
-        new_dev_number = self._last_device_number
+        new_dev_number = self.__next_id__()
 
         enddevice_href = hrefs.get_enddevice_href(new_dev_number)
         end_device = m.EndDevice(
             href=enddevice_href,
             deviceCategory=device_config.device_category_type.value,
-            lFDI=str(lfdi).encode('utf-8'),
+            lFDI=lfdi,
+            sFDI=sfdi_from_lfdi(lfdi),
             RegistrationLink=m.RegistrationLink(hrefs.get_registration_href(new_dev_number)),
             ConfigurationLink=m.ConfigurationLink(hrefs.get_configuration_href(new_dev_number))
         )
@@ -498,14 +517,21 @@ class EndDevices:
 
         """
         ed = self.get_device_by_lfdi(lfdi)
-        if m.DeviceCategoryType(ed.deviceCategory) == m.DeviceCategoryType.AGGREGATOR:
-            devices = [x for x in self.__all_end_devices__.values()]
+
+        if ed is None:
+            return m.EndDeviceList(hrefs.get_enddevice_list_href(), all=0, results=0)
+
+        if ed.deviceCategory is not None:
+            if m.DeviceCategoryType(ed.deviceCategory) == m.DeviceCategoryType.AGGREGATOR:
+                devices = [x for x in self.__all_end_devices__.values()]
+            else:
+                devices = [ed]
         else:
             devices = [ed]
 
         # TODO Handle start, length list things.
         dl = m.EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices),
-                           href=hrefs.get_enddevice_list_href(), pollRate=900)
+                             href=hrefs.get_enddevice_list_href(), pollRate=900)
         return dl
 
     def add_connectable(self, lfdi: Lfdi):

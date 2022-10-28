@@ -12,7 +12,7 @@ __all__ = ["build_server"]
 
 # templates = Jinja2Templates(directory="templates")
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.data.indexer import get_href_all_names, get_href
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
@@ -57,7 +57,9 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             environ['ieee_2030_5_peercert'] = x509
             environ['ieee_2030_5_subject'] = x509.get_subject().CN
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
-
+            environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha1").decode('ascii'))
+            environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
+            _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
         except OpenSSL.crypto.Error:
             # Only if we have a debug_device do we want to expose this device through the admin page.
             if self.debug_device:
@@ -65,7 +67,8 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
                 x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, Path(cert_file).read_bytes())
                 environ['ieee_2030_5_peercert'] = x509
                 environ['ieee_2030_5_subject'] = x509.get_subject().CN
-                environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
+                print(x509.get_serial_number())
+
             else:
                 environ['peercert'] = None
 

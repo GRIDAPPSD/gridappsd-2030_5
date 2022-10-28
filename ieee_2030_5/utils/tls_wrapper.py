@@ -199,6 +199,8 @@ class OpensslWrapper(TLSWrap):
 
         cmd = ["openssl", "x509", "-in", str(cert_file), "-noout", "-fingerprint", algorithm]
         ret_value = subprocess.check_output(cmd, text=True)
+        if "=" in ret_value:
+            ret_value = ret_value.split("=")[1].strip()
         return ret_value
 
     @staticmethod

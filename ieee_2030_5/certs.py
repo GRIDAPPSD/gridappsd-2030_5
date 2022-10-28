@@ -1,6 +1,8 @@
+import argparse
 import logging
+import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -13,6 +15,20 @@ from ieee_2030_5.types_ import PathStr, Lfdi
 from ieee_2030_5.utils.tls_wrapper import TLSWrap, OpensslWrapper
 
 _log = logging.getLogger(__name__)
+
+
+def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
+    fp = fingerprint.replace(":", "")
+    return Lfdi(fp[:40].encode('ascii'))
+
+
+def sfdi_from_lfdi(lfdi: Lfdi) -> int:
+    assert len(lfdi) == 40, "lfdi must be 160-bits (40 hex characters) long."
+    hex_str = str(int(lfdi[:9], 16))
+    check_bit = 1
+    while not (int(hex_str[-2:]) + check_bit) % 10 == 0:
+        check_bit += 1
+    return int(hex_str + str(check_bit))
 
 
 class TLSRepository:
@@ -76,6 +92,7 @@ class TLSRepository:
         self._proxyhost = proxyhost
 
         self._tls: TLSWrap = OpensslWrapper(self._openssl_cnf_file)
+        self._cert_paths: List[Path] = []
 
         # Create a new ca key if not exists.
         if not Path(self._ca_key).exists():
@@ -88,6 +105,7 @@ class TLSRepository:
         if not clear:
             for f in self._certs_dir.glob('*.crt'):
                 f = Path(f)
+                self._cert_paths.append(f)
                 cn = self.get_common_name(f.stem)
                 if cn not in ('ca', serverhost):
                     self._client_common_name_set.add(cn)
@@ -124,8 +142,7 @@ class TLSRepository:
         """
         # 160 / 4 == 40
         fp = self.fingerprint(device_id, True)
-        lfdi = Lfdi(fp[:40].encode('ascii'))
-        return Lfdi(fp[:40].encode('ascii'))
+        return lfdi_from_fingerprint(fp)
 
     def sfdi_from_lfdi(self, lfdi: Lfdi) -> int:
         print(len(lfdi))
@@ -190,6 +207,22 @@ class TLSRepository:
     def server_cert_file(self) -> Path:
         return self.__get_cert_file__(self._serverhost)
 
+    def find_device_id_from_sfdi(self, sfdi: int) -> Optional[str]:
+        """
+        Searches the certificate paths for a device id that maps to the sfdi passed into the method.
+        Args:
+            sfdi:
+
+        Returns:
+
+        """
+        device_id = None
+        for d in self._cert_paths:
+            if sfdi == self.sfdi(d.stem):
+                device_id = d.stem
+                break
+        return device_id
+
     def __get_cert_file__(self, common_name: str) -> Path:
         return self._certs_dir.joinpath(f"{common_name}.crt")
 
@@ -200,33 +233,80 @@ class TLSRepository:
         return self._combined_dir.joinpath(f"{common_name}-combined.pem")
 
 
+def _main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", help="Directory of certificates determine lfdi and sfdi from.")
+    parser.add_argument("--file", help="File to determine lfdi and sfdi from.")
+
+    opts = parser.parse_args()
+
+    if opts.dir and opts.file:
+        sys.stderr.write("Only specify dir or file.\n")
+        sys.exit(1)
+    elif opts.dir is None and opts.file is None:
+        sys.stderr.write("Must specify either --dir or --file.\n")
+        sys.exit(1)
+
+    target = opts.file
+    if opts.dir:
+        target = opts.dir
+
+    target = Path(target)
+    if not target.exists():
+        sys.stderr.write("Invalid file or directory refrence.\n")
+        sys.exit(1)
+
+    if target.is_dir():
+        targets = [target.glob("*.crt")]
+    else:
+        targets = [target]
+
+    for t in targets:
+        fingerprint = OpensslWrapper.tls_get_fingerprint_from_cert(t)
+        lfdi = lfdi_from_fingerprint(fingerprint)
+        sfdi = sfdi_from_lfdi(lfdi)
+        sys.stdout.write(f"certificate: {t}\n")
+        sys.stdout.write(f"-" * 60 + "\n")
+        sys.stdout.write(f"fingerprint: {fingerprint}\n")
+        sys.stdout.write(f"lfdi: {lfdi.decode('ascii')}\n")
+        sys.stdout.write(f"sfdi: {sfdi}\n\n")
+
+
 if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
-    tlsrepo = TLSRepository(repo_dir="~/tls",
-                            openssl_cnffile_template="../openssl.cnf",
-                            clear=False,
-                            serverhost="gridappsd_dev_2004:8443")
-    fingerprint = tlsrepo.fingerprint("dev1")
-    # fingerprint = "3F4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213B".replace("-", "")
-    print(len(fingerprint))
-    print("my lfdi: ", fingerprint[:40])
-    tlsrepo.sfdi_from_lfdi(fingerprint[:40].encode("ascii"))
-    # Each char is 4 bits so 9*4 == 36
-    print("left 36 bits: ", fingerprint[:9])
-    print("to int from fingerprint", int(fingerprint[:9], 16))
-    interum = str(int(fingerprint[:9], 16))
-    print(int(interum[-2:]))
-    add_value = 1
-    while not (int(interum[-2:]) + add_value) % 10 == 0:
-        add_value += 1
 
-    print(add_value)
-    interum = interum + str(add_value)
-    print(f"sfdi = ", interum)
-
-    print(f" our sfdi: {tlsrepo.sfdi('dev1')}")
-
-    _log.debug(f"fingerprint: {tlsrepo.fingerprint('dev1', False)}")
-
-    _log.debug(f"dev1 lfdi: {tlsrepo.lfdi('dev1')}, sfdi: {tlsrepo.sfdi('dev1')}")
+    fingerprint = "3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A".replace("-", "")
+    lfdi = lfdi_from_fingerprint(fingerprint)
+    sfdi = sfdi_from_lfdi(lfdi)
+    print(f"fingerprint: {fingerprint}")
+    print(f"lfdi: {lfdi}")
+    print(f"sfdi: {sfdi}")
+    #
+    # tlsrepo = TLSRepository(repo_dir="~/tls",
+    #                         openssl_cnffile_template="../openssl.cnf",
+    #                         clear=False,
+    #                         serverhost="gridappsd_dev_2004:8443")
+    # fingerprint = tlsrepo.fingerprint("dev1")
+    # # fingerprint = "3F4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213B".replace("-", "")
+    # print(len(fingerprint))
+    # print("my lfdi: ", fingerprint[:40])
+    # tlsrepo.sfdi_from_lfdi(fingerprint[:40].encode("ascii"))
+    # # Each char is 4 bits so 9*4 == 36
+    # print("left 36 bits: ", fingerprint[:9])
+    # print("to int from fingerprint", int(fingerprint[:9], 16))
+    # interum = str(int(fingerprint[:9], 16))
+    # print(int(interum[-2:]))
+    # add_value = 1
+    # while not (int(interum[-2:]) + add_value) % 10 == 0:
+    #     add_value += 1
+    #
+    # print(add_value)
+    # interum = interum + str(add_value)
+    # print(f"sfdi = ", interum)
+    #
+    # print(f" our sfdi: {tlsrepo.sfdi('dev1')}")
+    #
+    # _log.debug(f"fingerprint: {tlsrepo.fingerprint('dev1', False)}")
+    #
+    # _log.debug(f"dev1 lfdi: {tlsrepo.lfdi('dev1')}, sfdi: {tlsrepo.sfdi('dev1')}")

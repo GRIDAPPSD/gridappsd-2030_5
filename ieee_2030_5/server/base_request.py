@@ -71,7 +71,7 @@ class RequestOp(ServerOperation):
 
     @property
     def lfdi(self):
-        return self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
+        return request.environ["ieee_2030_5_lfdi"] # self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
 
     @property
     def device_id(self):
