@@ -14,6 +14,7 @@ from ieee_2030_5.certs import TLSRepository, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration, ProgramList
 from ieee_2030_5.data.indexer import add_href, get_href
 import ieee_2030_5.models as m
+from ieee_2030_5.models.adapters import DERControlAdapter
 
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import Lfdi
@@ -141,6 +142,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
     """
     _log.debug("Initializing 2030.5")
     _log.debug("Adding server level urls to cache")
+    DERControlAdapter.initialize_from_storage()
     add_href(hrefs.get_time_href(), m.TimeLink(href=hrefs.get_time_href()))
     add_href(hrefs.get_enddevice_list_href(), m.EndDeviceListLink(hrefs.get_enddevice_list_href()))
 
@@ -174,9 +176,15 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
     if config.server_mode == "enddevices_create_on_start":
         # TODO load from storage if available.
         for device_config in config.devices:
-            end_devices.initialize_device(device_config=device_config,
-                                          lfdi=tlsrepo.lfdi(device_config.id),
-                                          program_lists=config.program_lists)
+            # TODO remove after client fixed.
+            if device_config.id == 'dev1':
+                end_devices.initialize_device(device_config=device_config,
+                                              lfdi="bb621688cf9b7ab44c1313a775b14f348adbb33f",
+                                              program_lists=config.program_lists)
+            else:
+                end_devices.initialize_device(device_config=device_config,
+                                              lfdi=tlsrepo.lfdi(device_config.id),
+                                              program_lists=config.program_lists)
             if device_config.fsa_list:
                 for fsa in device_config.fsa_list:
                     print(fsa)
@@ -276,7 +284,7 @@ class EndDevices:
 
         """
         if not isinstance(lfdi, Lfdi):
-            lfdi = Lfdi(lfdi)
+            lfdi = Lfdi(lfdi.encode('ascii'))
 
         # Allowed to connect
         # if not self.allowed_to_connect(lfdi):
@@ -303,7 +311,9 @@ class EndDevices:
 
         """
         retvalue = None
-
+        # Handle bytes to str conversion because the lfdi_index_map uses str not bytes.
+        if not isinstance(lfdi, str):
+            lfdi = lfdi.decode('utf-8')
         index = self._lfdi_index_map.get(lfdi)
         if index is not None:
             retvalue = self.__all_end_devices__.get(index)
@@ -378,11 +388,11 @@ class EndDevices:
             ConfigurationLink=m.ConfigurationLink(hrefs.get_configuration_href(new_dev_number))
         )
         add_href(enddevice_href, end_device)
-
+        fsa_link_href = hrefs.get_fsa_list_href(end_device.href)
+        end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=fsa_link_href,
+                                                                                     all=len(device_config.fsa_list))
         if device_config.fsa_list:
-            fsa_link_href = hrefs.get_fsa_list_href(end_device.href)
-            end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=fsa_link_href,
-                                                                                       all=len(device_config.fsa_list))
+
             fsa_list = m.FunctionSetAssignmentsList(href=fsa_link_href, all=len(device_config.fsa_list))
             for fsa_index, fsa_config in enumerate(device_config.fsa_list):
                 fsa_href = hrefs.get_fsa_href(fsa_list.href, fsa_index)

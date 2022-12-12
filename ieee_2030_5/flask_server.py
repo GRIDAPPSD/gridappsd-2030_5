@@ -14,6 +14,7 @@ __all__ = ["build_server"]
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.data.indexer import get_href_all_names, get_href
+from ieee_2030_5.models.adapters import DERControlAdapter
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups, EndDevices
@@ -57,8 +58,13 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             environ['ieee_2030_5_peercert'] = x509
             environ['ieee_2030_5_subject'] = x509.get_subject().CN
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
-            environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha1").decode('ascii'))
-            environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
+            # TODO: Take out once client is able to deal with correct lfdi and sfdi
+            if environ['ieee_2030_5_subject'] == 'dev1':
+                environ['ieee_2030_5_lfdi'] = 'bb621688cf9b7ab44c1313a775b14f348adbb33f'
+                environ['ieee_2030_5_sfdi'] = 503002830207
+            else:
+                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha1").decode('ascii'))
+                environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
             _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
         except OpenSSL.crypto.Error:
             # Only if we have a debug_device do we want to expose this device through the admin page.
@@ -158,6 +164,23 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
 
     @app.route("/admin/index.html")
     def admin_home():
+        return render_template("admin/index.html")
+
+    @app.route("/admin/add-program.html")
+    def admin_add_der_program():
+        controls, default_control = DERControlAdapter.get_all()
+        return render_template("admin/add-der-program.html", der_controls=controls, default_der_control=default_control)
+
+    @app.route("/admin/add-der-control.html")
+    def admin_add_der_control():
+        return render_template("admin/add-der-control.html")
+
+    @app.route("/admin/save-der-control", methods=['post'])
+    def admin_save_der_control():
+        args = request.form.to_dict()
+        control = DERControlAdapter.build_der_control(**args)
+        DERControlAdapter.store_single(control)
+        print(request.form.to_dict())
         return render_template("admin/index.html")
 
     @app.route("/admin/resources")

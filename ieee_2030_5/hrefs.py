@@ -77,6 +77,20 @@ def get_dcap_href() -> str:
     return f"{DEFAULT_DCAP_ROOT}"
 
 
+def get_derc_default_href():
+    return f"{DER}{SEP}/dderc"
+
+
+def get_derc_href(index: int) -> str:
+    """Return the DERControl href to the caller
+
+    if -1 then don't include the index in the result.
+    """
+    if index == -1:
+        return f"{DER}{SEP}/derc"
+    return f"{DER}{SEP}/derc/{index}"
+
+
 def get_program_href(index: int, subref: str = None):
     if subref is not None:
         ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}{SEP}{subref}"

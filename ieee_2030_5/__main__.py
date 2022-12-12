@@ -53,6 +53,7 @@ from werkzeug.serving import BaseWSGIServer
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import build_server, run_server
+from ieee_2030_5.models.adapters import InvalidConfigFile
 from ieee_2030_5.server.server_constructs import initialize_2030_5
 
 _log = logging.getLogger()
@@ -201,4 +202,9 @@ def _main():
 
 
 if __name__ == '__main__':
-    _main()
+    try:
+        _main()
+    except InvalidConfigFile as ex:
+        print(ex.args[0])
+    except KeyboardInterrupt:
+        pass

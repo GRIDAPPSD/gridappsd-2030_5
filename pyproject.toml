@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gridappsd-2030_5"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 authors = ["C. Allwardt <3979063+craig8@users.noreply.github.com>"]
 packages = [

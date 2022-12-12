@@ -12,6 +12,8 @@ from dataclasses_json import dataclass_json
 
 __all__ = ["ServerConfiguration"]
 
+from ieee_2030_5.models.adapters import DERControlAdapter
+
 try:
     from gridappsd.field_interface import MessageBusDefinition
 except ImportError as ex:
@@ -19,7 +21,7 @@ except ImportError as ex:
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData, \
-    FunctionSetAssignments
+    FunctionSetAssignments, DERControl
 from ieee_2030_5.types_ import Lfdi
 
 from ieee_2030_5.server.exceptions import NotFoundError
@@ -73,6 +75,10 @@ class ServerConfiguration:
     server_hostname: str
     server_mode: Union[Literal["enddevices_create_on_start"],
                        Literal["enddevices_register_access_only"]]
+
+    DERControlListFile: str
+    DERProgramListFile: str
+    DERCurveListFile: str
     devices: List[DeviceConfiguration]
 
     tls_repository: str
@@ -89,6 +95,7 @@ class ServerConfiguration:
     proxy_hostname: Optional[str] = None
     gridappsd: Optional[GridappsdConfiguration] = None
     DefaultDERControl: Optional[DefaultDERControl] = None
+    DERControlList: Optional[DERControl] = field(default=list)
 
     @classmethod
     def from_dict(cls, env):
@@ -99,49 +106,53 @@ class ServerConfiguration:
         for d in self.devices:
             d.device_category_type = eval(f"DeviceCategoryType.{d.device_category_type}")
 
+        der_controls, der_default_control = None, None
+        if self.DERControlListFile:
+            der_controls, der_default_control = DERControlAdapter.load_from_yaml_file(self.DERControlListFile)
+
         temp_program_list = self.program_lists
         if isinstance(self.program_lists, str):
             temp_program_list = yaml.safe_load(Path(self.program_lists).read_text())
 
-        self.program_lists = []
-        for program_list in temp_program_list['program_lists']:
-            pl_obj = ProgramList(name=program_list["name"], programs=[])
-            for inter_index, program_obj in enumerate(program_list['programs']):
-                base = None
-                if "DERControlBase" in program_obj:
-                    base = DERControlBase()
-                    for k in program_obj.get("DERControlBase"):
-                        setattr(base, k, program_obj["DERControlBase"].get(k))
-                    del program_obj["DERControlBase"]
-                # TODO Do Something with base so we can retrieve it.
-                # if base:
-                #     self.DefaultDERControl = DefaultDERControl(DERControlBase=base)
-                #     for k, v in program.items():
-                #         setattr(self.DefaultDERControl, k, v)
-                # else:
-                program = DERProgram()
-
-                for k, v in program_obj.items():
-                    setattr(program, k, v)
-
-                pl_obj.programs.append(program)
-            self.program_lists.append(pl_obj)
-
-        temp_curve_list = self.curve_list
-        if isinstance(self.curve_list, str):
-            temp_curve_list = yaml.safe_load(Path(self.curve_list).read_text())
-
-        self.curve_list = []
-        for item in temp_curve_list['curve_list']:
-            curve_data: List[CurveData] = []
-            for data in item.get('CurveData'):
-                curve_data.append(CurveData(xvalue=data['xvalue'], yvalue=data['yvalue']))
-            del item["CurveData"]
-
-            curve = DERCurve(CurveData=curve_data)
-            for k, v in item.items():
-                setattr(curve, k, v)
-            self.curve_list.append(curve)
+        # self.program_lists = []
+        # for program_list in temp_program_list['program_lists']:
+        #     pl_obj = ProgramList(name=program_list["name"], programs=[])
+        #     for inter_index, program_obj in enumerate(program_list['programs']):
+        #         base = None
+        #         if "DERControlBase" in program_obj:
+        #             base = DERControlBase()
+        #             for k in program_obj.get("DERControlBase"):
+        #                 setattr(base, k, program_obj["DERControlBase"].get(k))
+        #             del program_obj["DERControlBase"]
+        #         # TODO Do Something with base so we can retrieve it.
+        #         # if base:
+        #         #     self.DefaultDERControl = DefaultDERControl(DERControlBase=base)
+        #         #     for k, v in program.items():
+        #         #         setattr(self.DefaultDERControl, k, v)
+        #         # else:
+        #         program = DERProgram()
+        #
+        #         for k, v in program_obj.items():
+        #             setattr(program, k, v)
+        #
+        #         pl_obj.programs.append(program)
+        #     self.program_lists.append(pl_obj)
+        #
+        # temp_curve_list = self.curve_list
+        # if isinstance(self.curve_list, str):
+        #     temp_curve_list = yaml.safe_load(Path(self.curve_list).read_text())
+        #
+        # self.curve_list = []
+        # for item in temp_curve_list['curve_list']:
+        #     curve_data: List[CurveData] = []
+        #     for data in item.get('CurveData'):
+        #         curve_data.append(CurveData(xvalue=data['xvalue'], yvalue=data['yvalue']))
+        #     del item["CurveData"]
+        #
+        #     curve = DERCurve(CurveData=curve_data)
+        #     for k, v in item.items():
+        #         setattr(curve, k, v)
+        #     self.curve_list.append(curve)
 
         if self.gridappsd:
             self.gridappsd = GridappsdConfiguration.from_dict(self.gridappsd)
