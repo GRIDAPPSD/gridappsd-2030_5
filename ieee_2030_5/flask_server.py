@@ -5,7 +5,7 @@ from pathlib import Path
 
 import OpenSSL
 import werkzeug.exceptions
-from flask import Flask, render_template, request, redirect, Response
+from flask import Flask, render_template, request, redirect, Response, url_for
 from werkzeug.serving import make_server, BaseWSGIServer
 
 __all__ = ["build_server"]
@@ -14,7 +14,8 @@ __all__ = ["build_server"]
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.data.indexer import get_href_all_names, get_href
-from ieee_2030_5.models.adapters import DERControlAdapter
+import ieee_2030_5.models.adapters as adpt
+from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 from ieee_2030_5.server.server_constructs import get_groups, EndDevices
@@ -166,22 +167,38 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
     def admin_home():
         return render_template("admin/index.html")
 
-    @app.route("/admin/add-program.html")
-    def admin_add_der_program():
-        controls, default_control = DERControlAdapter.get_all()
+    @app.route("/admin/add-fsa", methods=["get", "post"])
+    def admin_fsa():
+        if request.method == "POST":
+            return redirect("admin/index.html")
+
+        controls, default_control = adpt.DERControlAdapter.get_all()
+        return render_template("admin/add-fsa.html")
+
+    @app.route("/admin/add-end-device", methods=["get", "post"])
+    def admin_end_device():
+        if request.method == "POST":
+
+            return redirect(url_for("admin_home"))
+
+        return render_template("admin/add-end-device.html", device_categories=DeviceCategoryType)
+
+    @app.route("/admin/add-der-program", methods=["get", "post"])
+    def admin_der_program():
+        if request.method == "POST":
+            return redirect("admin/index.html")
+
+        controls, default_control = adpt.DERControlAdapter.get_all()
         return render_template("admin/add-der-program.html", der_controls=controls, default_der_control=default_control)
 
-    @app.route("/admin/add-der-control.html")
-    def admin_add_der_control():
+    @app.route("/admin/der-control", methods=['get', 'post'])
+    def admin_der_control():
+        if request.method == 'POST':
+            args = request.form.to_dict()
+            control = adpt.DERControlAdapter.build_der_control(**args)
+            adpt.DERControlAdapter.store_single(control)
+            return redirect(url_for("admin_home"))
         return render_template("admin/add-der-control.html")
-
-    @app.route("/admin/save-der-control", methods=['post'])
-    def admin_save_der_control():
-        args = request.form.to_dict()
-        control = DERControlAdapter.build_der_control(**args)
-        DERControlAdapter.store_single(control)
-        print(request.form.to_dict())
-        return render_template("admin/index.html")
 
     @app.route("/admin/resources")
     def admin_resource_list():

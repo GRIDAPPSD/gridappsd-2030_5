@@ -6,14 +6,26 @@
 </head>
 <body>
     <h1>New End Device</h1>
+    <form action="{{ url_for("admin_end_device") }}" method="post">
+    <input type="hidden" name="mRID" value="{{ mRID }}" />
     <div>
-        <div><label for="name">Name:</label><input type="text" /></div>
+        <div><label for="cert_name">CERT Name:
+            <input name="cert_name" type="text" value="{{ cert_name }}" />
+        </label></div>
+        <div><label for="pin">PIN:
+            <input name="pin" type="text" size="6" value="{{ pin }}"/>
+        </label></div>
         <div>
+            <h3>Device Category</h3>
             <ul>
-                <li><label for="has_di">Device Information?</label><input name="has_di" type="checkbox"/></li>
-                <li><label for="has_ps">Power Status?</label><input name="has_ps" type="checkbox"/></li>
+                {! Check to see if we can figure out the device category already plotted !}
+                {% for category in device_categories %}
+                <li><label for="{{ category.name }}"><input type="checkbox" name="{{ category.name }}" />{{ category.name }}</label></li>
+                {% endfor %}
             </ul>
         </div>
+        <input type="submit" value="Save" />
     </div>
+    </form>
 </body>
 </html>

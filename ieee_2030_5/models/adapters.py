@@ -17,19 +17,61 @@ class InvalidConfigFile(Exception):
     pass
 
 
+def __populate_from_kwargs__(obj: dataclasses.dataclass, **kwargs):
+    for k in dataclasses.fields(obj):
+        if k.name in kwargs:
+            setattr(obj, k.name, kwargs[k.name])
+            kwargs.pop(k.name)
+
+
 class BaseAdapter:
-    pass
+    @staticmethod
+    def initialize_from_storage():
+        raise NotImplementedError()
+
+    @staticmethod
+    def build(**kwargs) -> dataclasses.dataclass:
+        raise NotImplementedError()
+
+
+class EndDeviceAdapter(BaseAdapter):
+    __count__: int = 0
+
+    @staticmethod
+    def initialize_from_storage():
+        hrefs_found = get_href_filtered(hrefs.get_program_href(-1))
+        EndDeviceAdapter.__count__ = len(hrefs_found)
+
+    @staticmethod
+    def build(**kwargs) -> m.EndDevice:
+        ed = m.EndDevice()
+        __populate_from_kwargs__(ed, **kwargs)
+        return ed
+
+
+class DERProgramAdapter(BaseAdapter):
+    __count__ = 0
+
+    @staticmethod
+    def initialize_from_storage():
+        hrefs_found = get_href_filtered(hrefs.get_program_href(-1))
+        DERProgramAdapter.__count__ = len(hrefs_found)
+
+    @staticmethod
+    def build_der_program(**kwargs) -> m.DERProgram:
+        program = m.DERProgram()
+
+        return program
 
 
 class DERControlAdapter(BaseAdapter):
-    _control_count = 0
+    __count__ = 0
 
     @staticmethod
     def initialize_from_storage():
         dercs_href = hrefs.get_derc_href(-1)
         der_controls = get_href_filtered(dercs_href)
-        DERControlAdapter._control_count = len(der_controls)
-
+        DERControlAdapter.__count__ = len(der_controls)
 
     @staticmethod
     def build_der_control(**kwargs) -> m.DERControl:
@@ -58,16 +100,16 @@ class DERControlAdapter(BaseAdapter):
             der_control.mRID = uuid.uuid4()
 
         if not der_control.href:
-            der_control.href = hrefs.get_derc_href(DERControlAdapter._control_count)
+            der_control.href = hrefs.get_derc_href(DERControlAdapter.__count__)
             add_href(der_control.href, der_control)
-            DERControlAdapter._control_count += 1
+            DERControlAdapter.__count__ += 1
 
         add_href(der_control.href, der_control)
 
     @staticmethod
     def load_from_storage() -> Tuple[List[m.DERControl], m.DefaultDERControl]:
-        dercs_href = hrefs.get_derc_href(-1)
-        der_controls = get_href_filtered(hrefs.get_derc_href(-1))
+        der_controls, default_der_control = get_href_filtered(hrefs.get_derc_href(-1))
+        return der_controls, default_der_control
 
     @staticmethod
     def get_all() -> Tuple[List[m.DERControl], m.DefaultDERControl]:
@@ -75,7 +117,6 @@ class DERControlAdapter(BaseAdapter):
         der_controls = get_href_filtered(hrefs.get_derc_href(-1))
         default_der = get_href_filtered(hrefs.get_derc_default_href())
         return der_controls, default_der
-
 
     @staticmethod
     def load_from_yaml_file(yaml_file: StrPath) -> Tuple[List[m.DERControl], m.DefaultDERControl]:

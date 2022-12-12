@@ -1,28 +1,33 @@
-<!--<!DOCTYPE html>-->
-<!--<html lang="en">-->
-<!--<head>-->
-<!--    <meta charset="UTF-8">-->
-<!--    <title>Title</title>-->
-<!--</head>-->
-<!--<body>-->
-<!--<h1>Hello world!</h1>-->
-<!--<a href="/admin/clients">Clients</a>-->
-<!--</body>-->
-<!--</html>-->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Administration Area</title>
 </head>
 <body>
-<h1>Client certificate details</h1>
-<a href="{{ url_for('admin_resource_list') }}">Resource Tree</a>
-<a href="{{ url_for('admin_clients')}}">Clients</a>
-<a href="{{ url_for('admin_groups')}}">DER Program Lists</a>
-<a href="{{ url_for('admin_aggregators')}}">Aggregators</a>
-<a href="{{ url_for('admin_add_der_control') }}">Add DER Control</a>
+<h1>Administration Area</h1>
+<div>
+    <a href="{{ url_for('admin_der_control') }}">Add DER Control</a>
+</div>
+<div>
+    <a href="{{ url_for('admin_fsa') }}">Add FSA</a>
+</div>
+<div>
+    <a href="{{ url_for('admin_end_device') }}">Add End Device</a>
+</div>
+<div>
+    <a href="{{ url_for('admin_resource_list') }}">Resource Tree</a>
+</div>
+<div>
+    <a href="{{ url_for('admin_clients') }}">Clients</a>
+</div>
+<div>
+    <a href="{{ url_for('admin_groups') }}">DER Program Lists</a>
+</div>
+<div>
+    <a href="{{ url_for('admin_aggregators') }}">Aggregators</a>
+</div>
+
 
 </body>
 </html>
