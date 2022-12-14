@@ -156,6 +156,7 @@ class TLSRepository:
 
     def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
         if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
+            _log.info("Using hash from combined file.")
             value = Path(self.__get_combined_file__(device_id)).read_text()
             value = hashlib.sha256(value.encode('utf-8')).hexdigest()
         else:
@@ -218,6 +219,7 @@ class TLSRepository:
 
         """
         device_id = None
+        _log.debug(f"Attempting to find sfid: {sfdi}")
         for d in self._cert_paths:
             from_stem = self.sfdi(d.stem)
             if sfdi == self.sfdi(d.stem):
