@@ -74,7 +74,7 @@ class TLSWrap:
         raise NotImplementedError()
 
     @staticmethod
-    def tls_get_fingerprint_from_cert(cert_file: Path, algorithm: str = "sha1"):
+    def tls_get_fingerprint_from_cert(cert_file: Path, algorithm: str = "sha256"):
         """
 
         Args:
@@ -190,10 +190,10 @@ class OpensslWrapper(TLSWrap):
         return ret_value
 
     @staticmethod
-    def tls_get_fingerprint_from_cert(cert_file: Path, algorithm: str = "sha1"):
+    def tls_get_fingerprint_from_cert(cert_file: Path, algorithm: str = "sha256"):
         OpensslWrapper.__set_cnf_from_cert_path___(cert_file)
-        if algorithm == "sha1":
-            algorithm = "-sha1"
+        if algorithm == "sha256":
+            algorithm = "-sha256"
         else:
             raise NotImplementedError()
 

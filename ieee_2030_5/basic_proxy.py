@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import OpenSSL
 import yaml
 
-from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration
 
 _log = logging.getLogger(__name__)
@@ -39,7 +39,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
         context = ssl.SSLContext(ssl.PROTOCOL_TLS)
         context.verify_mode = ssl.CERT_OPTIONAL
 
-        context.load_verify_locations(cafile="/home/gridappsd/tls/certs/ca.crt")
+        # context.load_verify_locations(cafile="/home/gridappsd/tls/certs/ca.crt")
+        assert cert_file
+        ca_file = str(Path(cert_file).parent.joinpath("ca.crt"))
+        context.load_verify_locations(cafile=ca_file)
         if cert_file is not None and key_file is not None and \
                 Path(cert_file).exists() and Path(key_file).exists():
             context.load_cert_chain(certfile=cert_file, keyfile=key_file)

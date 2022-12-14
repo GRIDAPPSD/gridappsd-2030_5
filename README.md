@@ -13,7 +13,7 @@ section 6.1.3 and 6.1.4 respectively.
 The recommended way to install this project from pypi is in a virtual environment.  Create environment and install
 2030.5 server as follows.
 
-```commandline
+```shell
 # creates an environment 'env' in the current directory
 python3 -m venv env
 
@@ -35,7 +35,15 @@ The installation requires poetry version 1.2 or greater.  https://python-poetry.
 
 ## Running the server
 
-```commandline
+### Environmental Variables
+
+```shell
+# Use the combined certificate file as the basis for the lfdi.  Doing this allows this to be 
+# able to function against the IEEE_Client from EPRI.
+export IEEE_2030_5_CERT_FROM_COMBINED_FILE=1
+```
+
+```shell
 usage: 2030_5_server [-h] [--no-validate] [--no-create-certs] [--debug] config
 
 positional arguments:
@@ -50,7 +58,10 @@ optional arguments:
 
 ### Using the 2030.5 proxy
 
-```commandline
+The proxy is used to keep a http 1.1 connection alive rather than doing the tls setup
+more than one time.
+
+```shell
 usage: 2030_5_proxy [-h] [--debug] config
 
 positional arguments:

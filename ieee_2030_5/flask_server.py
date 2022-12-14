@@ -1,5 +1,7 @@
+import hashlib
 import json
 import logging
+import os
 import ssl
 from pathlib import Path
 
@@ -34,7 +36,6 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
     in the application.
     """
     tlsrepo: TLSRepository
-    debug_device: str
 
     def make_environ(self):
         """
@@ -59,14 +60,18 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             environ['ieee_2030_5_peercert'] = x509
             environ['ieee_2030_5_subject'] = x509.get_subject().CN
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
-            # TODO: Take out once client is able to deal with correct lfdi and sfdi
-            if environ['ieee_2030_5_subject'] == 'dev1':
-                environ['ieee_2030_5_lfdi'] = 'bb621688cf9b7ab44c1313a775b14f348adbb33f'
-                environ['ieee_2030_5_sfdi'] = 503002830207
+            if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
+                _log.info("Using hash from combined file.")
+                pth = self.tlsrepo.__get_combined_file__(x509.get_subject().CN)
+                sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
+                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(sha256hash)
             else:
-                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha1").decode('ascii'))
-                environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
+                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha256").decode('ascii'))
+            environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
+
             _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
+            found_device_id = self.tlsrepo.find_device_id_from_sfdi(environ['ieee_2030_5_sfdi'])
+            assert found_device_id == environ['ieee_2030_5_subject']
         except OpenSSL.crypto.Error:
             # Only if we have a debug_device do we want to expose this device through the admin page.
             if self.debug_device:
@@ -74,7 +79,6 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
                 x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, Path(cert_file).read_bytes())
                 environ['ieee_2030_5_peercert'] = x509
                 environ['ieee_2030_5_subject'] = x509.get_subject().CN
-                print(x509.get_serial_number())
 
             else:
                 environ['peercert'] = None
@@ -178,17 +182,22 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
     @app.route("/admin/add-end-device", methods=["get", "post"])
     def admin_end_device():
         if request.method == "POST":
-
             return redirect(url_for("admin_home"))
 
         return render_template("admin/add-end-device.html", device_categories=DeviceCategoryType)
 
     @app.route("/admin/add-der-program", methods=["get", "post"])
     def admin_der_program():
-        if request.method == "POST":
-            return redirect("admin/index.html")
-
         controls, default_control = adpt.DERControlAdapter.get_all()
+
+        if request.method == "POST":
+            args = request.form.to_dict()
+            print(f"Args before: {args}")
+            adpt.DERProgramAdapter.build(**args)
+            print(f"Args after: {args}")
+
+            return redirect(url_for("admin_home"))
+
         return render_template("admin/add-der-program.html", der_controls=controls, default_der_control=default_control)
 
     @app.route("/admin/der-control", methods=['get', 'post'])

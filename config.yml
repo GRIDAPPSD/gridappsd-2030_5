@@ -1,23 +1,26 @@
 ---
 server_hostname: 127.0.0.1:8070
 proxy_hostname: 0.0.0.0:7443
-#server_hostname: 0.0.0.0:8443
+# server_hostname: 0.0.0.0:7443
 
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
-# server_mode: enddevices_register_access_only
-server_mode: enddevices_create_on_start
 
-debug_device: dev1
+server_mode: enddevices_register_access_only
+# server_mode: enddevices_create_on_start
 
-# File for programs for inverters etc.
-program_lists: program_lists_config.yml
+# debug_device: dev1
 
-# File for program curves
-curve_list: curves_config.yml
+DERControlListFile: DERControlList.yml
+DERProgramListFile: DERProgramList.yml
+DERCurveListFile: DERCurveList.yml
 
 # Device names available for control
 devices:
+  - id: dev2
+    device_category_type: FUEL_CELL
+    pin: 12345
+
   - id: dev1
     # DeviceCategoryType from ieee_2030_5.models.device_category
     device_category_type: FUEL_CELL

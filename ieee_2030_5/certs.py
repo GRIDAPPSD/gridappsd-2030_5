@@ -1,13 +1,13 @@
 import argparse
+import hashlib
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import List, Tuple, Optional
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-
-from ieee_2030_5.execute import execute_command
 
 __all__ = ['TLSRepository']
 
@@ -25,8 +25,9 @@ def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
 def sfdi_from_lfdi(lfdi: Lfdi) -> int:
     assert len(lfdi) == 40, "lfdi must be 160-bits (40 hex characters) long."
     hex_str = str(int(lfdi[:9], 16))
-    check_bit = 1
-    while not (int(hex_str[-2:]) + check_bit) % 10 == 0:
+    check_bit = 0
+    full_sum = sum([int(x) for x in hex_str])
+    while not (full_sum + check_bit) % 10 == 0:
         check_bit += 1
     return int(hex_str + str(check_bit))
 
@@ -110,6 +111,11 @@ class TLSRepository:
                 if cn not in ('ca', serverhost):
                     self._client_common_name_set.add(cn)
 
+        for d in self._cert_paths:
+            lfdi_from_stem = self.lfdi(d.stem)
+            from_stem = self.sfdi(d.stem)
+            _log.debug(f"For cert {d.name}\n\tLFDI: {lfdi_from_stem}\n\tSFDI: {from_stem}")
+
     def __create_ca__(self):
         self._tls.tls_create_private_key(self._ca_key)
         self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
@@ -144,21 +150,16 @@ class TLSRepository:
         fp = self.fingerprint(device_id, True)
         return lfdi_from_fingerprint(fp)
 
-    def sfdi_from_lfdi(self, lfdi: Lfdi) -> int:
-        print(len(lfdi))
-        assert len(lfdi) == 40, "lfdi must be 160-bits (40 hex characters) long."
-        hex_str = str(int(lfdi[:9], 16))
-        check_bit = 1
-        while not (int(hex_str[-2:]) + check_bit) % 10 == 0:
-            check_bit += 1
-        return int(hex_str + str(check_bit))
-
-    def sfdi(self, device_id: str):
+    def sfdi(self, device_id: str) -> int:
         lfdi_ = self.lfdi(device_id)
-        return self.sfdi_from_lfdi(lfdi_)
+        return sfdi_from_lfdi(lfdi_)
 
     def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
-        value = self._tls.tls_get_fingerprint_from_cert(self.__get_cert_file__(device_id))
+        if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
+            value = Path(self.__get_combined_file__(device_id)).read_text()
+            value = hashlib.sha256(value.encode('utf-8')).hexdigest()
+        else:
+            value = self._tls.tls_get_fingerprint_from_cert(self.__get_cert_file__(device_id))
         if without_colan:
             value = value.replace(":", "")
         if "=" in value:
@@ -218,6 +219,7 @@ class TLSRepository:
         """
         device_id = None
         for d in self._cert_paths:
+            from_stem = self.sfdi(d.stem)
             if sfdi == self.sfdi(d.stem):
                 device_id = d.stem
                 break
@@ -282,6 +284,15 @@ if __name__ == '__main__':
     print(f"fingerprint: {fingerprint}")
     print(f"lfdi: {lfdi}")
     print(f"sfdi: {sfdi}")
+
+    fingerprint = "B5:65:B2:C4:D4:22:59:72:58:6E:4E:E2:B1:F2:98:D4:20:62:15:DB:53:49:AB:45:2F:D2:8F:BC:62:2C:28:1D".replace(":", "")
+    lfdi = lfdi_from_fingerprint(fingerprint)
+    sfdi = sfdi_from_lfdi(lfdi)
+    print(f"fingerprint: {fingerprint}")
+    print(f"lfdi: {lfdi}")
+    print(f"sfdi: {sfdi}")
+
+
     #
     # tlsrepo = TLSRepository(repo_dir="~/tls",
     #                         openssl_cnffile_template="../openssl.cnf",
