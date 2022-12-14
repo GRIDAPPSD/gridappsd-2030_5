@@ -91,6 +91,7 @@ def get_tls_repository(cfg: ServerConfiguration,
             else:
                 already_represented.add(k)
                 tlsrepo.create_cert(k.id)
+                _log.debug(f"for {k.id}\nlfdi -> {tlsrepo.lfdi(k.id)}\nsfdi -> {tlsrepo.sfdi(k.id)}")
     return tlsrepo
 
 
