@@ -145,7 +145,10 @@ def _main():
     cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
 
     config = ServerConfiguration(**cfg_dict)
-
+    
+    if config.lfdi_mode == "lfdi_mode_from_file":
+        os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
+        
     assert config.tls_repository
     assert len(config.devices) > 0
     assert config.server_hostname

@@ -2,6 +2,7 @@
 server_hostname: 127.0.0.1:8070
 proxy_hostname: 0.0.0.0:7443
 # server_hostname: 0.0.0.0:7443
+# server_hostname: gridappsd_dev_2004:7443
 
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
@@ -9,35 +10,113 @@ openssl_cnf: "openssl.cnf"
 server_mode: enddevices_register_access_only
 # server_mode: enddevices_create_on_start
 
-# debug_device: dev1
-
-DERControlListFile: DERControlList.yml
-DERProgramListFile: DERProgramList.yml
-DERCurveListFile: DERCurveList.yml
+# lfdi_mode: Determines what piece of information is used to calculate the lfdi
+#
+# Options:
+#   lfdi_mod_from_file             - sha256 hash of certificate file's content.
+#   lfdi_mod_from_cert_fingerprint - sha256 hash of the certificates fingerprint.
+#
+# default: lfdi_mod_from_cert_fingerprint
+lfdi_mode: lfdi_mode_from_file
 
 # Device names available for control
 devices:
+  # SolarEdge SE6000H HD-Wave SetApp Enabled Inverter
+  - id: enphase1
+    device_category_type: FUEL_CELL
+    pin: 111115
+    nameplate:
+      rtgMaxW: 6000
+
   - id: dev2
     device_category_type: FUEL_CELL
     pin: 12345
+    nameplate:
+      # Active power rating in wats an unity power factor
+      rtgMaxW:
+      # Active power rating in watts at specified over-excited power factor
+      rtgOverExcitedW:
+      # Over-excited power factor DERCapability::rtgOverExcitedPF
+      rtgOverExcitedPF:
+      # Active power rating in watts at specified under-excited power factor DERCapability::rtgUnderExcitedW
+      rtgUnderExcitedW:
+      # Under-excited power factor DERCapability::rtgUnderExcitedPF
+      rtgUnderExcitedPF:
+      # Maximum apparent power rating in voltamperes DERCapability::rtgMaxVA
+      rtgMaxVA:
+      # Indication of reactive power and voltage/power control capability DERCapability::rtgNormalCategory
+      rtgNormalCategory:
+      # Indication of voltage and frequencyride-through capability category I, II, or III DERCapability::rtgAbnormalCategory
+      rtgAbnormalCategory:
+      # Maximum injected reactive power rating in vars DERCapability::rtgMaxVar
+      rtgMaxVar:
+      # Maximum absorbed reactive power rating in vars DERCapability::rtgMaxVarNeg
+      rtgMaxVarNeg:
+      # Maximum active power charge rating in watts DERCapability::rtgMaxChargeRateW
+      rtgMaxChargeRateW:
+      # Maximum apparent power charge rating in voltamperes; may differ from the apparent power maximum rating
+      # DERCapability::rtgMaxChargeRateVA
+      rtgMaxChargeRateVA:
+      # Nominal ac voltage rating in rms volts DERCapability::rtgVNom
+      rtgVNom:
+      # Maximum ac voltage rating in rms volts DERCapability::rtgMaxV
+      rtgMaxV:
+      # Minimum ac voltage rating in rms volts DERCapability::rtgMinV
+      rtgMinV:
+      # Indication of support for each control mode function DERCapability::modesSupported
+      modesSupported:
+      # Reactive susceptance that remains connected to the Area EPS in the cease to energize and trip state
+      # DERCapability::rtgReactiveSusceptance
+      rtgReactiveSusceptance:
+      # Manufacturer DeviceInformation::mfID
+      mfID:
+      # Model DeviceInformation::mfModel
+      mfModel:
+      # Serial number DeviceInformation::mfSerNum
+      mfSerNum:
+      # Version DeviceInformation::mfHwVer DeviceInformation::swVer
+      mfHwVer:
+      swVer:
+      
 
   - id: dev1
     # DeviceCategoryType from ieee_2030_5.models.device_category
     device_category_type: FUEL_CELL
     pin: 12345
 
-    # In the absence of scheduled controls, DERs SHALL revert to a default control setting specified by
-    # interconnection tariffs, the utility Interconnection Handbook or as specified by the last DefaultDERControl.
-    #
-    # Define the DefaultDERControl for the inverter if necessary to customize for this specific inverter.
-    #
-    # default: None (uses the global DefaultDERContorl)
-    fsa_list:
-      - mRID: _def62366-746e-4fcb-b3ee-ebebb90d72d4-fsa
-        description: _def62366-746e-4fcb-b3ee-ebebb90d72d4 fsa description
-        program_lists:
-          - pl1
-          - pl2
+    programs:
+      - description: Program 1
+      - description: Program 2
+
+
+    
+programs:
+  - description: Program 1
+    default_control: Control 1
+    controls:
+      - Control 2
+      - Control 3
+      
+  - description: Program 2
+  - description: Program 3
+
+controls:
+  - description: Control 1
+    base:
+      setESDelay: 30
+      setESHighFreq: UInt16 [0..1]
+      setESHighVolt: Int16 [0..1]
+      setESLowFreq: UInt16 [0..1]
+      setESLowVolt: Int16 [0..1]
+      setESRampTms: UInt32 [0..1]
+      setESRandomDelay: UInt32 [0..1]
+      setGradW: UInt16 [0..1]
+      setSoftGradW: UInt16 [0..1]
+  - description: Control 2
+  - description: Control 3
+
+events:
+  - control: 0
 
 #{
 #    "devices": [

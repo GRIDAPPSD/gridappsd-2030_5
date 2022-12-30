@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from http.client import HTTPSConnection
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -33,6 +34,14 @@ class RequestForwarder(BaseHTTPRequestHandler):
         key_file = None
         if x509_binary:
             x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
+            # subject = x509.get_subject().CN
+            # serial_num = x509.get_serial_number()
+            # fingerprint = x509.digest("sha256").decode("ascii")
+            # _log.info(f"Connected using fingerprint: {fingerprint}")
+            # lfdi = lfdi_from_fingerprint(fingerprint)
+            # _log.info(f"LFDI -> {lfdi}")
+            # sfdi = sfdi_from_lfdi(lfdi)
+            # _log.info(f"SFDI -> {sfdi}")
             cn = x509.get_subject().CN
             cert_file, key_file = self.server.tls_repo.get_file_pair(cn)
 

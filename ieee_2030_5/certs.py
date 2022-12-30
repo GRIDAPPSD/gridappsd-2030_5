@@ -135,6 +135,7 @@ class TLSRepository:
                                                  self.__get_combined_file__(common_name))
 
         self._common_names[common_name] = common_name
+        self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
 
     def lfdi(self, device_id: str) -> Lfdi:
         """
@@ -148,7 +149,7 @@ class TLSRepository:
         """
         # 160 / 4 == 40
         fp = self.fingerprint(device_id, True)
-        return lfdi_from_fingerprint(fp)
+        return Lfdi(lfdi_from_fingerprint(fp))
 
     def sfdi(self, device_id: str) -> int:
         lfdi_ = self.lfdi(device_id)

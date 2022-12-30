@@ -109,6 +109,7 @@ def before_request():
 
 
 def after_request(response: Response) -> Response:
+    _log.debug(f"RESP HEADERS:\n{response.headers}")
     _log.debug(f"RESP:\n{response.get_data().decode('utf-8')}")
     return response
 
@@ -261,7 +262,6 @@ def run_server(config: ServerConfiguration,
         host = config.server_hostname
         port = 8443
 
-    PeerCertWSGIRequestHandler.debug_device = config.debug_device
     PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
     app.run(host=host,
             ssl_context=ssl_context,

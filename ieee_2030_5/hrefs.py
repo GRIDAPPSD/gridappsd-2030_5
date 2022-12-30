@@ -54,7 +54,11 @@ def get_fsa_list_href(end_device_href: str) -> str:
 
 @lru_cache()
 def get_enddevice_href(index: int) -> str:
-    return SEP.join([DEFAULT_EDEV_ROOT, f"{index}"])
+    if index == -1:
+        ret = DEFAULT_EDEV_ROOT
+    else:
+        ret = SEP.join([DEFAULT_EDEV_ROOT, f"{index}"])
+    return ret
 
 
 @lru_cache()
@@ -92,10 +96,19 @@ def get_derc_href(index: int) -> str:
 
 
 def get_program_href(index: int, subref: str = None):
-    if subref is not None:
-        ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}{SEP}{subref}"
+    """Return the DERProgram href to the caller
+
+    Args:
+        index: if -1 then don't include the index in the result else use the index
+        subref: used to specify a subsection in the program.
+    """
+    if index == -1:
+        ref = f"{DEFAULT_PROGRAM_ROOT}"
     else:
-        ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}"
+        if subref is not None:
+            ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}{SEP}{subref}"
+        else:
+            ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}"
     return ref
 
 # TimeLink

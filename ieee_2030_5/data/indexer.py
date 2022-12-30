@@ -86,6 +86,9 @@ def get_href(href: str) -> dataclass:
 
 
 def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
+    if __indexer__.__items__ is None:
+        return []
+    
     return [v.item for k, v in __indexer__.__items__.items()
             if k.startswith(href_prefix) and v.item is not None]
 

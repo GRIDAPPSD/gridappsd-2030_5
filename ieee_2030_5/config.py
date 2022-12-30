@@ -40,9 +40,7 @@ class DeviceConfiguration:
     poll_rate: int = 900
     # TODO: Direct control means that only one FSA will be available to the client.
     direct_control: bool = True
-    fsa_list: Optional[List[Dict]] = None
-    DefaultDERControl: Optional[DefaultDERControl] = None
-
+        
     @classmethod
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
@@ -60,7 +58,28 @@ class GridappsdConfiguration:
     feeder_id: Optional[str] = None
     simulation_id_file: Optional[str] = None
     simulation_id: Optional[str] = None
+    
+# @dataclass
+# class ControlDefaults:
+#     setESDelay: Optional[Int]
+#     setESHighFreq: UInt16 [0..1]
+#     setESHighVolt: Int16 [0..1]
+#     setESLowFreq: UInt16 [0..1]
+#     setESLowVolt: Int16 [0..1]
+#     setESRampTms: UInt32 [0..1]
+#     setESRandomDelay: UInt32 [0..1]
+#     setGradW: UInt16 [0..1]
+#     setSoftGradW: UInt16 [0..1]
 
+# @dataclass
+# class Program:
+#     description: str
+#     mRID: Optional[str]
+
+# @dataclass
+# class Control:
+#     description: str
+#     mRID: Optional[str]
 
 @dataclass
 class ProgramList:
@@ -73,29 +92,36 @@ class ServerConfiguration:
     openssl_cnf: str
     # Can include ip address as well
     server_hostname: str
-    server_mode: Union[Literal["enddevices_create_on_start"],
-                       Literal["enddevices_register_access_only"]]
-
-    DERControlListFile: str
-    DERProgramListFile: str
-    DERCurveListFile: str
+    
     devices: List[DeviceConfiguration]
 
     tls_repository: str
     openssl_cnf: str
+    
+    
+    server_mode: Union[Literal["enddevices_create_on_start"],
+                       Literal["enddevices_register_access_only"]] = "enddevices_register_access_only"
 
-    # map into program_lists array for programs for specific
-    # named list.
-    programs_map: Dict[str, int] = field(default_factory=dict)
-    program_lists: List[ProgramList] = field(default_factory=list)
-    fsa_list: List[FunctionSetAssignments] = field(default_factory=list)
-    curve_list: List[DERCurve] = field(default_factory=list)
 
-    debug_device: Optional[str] = None
+    lfdi_mode: Union[Literal["lfdi_mod_from_file"], 
+                     Literal["lfdi_mod_from_cert_fingerprint"]] = "lfdi_mod_from_cert_fingerprint"
+    
+    programs: List[Dict] = field(default_factory=list)
+    controls: List[Dict] = field(default_factory=list)
+    curves: List[Dict] = field(default_factory=list)
+    events: List[Dict] = field(default_factory=list)
+
+    # # map into program_lists array for programs for specific
+    # # named list.
+    # programs_map: Dict[str, int] = field(default_factory=dict)
+    # program_lists: List[ProgramList] = field(default_factory=list)
+    # fsa_list: List[FunctionSetAssignments] = field(default_factory=list)
+    # curve_list: List[DERCurve] = field(default_factory=list)
+
     proxy_hostname: Optional[str] = None
     gridappsd: Optional[GridappsdConfiguration] = None
-    DefaultDERControl: Optional[DefaultDERControl] = None
-    DERControlList: Optional[DERControl] = field(default=list)
+    # DefaultDERControl: Optional[DefaultDERControl] = None
+    # DERControlList: Optional[DERControl] = field(default=list)
 
     @classmethod
     def from_dict(cls, env):
@@ -106,13 +132,13 @@ class ServerConfiguration:
         for d in self.devices:
             d.device_category_type = eval(f"DeviceCategoryType.{d.device_category_type}")
 
-        der_controls, der_default_control = None, None
-        if self.DERControlListFile:
-            der_controls, der_default_control = DERControlAdapter.load_from_yaml_file(self.DERControlListFile)
+        # der_controls, der_default_control = None, None
+        # if self.DERControlListFile:
+        #     der_controls, der_default_control = DERControlAdapter.load_from_yaml_file(self.DERControlListFile)
 
-        temp_program_list = self.program_lists
-        if isinstance(self.program_lists, str):
-            temp_program_list = yaml.safe_load(Path(self.program_lists).read_text())
+        # temp_program_list = self.program_lists
+        # if isinstance(self.program_lists, str):
+        #     temp_program_list = yaml.safe_load(Path(self.program_lists).read_text())
 
         # self.program_lists = []
         # for program_list in temp_program_list['program_lists']:
@@ -177,14 +203,6 @@ class ServerConfiguration:
                 _log.info("no simulation id")
             _log.info("x" * 80)
 
-        if self.debug_device:
-            found = False
-            for d in self.devices:
-                if self.debug_device == d.id:
-                    found = True
-                    break
-            if not found:
-                raise ValueError("debug_device must be one of the devices available.")
         # if self.field_bus_config:
         #     self.field_bus_def = MessageBusDefinition.load(self.field_bus_config)
 

@@ -1,27 +1,40 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import uuid
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any, Optional
 
+import typing
 import yaml
 
 from ieee_2030_5 import hrefs
-from ieee_2030_5.data.indexer import add_href, get_href_filtered
+from ieee_2030_5.data.indexer import add_href, get_href_filtered, get_href
 import ieee_2030_5.models as m
 from ieee_2030_5.types_ import StrPath
 
+_log = logging.getLogger(__name__)
 
 class InvalidConfigFile(Exception):
     pass
 
 
-def __populate_from_kwargs__(obj: dataclasses.dataclass, **kwargs):
+def __populate_from_kwargs__(obj: dataclasses.dataclass, **kwargs) -> Dict[str, Any]:
     for k in dataclasses.fields(obj):
         if k.name in kwargs:
-            setattr(obj, k.name, kwargs[k.name])
+            type_eval = eval(k.type)
+
+            if typing.get_args(type_eval) is typing.get_args(Optional[int]):
+                setattr(obj, k.name, int(kwargs[k.name]))
+            elif typing.get_args(k.type) is typing.get_args(Optional[bool]):
+                setattr(obj, k.name, bool(kwargs[k.name]))
+            # elif bytes in args:
+            #     setattr(obj, k.name, bytes(kwargs[k.name]))
+            else:
+                setattr(obj, k.name, kwargs[k.name])
             kwargs.pop(k.name)
+    return kwargs
 
 
 class BaseAdapter:
@@ -33,13 +46,34 @@ class BaseAdapter:
     def build(**kwargs) -> dataclasses.dataclass:
         raise NotImplementedError()
 
+    @staticmethod
+    def get_by_href(href: str) -> dataclasses.dataclass:
+        return get_href(href)
+
+    @staticmethod
+    def get_next_index() -> int:
+        raise NotImplementedError()
+
+    @staticmethod
+    def store(value: dataclasses.dataclass) -> dataclasses.dataclass:
+        raise NotImplementedError()
+
 
 class EndDeviceAdapter(BaseAdapter):
     __count__: int = 0
 
     @staticmethod
+    def initialize(programs: List):
+        EndDeviceAdapter.initialize_from_storage()
+        stored_devices = EndDeviceAdapter.get_all()
+        
+        for program in programs:
+            _log.debug(f"Config program\n{program}")
+        
+        
+    @staticmethod
     def initialize_from_storage():
-        hrefs_found = get_href_filtered(hrefs.get_program_href(-1))
+        hrefs_found = get_href_filtered(hrefs.get_enddevice_href(-1))
         EndDeviceAdapter.__count__ = len(hrefs_found)
 
     @staticmethod
@@ -48,24 +82,90 @@ class EndDeviceAdapter(BaseAdapter):
         __populate_from_kwargs__(ed, **kwargs)
         return ed
 
+    @staticmethod
+    def get_by_index(index: int) -> m.EndDevice:
+        return get_href(hrefs.get_enddevice_href(index))
+
+    @staticmethod
+    def get_next_index() -> int:
+        return EndDeviceAdapter.__count__
+
+    @staticmethod
+    def get_next_href() -> str:
+        return hrefs.get_enddevice_href(EndDeviceAdapter.get_next_index())
+
+    @staticmethod
+    def store(value: m.EndDevice) -> m.EndDevice:
+        if not value.href:
+            value.href = EndDeviceAdapter.get_next_href()
+        add_href(value.href, value)
+        return value
+    
+    @staticmethod
+    def get_all() -> List[m.EndDevice]:
+        return get_href_filtered(hrefs.get_enddevice_href(-1))
 
 class DERProgramAdapter(BaseAdapter):
     __count__ = 0
 
+    @staticmethod
+    def initialize(programs: List):
+        DERProgramAdapter.initialize_from_storage()
+        
     @staticmethod
     def initialize_from_storage():
         hrefs_found = get_href_filtered(hrefs.get_program_href(-1))
         DERProgramAdapter.__count__ = len(hrefs_found)
 
     @staticmethod
-    def build_der_program(**kwargs) -> m.DERProgram:
+    def build(**kwargs) -> m.DERProgram:
+        """ Build a DERProgram from the passed kwargs
+
+        kwarg variables:
+            der_control_checked<int> - will be passed with the value of the href for the checked control.
+            default_der_control - Is the default der control that should be used when no controls are active.
+        """
         program = m.DERProgram()
+
+        kwargs = __populate_from_kwargs__(program, **kwargs)
+
+        href_default = kwargs.pop('default_der_control', None)
+        hrefs_controls = [kwargs[k] for k in kwargs if k.startswith('der_control_checked')]
+
+        program.DefaultDERControlLink = m.DefaultDERControlLink(href=href_default)
+        # m.DERControlList
+        program.DERControlListLink = hrefs.get_program_href()
 
         return program
 
 
 class DERControlAdapter(BaseAdapter):
     __count__ = 0
+    
+    @staticmethod
+    def initialize(config: List[Any]):
+        DERControlAdapter.initialize_from_storage()
+        
+        stored_controls, stored_default = DERControlAdapter.get_all()
+        
+        for ctl in config:
+            stored_ctl = None
+            for found in stored_controls:
+                if ctl['description'] == found.description:
+                    _log.debug("Found description")
+                    stored_ctl = found
+                    break
+            if stored_ctl:
+                _log.debug("Do stuff with stored ctl")
+            else:
+                # Create a new DERControl and DERControlBase and initialize as much as possible
+                control = m.DERControl()
+                base_control = m.DERControlBase()
+                control.DERControlBase = base_control
+                if "base" in ctl:
+                    for k, v in ctl["base"].items():
+                        setattr(base_control, k, v)
+                    del ctl["base"]
 
     @staticmethod
     def initialize_from_storage():
