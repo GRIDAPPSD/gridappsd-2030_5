@@ -1,22 +1,22 @@
 from __future__ import annotations
 
+import atexit
 import logging
+import ssl
 import threading
+import xml.dom.minidom
 from http.client import HTTPSConnection
 from os import PathLike
 from pathlib import Path
-import ssl
-import atexit
-from typing import Optional, Dict, Tuple
-import xml.dom.minidom
 from threading import Timer
+from typing import Dict, Optional, Tuple
 
 import werkzeug.middleware.lint
 import xsdata
 
-# import ieee_2030_5.models as m
-# import ieee_2030_5.utils as u
-# import ieee_2030_5.utils.tls_wrapper as tls
+import ieee_2030_5.models as m
+import ieee_2030_5.utils as utils
+import ieee_2030_5.utils.tls_wrapper as tls
 
 _log = logging.getLogger(__name__)
 
@@ -78,9 +78,9 @@ class IEEE2030_5_Client:
         return self._http_conn
 
     def register_end_device(self) -> str:
-        lfid = u.get_lfdi_from_cert(self._cert)
-        sfid = u.get_sfdi_from_lfdi(lfid)
-        response = self.__post__(dcap.EndDeviceListLink.href, data=u.dataclass_to_xml(m.EndDevice(sFDI=sfid)))
+        lfid = utils.get_lfdi_from_cert(self._cert)
+        sfid = utils.get_sfdi_from_lfdi(lfid)
+        response = self.__post__(dcap.EndDeviceListLink.href, data=utils.dataclass_to_xml(m.EndDevice(sFDI=sfid)))
         print(response)
 
         if response.status in (200, 201):
@@ -211,7 +211,7 @@ class IEEE2030_5_Client:
 
         response_obj = None
         try:
-            response_obj = u.xml_to_dataclass(response_data)
+            response_obj = utils.xml_to_dataclass(response_data)
             resp_xml = xml.dom.minidom.parseString(response_data)
             if resp_xml and self._debug:
                 print(f"<---- GET RESPONSE")

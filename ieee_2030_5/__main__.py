@@ -179,6 +179,7 @@ def _main():
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
 
+    # Initialize the repository of 2030.5 devices.
     end_devices = initialize_2030_5(config, tls_repo)
 
     if not opts.production:

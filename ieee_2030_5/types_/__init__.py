@@ -10,7 +10,7 @@ PathStr = Union[Path, str]
 StrPath = PathStr
 TimeType = int
 TimeOffsetType = int
-Lfdi = bytes
+Lfdi = str
 
 SEP_XML = "application/sep+xml"
 

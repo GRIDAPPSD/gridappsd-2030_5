@@ -19,7 +19,7 @@ _log = logging.getLogger(__name__)
 
 def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
     fp = fingerprint.replace(":", "")
-    return Lfdi(fp[:40].encode('ascii'))
+    return Lfdi(fp[:40])
 
 
 def sfdi_from_lfdi(lfdi: Lfdi) -> int:
@@ -166,6 +166,7 @@ class TLSRepository:
             value = value.replace(":", "")
         if "=" in value:
             value = value.split("=")[1]
+        assert isinstance(value, str)
         return value
 
     def get_common_name(self, device_id: str) -> x509:
