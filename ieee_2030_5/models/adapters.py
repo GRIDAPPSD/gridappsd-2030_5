@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import datetime, timezone
 import logging
 import uuid
 from pathlib import Path
@@ -10,9 +11,10 @@ import typing
 import yaml
 
 from ieee_2030_5 import hrefs
+import ieee_2030_5.config as cfg
 from ieee_2030_5.data.indexer import add_href, get_href_filtered, get_href
 import ieee_2030_5.models as m
-from ieee_2030_5.types_ import StrPath
+from ieee_2030_5.types_ import StrPath, format_time
 
 _log = logging.getLogger(__name__)
 
@@ -49,6 +51,10 @@ class BaseAdapter:
     @staticmethod
     def get_by_href(href: str) -> dataclasses.dataclass:
         return get_href(href)
+    
+    @staticmethod
+    def get_index(data: dataclasses.dataclass):
+        raise NotImplemented()
 
     @staticmethod
     def get_next_index() -> int:
@@ -57,18 +63,20 @@ class BaseAdapter:
     @staticmethod
     def store(value: dataclasses.dataclass) -> dataclasses.dataclass:
         raise NotImplementedError()
-
+    
 
 class EndDeviceAdapter(BaseAdapter):
     __count__: int = 0
+    __config_devices__: Dict[str, cfg.DeviceConfiguration] = {}
 
     @staticmethod
-    def initialize(programs: List):
+    def initialize(devices: List):
         EndDeviceAdapter.initialize_from_storage()
         stored_devices = EndDeviceAdapter.get_all()
         
-        for program in programs:
-            _log.debug(f"Config program\n{program}")
+        for device in devices:
+            EndDeviceAdapter.__config_devices__[device.id] = device
+            _log.debug(f"Config program\n{device}")
         
         
     @staticmethod
@@ -81,6 +89,15 @@ class EndDeviceAdapter(BaseAdapter):
         ed = m.EndDevice()
         __populate_from_kwargs__(ed, **kwargs)
         return ed
+    
+    @staticmethod
+    def get_index(end_device: m.EndDevices) -> int:
+        for i in range(EndDeviceAdapter.__count__ + 1):
+            if end_device.href == hrefs.get_enddevice_href(i):
+                return i
+        
+        raise KeyError(f"End device not found for {end_device.href}")
+    
 
     @staticmethod
     def get_by_index(index: int) -> m.EndDevice:
@@ -95,9 +112,24 @@ class EndDeviceAdapter(BaseAdapter):
         return hrefs.get_enddevice_href(EndDeviceAdapter.get_next_index())
 
     @staticmethod
-    def store(value: m.EndDevice) -> m.EndDevice:
+    def store(device_id: str, value: m.EndDevice) -> m.EndDevice:
+        """Store the end device into temporary/permanant storage.
+        
+        The device_id is necessary to map the configured device into the linked registration
+        
+        This function will add the href and registration link to the end device.  
+        
+        """
         if not value.href:
             value.href = EndDeviceAdapter.get_next_href()
+        if not value.RegistrationLink:
+            reg_time = datetime.now(timezone.utc)
+            mreg = m.Registration(href=hrefs.get_registration_href(EndDeviceAdapter.get_index(value)),
+                                  pIN=EndDeviceAdapter.__config_devices__[device_id].pin,
+                                  dateTimeRegistered=format_time(reg_time))
+            add_href(mreg.href, mreg)
+            value.RegistrationLink = m.RegistrationLink(mreg.href)
+            
         add_href(value.href, value)
         return value
     

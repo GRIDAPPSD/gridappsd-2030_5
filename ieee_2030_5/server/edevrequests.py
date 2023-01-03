@@ -52,7 +52,7 @@ class EDevRequests(RequestOp):
         if not request.data:
             raise werkzeug.exceptions.Forbidden()
         
-        ed = xml_to_dataclass(request.data.decode('utf-8'))
+        ed: m.EndDevice = xml_to_dataclass(request.data.decode('utf-8'))
 
         if not isinstance(ed, m.EndDevice):
             raise werkzeug.exceptions.Forbidden()
@@ -65,10 +65,10 @@ class EDevRequests(RequestOp):
         if end_device := self._end_devices.get_device_by_lfdi(ed.lFDI):
             status = 200
             ed_href = end_device.href
-        else:
+        else:            
             if not ed.href:
-                ed = adpt.EndDeviceAdapter.store(ed)
-
+                ed = adpt.EndDeviceAdapter.store(device_id, ed)
+                  
             ed_href = self._end_devices.add_end_device(ed)
             status = 201
 
@@ -93,11 +93,9 @@ class EDevRequests(RequestOp):
         # top level /edev should return specific end device list based upon
         # the lfdi of the connection.
         if pth == hrefs.DEFAULT_EDEV_ROOT:
-            retval = self._end_devices.get_end_device_list(self.lfdi)
-            #retval.EndDevice[0].lFDI = retval.EndDevice[0].lFDI
+            retval = self._end_devices.get_end_device_list(self.lfdi)            
         else:
             retval = get_href(pth)
-            #retval.lFDI = retval.lFDI.decode('utf-8')
         return self.build_response_from_dataclass(retval)
 
 

@@ -352,7 +352,8 @@ class EndDevices:
         new_id = self.__next_id__()
         self.__all_end_devices__[new_id] = end_device
         self._lfdi_index_map[end_device.lFDI] = new_id
-        end_device.href = hrefs.get_enddevice_href(new_id)
+        if not end_device.href:
+            end_device.href = hrefs.get_enddevice_href(new_id)
         add_href(end_device.href, end_device)
         return end_device.href
 
