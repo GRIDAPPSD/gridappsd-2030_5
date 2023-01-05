@@ -26,6 +26,9 @@ DEFAULT_PROGRAM_ROOT = f"/{PROGRAM}"
 SEP = "_"
 MATCH_REG = "[a-zA-Z0-9_]*"
 
+# Used as a sentinal value when we only want the href of the root 
+NO_INDEX = -1
+
 
 @lru_cache()
 def get_enddevice_list_href() -> str:
@@ -53,9 +56,11 @@ def get_fsa_list_href(end_device_href: str) -> str:
 
 
 @lru_cache()
-def get_enddevice_href(index: int) -> str:
-    if index == -1:
+def get_enddevice_href(index: int, subref: str = None) -> str:
+    if index == NO_INDEX:
         ret = DEFAULT_EDEV_ROOT
+    elif subref:
+        ret = SEP.join([DEFAULT_EDEV_ROOT, f"{index}", f"{subref}"])
     else:
         ret = SEP.join([DEFAULT_EDEV_ROOT, f"{index}"])
     return ret
@@ -88,9 +93,9 @@ def get_derc_default_href():
 def get_derc_href(index: int) -> str:
     """Return the DERControl href to the caller
 
-    if -1 then don't include the index in the result.
+    if NO_INDEX then don't include the index in the result.
     """
-    if index == -1:
+    if index == NO_INDEX:
         return f"{DER}{SEP}/derc"
     return f"{DER}{SEP}/derc/{index}"
 
@@ -99,10 +104,10 @@ def get_program_href(index: int, subref: str = None):
     """Return the DERProgram href to the caller
 
     Args:
-        index: if -1 then don't include the index in the result else use the index
+        index: if NO_INDEX then don't include the index in the result else use the index
         subref: used to specify a subsection in the program.
     """
-    if index == -1:
+    if index == NO_INDEX:
         ref = f"{DEFAULT_PROGRAM_ROOT}"
     else:
         if subref is not None:
@@ -110,6 +115,8 @@ def get_program_href(index: int, subref: str = None):
         else:
             ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}"
     return ref
+
+
 
 # TimeLink
 # tm: str = f"{DEFAULT_DCAP_ROOT}{SEP}tm"
