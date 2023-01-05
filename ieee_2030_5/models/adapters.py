@@ -1,29 +1,31 @@
 from __future__ import annotations
 
-import dataclasses
-from datetime import datetime, timezone
+from dataclasses import dataclass, fields, field
 import logging
-import uuid
-from pathlib import Path
-from typing import List, Tuple, Dict, Any, Optional
-
 import typing
-import yaml
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from ieee_2030_5 import hrefs
+import yaml
+from ieee_2030_5.certs import TLSRepository
+
 import ieee_2030_5.config as cfg
-from ieee_2030_5.data.indexer import add_href, get_href_filtered, get_href
 import ieee_2030_5.models as m
+from ieee_2030_5 import hrefs
+from ieee_2030_5.data.indexer import add_href, get_href, get_href_filtered
 from ieee_2030_5.types_ import StrPath, format_time
 
 _log = logging.getLogger(__name__)
+
 
 class InvalidConfigFile(Exception):
     pass
 
 
-def __populate_from_kwargs__(obj: dataclasses.dataclass, **kwargs) -> Dict[str, Any]:
-    for k in dataclasses.fields(obj):
+def __populate_from_kwargs__(obj: dataclass, **kwargs) -> Dict[str, Any]:
+    for k in fields(obj):
         if k.name in kwargs:
             type_eval = eval(k.type)
 
@@ -40,20 +42,37 @@ def __populate_from_kwargs__(obj: dataclasses.dataclass, **kwargs) -> Dict[str, 
 
 
 class BaseAdapter:
+    
+    __server_configuration__: cfg.ServerConfiguration
+    __device_configurations__: List[cfg.DeviceConfiguration] = None
+    __tls_repository__: List[cfg.TLSRepository] = None
+    
     @staticmethod
-    def initialize_from_storage():
+    def is_initialized():
+        return BaseAdapter.__device_configurations__ is not None and BaseAdapter.__tls_repository__ is not None
+    
+    @staticmethod
+    def initialize(server_config: cfg.ServerConfiguration, tlsrepo: TLSRepository):
+        BaseAdapter.__server_configuration__ = server_config
+        BaseAdapter.__device_configurations__ = server_config.devices
+        BaseAdapter.__tls_repository__ = tlsrepo
+        
+        DERCurveAdapter.initialize()
+        DERControlAdapter.initialize()
+        DERProgramAdapter.initialize()
+        EndDeviceAdapter.initialize()
+        #DeviceCapabilityAdapter.initialize()
+
+    @staticmethod
+    def build(**kwargs) -> dataclass:
         raise NotImplementedError()
 
     @staticmethod
-    def build(**kwargs) -> dataclasses.dataclass:
-        raise NotImplementedError()
-
-    @staticmethod
-    def get_by_href(href: str) -> dataclasses.dataclass:
+    def get_by_href(href: str) -> dataclass:
         return get_href(href)
     
     @staticmethod
-    def get_index(data: dataclasses.dataclass):
+    def get_index(data: dataclass):
         raise NotImplemented()
 
     @staticmethod
@@ -61,27 +80,89 @@ class BaseAdapter:
         raise NotImplementedError()
 
     @staticmethod
-    def store(value: dataclasses.dataclass) -> dataclasses.dataclass:
+    def store(value: dataclass) -> dataclass:
         raise NotImplementedError()
-    
+
+
+class DeviceCapabilityAdapter(BaseAdapter):
+    pass
 
 class EndDeviceAdapter(BaseAdapter):
     __count__: int = 0
     __config_devices__: Dict[str, cfg.DeviceConfiguration] = {}
 
     @staticmethod
-    def initialize(devices: List):
-        EndDeviceAdapter.initialize_from_storage()
-        stored_devices = EndDeviceAdapter.get_all()
+    def initialize():
+        """ Intializes the following based upon the device configuration and the tlsrepository.
         
-        for device in devices:
-            EndDeviceAdapter.__config_devices__[device.id] = device
-            _log.debug(f"Config program\n{device}")
+        Each EndDevice will have the following sub-components initialized:
+        - PowerStatus - PowerStatusLink
+        - DeviceStatus - DeviceStatusLink
+        - Registration - RegistrationLink
+        - MessagingProgramList - MessagingProgramListLink
+        - Log
+        Either FSA or DemandResponseProgram
+        - DemandResponseProgram - DemandResponseProgramListLink
+        
+        
+        As well as the following properties
+        - changedTime - Current time of initialization
+        - sFDI - The short form of the certificate for the system.
+        """
+        # assert EndDeviceAdapter.__tls_repository__ is not None
+        # EndDeviceAdapter.initialize_from_storage()
+        # programs = DERProgramAdapter.get_all()
+        # stored_devices = EndDeviceAdapter.get_all()
+        
+        devices: List[cfg.DeviceConfiguration] = BaseAdapter.__device_configurations__
+        
+        #TODO Fix This!
+        
+        # for index, device in enumerate(devices):
+        #     device: cfg.DeviceConfiguration = device
+        #     EndDeviceAdapter.__config_devices__[device.id] = device
+            
+        #     ed = m.EndDevice()
+            
+        #     ds = m.DeviceStatus(href=hrefs.get_enddevice_href(index, "dstat"))
+        #     # TODO add other stuff to device status
+        #     add_href(ds.href, ds)
+        #     ed.DeviceStatusLink = m.DeviceStatusLink(ds.href)
+            
+        #     ps = m.PowerStatus(href=hrefs.get_enddevice_href(index, "ps"))
+        #     # TODO add other stuff to power status
+        #     add_href(ps.href, ps)
+        #     ed.PowerStatusLink = m.PowerStatusLink(ps.href)
+            
+        #     reg = m.Registration(href=hrefs.get_enddevice_href(index, "reg"))
+        #     reg.pIN = device.pin
+        #     reg.pollRate = device.poll_rate
+        #     add_href(reg.href, reg)        
+        #     ed.RegistrationLink = m.RegistrationLink(reg.href)
+            
+        #     log = m.LogEventList(href=hrefs.get_enddevice_href(index, "log"))
+        #     add_href(log.href, log)
+        #     ed.LogEventListLink = m.LogEventListLink(log.href)
+            
+            # try:
+            #     dev_programs = device['programs']
+            #     drp = m.DemandResponseProgramList(href=hrefs.get_enddevice_href(index, "derp"), all=len(dev_programs))
+            #     for dev_program in dev_programs:
+            #         for program in programs:
+            #             if dev_program['description'] == program.description:
+                            
+            # except KeyError:
+            #     _log.info(f"No programs for device: {device.id}")
+                            
+                            
+                        
+                        
+            # _log.debug(f"Config program\n{device}")
         
         
     @staticmethod
     def initialize_from_storage():
-        hrefs_found = get_href_filtered(hrefs.get_enddevice_href(-1))
+        hrefs_found = get_href_filtered(hrefs.get_enddevice_href(hrefs.NO_INDEX))
         EndDeviceAdapter.__count__ = len(hrefs_found)
 
     @staticmethod
@@ -135,20 +216,57 @@ class EndDeviceAdapter(BaseAdapter):
     
     @staticmethod
     def get_all() -> List[m.EndDevice]:
-        return get_href_filtered(hrefs.get_enddevice_href(-1))
+        return get_href_filtered(hrefs.get_enddevice_href(hrefs.NO_INDEX))
+    
+class DERCurveAdapter(BaseAdapter):
+    __count__ = 0
+    
+    def initialize():
+        if BaseAdapter.__device_configurations__ is None:
+            raise ValueError("Initialize BaseAdapter before initializing the Curves.")
+        
+                  
 
 class DERProgramAdapter(BaseAdapter):
     __count__ = 0
+    # __config_programs__: Dict[str, cfg.DERProgram] = {}
 
     @staticmethod
-    def initialize(programs: List):
-        DERProgramAdapter.initialize_from_storage()
+    def initialize():
         
-    @staticmethod
-    def initialize_from_storage():
-        hrefs_found = get_href_filtered(hrefs.get_program_href(-1))
-        DERProgramAdapter.__count__ = len(hrefs_found)
+        programs = BaseAdapter.__server_configuration__.programs
+        _log.debug("Update m.DERPrograms' adding links to the different program pieces.")
+        # Initialize "global" m.DERPrograms href lists, including all the different links to
+        # locations for active, default, curve and control lists.
+        for index, program_cfg in enumerate(programs):
+            program = m.DERProgram(**program_cfg.__dict__)
+            # program.description = program_cfg.description
+            # program.primacy = program_cfg.primacy
+            # program.version = program_cfg.version
+            
+            # TODO Fix this!
+            # program.mRID = 
+            # mrid = program_cfg.get('mrid')
+            # if mrid is None or len(mrid.trim()) == 0:
+            #     program.mRID = f"program_mrid_{index}"
+            # program_cfg['mrid'] = program.mRID
+            
+            program.href = hrefs.get_program_href(index)
+            program.ActiveDERControlListLink = m.ActiveDERControlListLink(
+                href=hrefs.get_program_href(index, "actderc"), all=0)
+            program.DERCurveListLink = m.DERCurveListLink(
+                href=hrefs.get_program_href(index, "dc"), all=0)
+            program.DefaultDERControlLink = m.DefaultDERControlLink(
+                href=hrefs.get_program_href(index, "dderc"))
+            program.DERControlListLink = m.DERControlListLink(
+                href=hrefs.get_program_href(index, "derc"), all=0)
 
+            add_href(program.href, program)
+            
+    @staticmethod
+    def get_all() -> List:
+        return get_href_filtered(hrefs.get_program_href(hrefs.NO_INDEX))
+        
     @staticmethod
     def build(**kwargs) -> m.DERProgram:
         """ Build a DERProgram from the passed kwargs
@@ -175,33 +293,37 @@ class DERControlAdapter(BaseAdapter):
     __count__ = 0
     
     @staticmethod
-    def initialize(config: List[Any]):
-        DERControlAdapter.initialize_from_storage()
+    def initialize():
+        config = DERControlAdapter.__server_configuration__.controls
         
-        stored_controls, stored_default = DERControlAdapter.get_all()
-        
-        for ctl in config:
+        for index, ctl in enumerate(config):
             stored_ctl = None
-            for found in stored_controls:
-                if ctl['description'] == found.description:
-                    _log.debug("Found description")
-                    stored_ctl = found
-                    break
-            if stored_ctl:
-                _log.debug("Do stuff with stored ctl")
-            else:
-                # Create a new DERControl and DERControlBase and initialize as much as possible
-                control = m.DERControl()
-                base_control = m.DERControlBase()
-                control.DERControlBase = base_control
-                if "base" in ctl:
-                    for k, v in ctl["base"].items():
-                        setattr(base_control, k, v)
-                    del ctl["base"]
+            # for found in stored_controls:
+            #     if ctl['description'] == found.description:
+            #         _log.debug("Found description")
+            #         stored_ctl = found
+            #         break
+            # if stored_ctl:
+            #     _log.debug("Do stuff with stored ctl")
+            # else:
+            # Create a new DERControl and DERControlBase and initialize as much as possible
+            control = m.DERControl()
+            base_control = m.DERControlBase()
+            control.DERControlBase = base_control
+            if hasattr(ctl, "base"):
+                for k, v in getattr(ctl, "base", {}).items():
+                    setattr(base_control, k, v)
+                del ctl["base"]
+            control.href = hrefs.get_derc_href(hrefs.get_derc_href(index))
+            
+            control.mRID = f"dercontrol_{index}" if not hasattr(ctl, "mrid") else getattr(ctl, "mrid")
+            
+            add_href(control.href, control)
+            
 
     @staticmethod
     def initialize_from_storage():
-        dercs_href = hrefs.get_derc_href(-1)
+        dercs_href = hrefs.get_derc_href(hrefs.NO_INDEX)
         der_controls = get_href_filtered(dercs_href)
         DERControlAdapter.__count__ = len(der_controls)
 
@@ -215,12 +337,12 @@ class DERControlAdapter(BaseAdapter):
         control = m.DERControl()
         base_control = m.DERControlBase()
         control.DERControlBase = base_control
-        field_list = dataclasses.fields(control)
+        field_list = fields(control)
         for k, v in kwargs.items():
             for f in field_list:
                 if k == f.name:
                     setattr(control, k, v)
-            for f in dataclasses.fields(base_control):
+            for f in fields(base_control):
                 if k == f.name:
                     setattr(base_control, k, v)
 
@@ -240,13 +362,13 @@ class DERControlAdapter(BaseAdapter):
 
     @staticmethod
     def load_from_storage() -> Tuple[List[m.DERControl], m.DefaultDERControl]:
-        der_controls, default_der_control = get_href_filtered(hrefs.get_derc_href(-1))
+        der_controls, default_der_control = get_href_filtered(hrefs.get_derc_href(hrefs.NO_INDEX))
         return der_controls, default_der_control
 
     @staticmethod
     def get_all() -> Tuple[List[m.DERControl], m.DefaultDERControl]:
         """ Retrieve a list of dataclasses for DERControl for the """
-        der_controls = get_href_filtered(hrefs.get_derc_href(-1))
+        der_controls = get_href_filtered(hrefs.get_derc_href(hrefs.NO_INDEX))
         default_der = get_href_filtered(hrefs.get_derc_default_href())
         return der_controls, default_der
 
@@ -295,7 +417,7 @@ class DERControlAdapter(BaseAdapter):
             if name in derc_names:
                 raise ValueError(f"Duplicate name {name} found in {yaml_file}")
 
-            base_field_names = [fld.name for fld in dataclasses.fields(m.DERControlBase)]
+            base_field_names = [fld.name for fld in fields(m.DERControlBase)]
             base_dict = {ctl: derc[ctl] for ctl in derc if ctl in base_field_names}
             control_fields = {ctl: derc[ctl] for ctl in derc if not ctl in base_dict.keys()}
             control_base = m.DERControlBase(**base_dict)

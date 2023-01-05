@@ -1,4 +1,4 @@
-from ieee_2030_5.models.device_category import DeviceCategoryType
+from ieee_2030_5.models.enums import DeviceCategoryType, CurveType 
 from ieee_2030_5.models.derforecasts import (
     DERFlexibility,
     DERForecast,
@@ -348,6 +348,7 @@ __all__ = [
     "CurrentDERProgramLink",
     "CurrentRMS",
     "CurveData",
+    "CurveType",
     "CustomerAccount",
     "CustomerAccountLink",
     "CustomerAccountList",

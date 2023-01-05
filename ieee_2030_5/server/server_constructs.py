@@ -14,7 +14,7 @@ from ieee_2030_5.certs import TLSRepository, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration, ProgramList
 from ieee_2030_5.data.indexer import add_href, get_href
 import ieee_2030_5.models as m
-from ieee_2030_5.models.adapters import DERControlAdapter, DERProgramAdapter, EndDeviceAdapter
+from ieee_2030_5.models.adapters import DERControlAdapter, DERProgramAdapter, DeviceCapabilityAdapter, EndDeviceAdapter, BaseAdapter
 
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import Lfdi
@@ -130,7 +130,7 @@ def get_groups() -> Dict[GroupLevel, Group]:
     return groups
 
 
-def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> EndDevices:
+def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     """
     Initialize the 2030.5 server side.  After this function call the following items
     will be initialized.
@@ -143,60 +143,44 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository) -> En
     _log.debug("Initializing 2030.5")
     _log.debug("Adding server level urls to cache")
     
-    DERControlAdapter.initialize(config.controls)
-    DERProgramAdapter.initialize(config.programs)
-    EndDeviceAdapter.initialize(config.devices)
+    # start intializing the system 
+    BaseAdapter.initialize(config, tlsrepo)
     
-    # DERControlAdapter.initialize_from_storage()
-    add_href(hrefs.get_time_href(), m.TimeLink(href=hrefs.get_time_href()))
-    add_href(hrefs.get_enddevice_list_href(), m.EndDeviceListLink(hrefs.get_enddevice_list_href()))
+    
+    
+    # # DERControlAdapter.initialize_from_storage()
+    # add_href(hrefs.get_time_href(), m.TimeLink(href=hrefs.get_time_href()))
+    # add_href(hrefs.get_enddevice_list_href(), m.EndDeviceListLink(hrefs.get_enddevice_list_href()))
 
-    _log.debug("Update DERCurves' href property")
-    # Create curves for der controls.
-    for index, curve in enumerate(config.curves):
-        curve.href = hrefs.get_curve_href(index)
-        add_href(curve.href, curve)
+    # _log.debug("Update DERCurves' href property")
+    # # Create curves for der controls.
+    # for index, curve in enumerate(config.curves):
+    #     curve.href = hrefs.get_curve_href(index)
+    #     add_href(curve.href, curve)
+        
+    # _log.debug("Registering EndDevices")
+    # end_devices = EndDevices()
+    # # Initialize all the enddevices on startup or load them
+    # # from storage if available
+    # if config.server_mode == "enddevices_create_on_start":
+    #     # TODO load from storage if available.
+    #     for device_config in config.devices:
+    #         end_devices.initialize_device(device_config=device_config,
+    #                                       lfdi=tlsrepo.lfdi(device_config.id),
+    #                                       program_lists=config.programs)
+    #         if device_config.fsa_list:
+    #             for fsa in device_config.fsa_list:
+    #                 print(fsa)
+    #         print(end_devices.__all_end_devices__)
 
-    _log.debug("Update m.DERPrograms' adding links to the different program pieces.")
-    # Initialize "global" m.DERPrograms href lists, including all the different links to
-    # locations for active, default, curve and control lists.
-    for index, program_cfg in enumerate(config.programs):
-        program = m.DERProgram()
-        program.href = hrefs.get_program_href(index)
-        program.ActiveDERControlListLink = m.ActiveDERControlListLink(
-            href=hrefs.get_program_href(index, "actderc"), all=0)
-        program.DERCurveListLink = m.DERCurveListLink(
-            href=hrefs.get_program_href(index, "dc"), all=0)
-        program.DefaultDERControlLink = m.DefaultDERControlLink(
-            href=hrefs.get_program_href(index, "dderc"))
-        program.DERControlListLink = m.DERControlListLink(
-            href=hrefs.get_program_href(index, "derc"), all=0)
+    # else:
+    #     # Initialize allowed connection only.
+    #     for cfg in config.devices:
+    #         lfdi = tlsrepo.lfdi(cfg.id)
+    #         _log.debug(f"FOR dev_id: {cfg.id} LFDI is {lfdi}")
+    #         end_devices.add_connectable(lfdi=tlsrepo.lfdi(cfg.id))
 
-        add_href(program.href, program)
-
-    _log.debug("Registering EndDevices")
-    end_devices = EndDevices()
-    # Initialize all the enddevices on startup or load them
-    # from storage if available
-    if config.server_mode == "enddevices_create_on_start":
-        # TODO load from storage if available.
-        for device_config in config.devices:
-            end_devices.initialize_device(device_config=device_config,
-                                          lfdi=tlsrepo.lfdi(device_config.id),
-                                          program_lists=config.program_lists)
-            if device_config.fsa_list:
-                for fsa in device_config.fsa_list:
-                    print(fsa)
-            print(end_devices.__all_end_devices__)
-
-    else:
-        # Initialize allowed connection only.
-        for cfg in config.devices:
-            lfdi = tlsrepo.lfdi(cfg.id)
-            _log.debug(f"FOR dev_id: {cfg.id} LFDI is {lfdi}")
-            end_devices.add_connectable(lfdi=tlsrepo.lfdi(cfg.id))
-
-    return end_devices
+    # return end_devices
 
 
 @dataclass
@@ -383,7 +367,7 @@ class EndDevices:
         enddevice_href = hrefs.get_enddevice_href(new_dev_number)
         end_device = m.EndDevice(
             href=enddevice_href,
-            deviceCategory=device_config.device_category_type.value,
+            deviceCategory=device_config.deviceCategory,
             lFDI=lfdi,
             sFDI=sfdi_from_lfdi(lfdi),
             RegistrationLink=m.RegistrationLink(hrefs.get_registration_href(new_dev_number)),

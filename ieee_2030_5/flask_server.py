@@ -145,8 +145,7 @@ def __build_ssl_context__(tlsrepo: TLSRepository) -> ssl.SSLContext:
     return ssl_context
 
 
-def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
-                  enddevices: EndDevices) -> Flask:
+def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath('templates')))
 
     # Debug headers path and request arguments
@@ -155,8 +154,8 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
     app.before_request(handle_chunking)
     app.after_request(after_request)
 
-    ServerEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
-    AdminEndpoints(app, end_devices=enddevices, tls_repo=tlsrepo, config=config)
+    ServerEndpoints(app, tls_repo=tlsrepo, config=config)
+    AdminEndpoints(app, tls_repo=tlsrepo, config=config)
 
     # now we get into the regular Flask details, except we're passing in the peer certificate
     # as a variable to the template.
@@ -252,7 +251,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository,
 def run_server(config: ServerConfiguration,
                tlsrepo: TLSRepository,
                enddevices: EndDevices, **kwargs):
-    app = __build_app__(config, tlsrepo, enddevices)
+    app = __build_app__(config, tlsrepo)
     ssl_context = __build_ssl_context__(tlsrepo)
 
     try:
@@ -274,7 +273,7 @@ def build_server(config: ServerConfiguration,
                  tlsrepo: TLSRepository,
                  enddevices: EndDevices, **kwargs) -> BaseWSGIServer:
 
-    app = __build_app__(config, tlsrepo, enddevices)
+    app = __build_app__(config, tlsrepo)
     ssl_context = __build_ssl_context__(tlsrepo)
 
     try:

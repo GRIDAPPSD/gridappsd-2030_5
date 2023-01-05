@@ -8,8 +8,7 @@ from ieee_2030_5.server.server_constructs import EndDevices
 
 
 class AdminEndpoints:
-    def __init__(self, app: Flask, end_devices: EndDevices, tls_repo: TLSRepository, config: ServerConfiguration):
-        self.end_devices = end_devices
+    def __init__(self, app: Flask, tls_repo: TLSRepository, config: ServerConfiguration):
         self.tls_repo = tls_repo
         self.server_config = config
 
