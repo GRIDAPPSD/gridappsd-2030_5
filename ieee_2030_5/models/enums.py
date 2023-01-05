@@ -1,6 +1,41 @@
 from enum import IntEnum
 
 
+class CurveType(IntEnum):
+    # 0 - opModFreqWatt (Frequency-Watt Curve Mode)
+    # 1 - opModHFRTMayTrip (High Frequency Ride Through, May Trip Mode)
+    # 2 - opModHFRTMustTrip (High Frequency Ride Through, Must Trip Mode)
+    # 3 - opModHVRTMayTrip (High Voltage Ride Through, May Trip Mode)
+    # 4 - opModHVRTMomentaryCessation (High Voltage Ride Through, Momentary Cessation
+    # Mode)
+    # 5 - opModHVRTMustTrip (High Voltage Ride Through, Must Trip Mode)
+    # 6 - opModLFRTMayTrip (Low Frequency Ride Through, May Trip Mode)
+    # 7 - opModLFRTMustTrip (Low Frequency Ride Through, Must Trip Mode)
+    # 8 - opModLVRTMayTrip (Low Voltage Ride Through, May Trip Mode)
+    # 9 - opModLVRTMomentaryCessation (Low Voltage Ride Through, Momentary Cessation
+    # Mode)
+    # 10 - opModLVRTMustTrip (Low Voltage Ride Through, Must Trip Mode)
+    # 11 - opModVoltVar (Volt-Var Mode)
+    # 12 - opModVoltWatt (Volt-Watt Mode)
+    # 13 - opModWattPF (Watt-PowerFactor Mode)
+    # 14 - opModWattVar (Watt-Var Mode)
+    opModFreqWatt = 0
+    opModHFRTMayTrip = 1
+    opModHFRTMustTrip = 2
+    opModHVRTMayTrip = 3
+    opModHVRTMomentaryCessation = 4
+    opModHVRTMustTrip = 5
+    opModLFRTMayTrip = 6
+    opModLFRTMustTrip = 7
+    opModLVRTMayTrip = 8
+    opModLVRTMomentaryCessation = 9
+    opModLVRTMustTrip = 10
+    opModVoltVar = 11
+    opModVoltWatt = 12
+    opModWattPF = 13
+    opModWattVar = 14
+
+
 class DeviceCategoryType(IntEnum):
     """
     DeviceCategoryType defined from 20305-2018_IIEStandardforSmartEnergyProfileApplicationsProtocol.pdf Appendix
@@ -18,7 +53,7 @@ class DeviceCategoryType(IntEnum):
     SMART_APPLIANCE = 7
     IRRIGATION_PUMP = 8
     MANAGED_COMMERCIAL_AND_INDUSTRIAL_LOADS = 9
-    SIMPLE_RESIDENTIAL_LOADS = 10   # On/Off loads
+    SIMPLE_RESIDENTIAL_LOADS = 10    # On/Off loads
     EXTERIOR_LIGHTING = 11
     INTERIOR_LIGHTING = 12
     LOAD_CONTROL_SWITCH = 13
@@ -27,9 +62,9 @@ class DeviceCategoryType(IntEnum):
     ELECTRIC_VEHICLE = 16
     ELECTRIC_VEHICLE_SUPPLY_EQUIPMENT = 17
     VIRTUAL_OR_MIXED_DER = 18
-    RECIPROCATING_ENGINE = 19  # Synchronous Machine
-    FUEL_CELL = 20  # Battery
-    PHOTOVOLTAIC_SYSTEM = 21  # Solar
+    RECIPROCATING_ENGINE = 19    # Synchronous Machine
+    FUEL_CELL = 20    # Battery
+    PHOTOVOLTAIC_SYSTEM = 21    # Solar
     COMBINED_HEAT_AND_POWER = 22
     COMBINED_PV_AND_STORAGE = 23
     OTHER_GENERATION_SYSTEMS = 24
