@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import sys
 from dataclasses import dataclass, field
-import logging
 from pathlib import Path
-from typing import List, Literal, Union, Optional, Dict, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import yaml
 from dataclasses_json import dataclass_json
@@ -19,34 +19,79 @@ try:
 except ImportError as ex:
     pass
 
+import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models import DeviceCategoryType, DERProgram, DERCurve, DefaultDERControl, DERControlBase, CurveData, \
-    FunctionSetAssignments, DERControl
-from ieee_2030_5.types_ import Lfdi
-
 from ieee_2030_5.server.exceptions import NotFoundError
-
+from ieee_2030_5.types_ import Lfdi
 
 _log = logging.getLogger(__name__)
 
 
 @dataclass
-class DeviceConfiguration:
-    id: str
-    device_category_type: DeviceCategoryType
-    pin: int
-    hostname: str = None
-    ip: str = None
-    poll_rate: int = 900
-    # TODO: Direct control means that only one FSA will be available to the client.
-    direct_control: bool = True
-        
+class DeviceConfiguration(m.EndDevice):
+    # This id will be used to create certificates. 
+    id: str = None
+    
+    # device_category_type: m.DeviceCategoryType
+    # pin: int
+    # hostname: str = None
+    # ip: str = None
+    # poll_rate: int = 900
+    # # TODO: Direct control means that only one FSA will be available to the client.
+    # direct_control: bool = True
+    # programs: List[str] = field(default_factory=list)
+
     @classmethod
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
         return self.id.__hash__()
+
+
+@dataclass
+class DERCurveConfiguration(m.DERCurve):
+
+    @classmethod
+    def from_dict(cls, env):
+        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
+
+    def __hash__(self):
+        return self.description.__hash__()
+
+
+@dataclass
+class DERControlBaseConfiguration(m.DERControlBase):
+
+    @classmethod
+    def from_dict(cls, env):
+        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
+
+    def __hash__(self):
+        return self.description.__hash__()
+
+
+@dataclass
+class DERControlConfiguration(m.DERControl):
+
+    @classmethod
+    def from_dict(cls, env):
+        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
+
+    def __hash__(self):
+        return self.description.__hash__()
+
+
+@dataclass
+class DERProgramConfiguration(m.DERProgram):
+
+    @classmethod
+    def from_dict(cls, env):
+        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
+
+    def __hash__(self):
+        return self.description.__hash__()
+
 
 
 @dataclass_json
@@ -58,7 +103,8 @@ class GridappsdConfiguration:
     feeder_id: Optional[str] = None
     simulation_id_file: Optional[str] = None
     simulation_id: Optional[str] = None
-    
+
+
 # @dataclass
 # class ControlDefaults:
 #     setESDelay: Optional[Int]
@@ -81,10 +127,11 @@ class GridappsdConfiguration:
 #     description: str
 #     mRID: Optional[str]
 
+
 @dataclass
 class ProgramList:
     name: str
-    programs: List[DERProgram]
+    programs: List[m.DERProgram]
 
 
 @dataclass
@@ -92,23 +139,22 @@ class ServerConfiguration:
     openssl_cnf: str
     # Can include ip address as well
     server_hostname: str
-    
+
     devices: List[DeviceConfiguration]
 
     tls_repository: str
     openssl_cnf: str
-    
-    
-    server_mode: Union[Literal["enddevices_create_on_start"],
-                       Literal["enddevices_register_access_only"]] = "enddevices_register_access_only"
 
+    server_mode: Union[
+        Literal["enddevices_create_on_start"],
+        Literal["enddevices_register_access_only"]] = "enddevices_register_access_only"
 
-    lfdi_mode: Union[Literal["lfdi_mod_from_file"], 
+    lfdi_mode: Union[Literal["lfdi_mod_from_file"],
                      Literal["lfdi_mod_from_cert_fingerprint"]] = "lfdi_mod_from_cert_fingerprint"
-    
-    programs: List[Dict] = field(default_factory=list)
-    controls: List[Dict] = field(default_factory=list)
-    curves: List[Dict] = field(default_factory=list)
+
+    programs: List[DERProgramConfiguration] = field(default_factory=list)
+    controls: List[DERControlConfiguration] = field(default_factory=list)
+    curves: List[DERCurveConfiguration] = field(default_factory=list)
     events: List[Dict] = field(default_factory=list)
 
     # # map into program_lists array for programs for specific
@@ -128,9 +174,13 @@ class ServerConfiguration:
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __post_init__(self):
+        self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
+        self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
+        self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
         self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
         for d in self.devices:
-            d.device_category_type = eval(f"DeviceCategoryType.{d.device_category_type}")
+            d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
+            #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
 
         # der_controls, der_default_control = None, None
         # if self.DERControlListFile:
@@ -185,14 +235,17 @@ class ServerConfiguration:
             if Path(self.gridappsd.feeder_id_file).exists():
                 self.gridappsd.feeder_id = Path(self.gridappsd.feeder_id_file).read_text().strip()
             if Path(self.gridappsd.simulation_id_file).exists():
-                self.gridappsd.simulation_id = Path(self.gridappsd.simulation_id_file).read_text().strip()
+                self.gridappsd.simulation_id = Path(
+                    self.gridappsd.simulation_id_file).read_text().strip()
 
             if not self.gridappsd.feeder_id:
-                raise ValueError("Feeder id from gridappsd not found in feeder_id_file nor was specified "
-                                 "in gridappsd config section.")
+                raise ValueError(
+                    "Feeder id from gridappsd not found in feeder_id_file nor was specified "
+                    "in gridappsd config section.")
 
             # TODO: This might not be the best place for this manipulation
-            self.gridappsd.field_bus_def = MessageBusDefinition.load(self.gridappsd.field_bus_config)
+            self.gridappsd.field_bus_def = MessageBusDefinition.load(
+                self.gridappsd.field_bus_config)
             self.gridappsd.field_bus_def.id = self.gridappsd.feeder_id
 
             _log.info("Gridappsd Configuration For Simulation")
