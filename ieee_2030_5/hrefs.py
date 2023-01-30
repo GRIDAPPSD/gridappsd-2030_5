@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Optional, List
+from typing import List, Optional
 
 EDEV = "edev"
 DCAP = "dcap"
@@ -9,8 +9,12 @@ DRP = "drp"
 SDEV = "sdev"
 MSG = "msg"
 DER = "der"
-CURVE = "curve"
+CURVE = "dc"
 PROGRAM = "program"
+RSPS = "rsps"
+LOG = "log"
+DERC = "derc"
+DDERC = "dderc"
 
 DEFAULT_DCAP_ROOT = f"/{DCAP}"
 DEFAULT_EDEV_ROOT = f"/{EDEV}"
@@ -22,11 +26,13 @@ DEFAULT_MESSAGE_ROOT = f"/{MSG}"
 DEFAULT_DER_ROOT = f"/{DER}"
 DEFAULT_CURVE_ROOT = f"/{CURVE}"
 DEFAULT_PROGRAM_ROOT = f"/{PROGRAM}"
+DEFAULT_RSPS_ROOT = f"/{RSPS}"
+DEFAULT_LOG_EVENT_ROOT = f"/{LOG}"
 
 SEP = "_"
 MATCH_REG = "[a-zA-Z0-9_]*"
 
-# Used as a sentinal value when we only want the href of the root 
+# Used as a sentinal value when we only want the href of the root
 NO_INDEX = -1
 
 
@@ -55,6 +61,19 @@ def get_fsa_list_href(end_device_href: str) -> str:
     return SEP.join([end_device_href, "fsa"])
 
 
+def get_response_set_href():
+    return DEFAULT_RSPS_ROOT
+
+
+@lru_cache()
+def get_der_list_href(index: int) -> str:
+    if index == NO_INDEX:
+        ret = DEFAULT_DER_ROOT
+    else:
+        ret = SEP.join([DEFAULT_DER_ROOT, str(index)])
+    return ret
+
+
 @lru_cache()
 def get_enddevice_href(index: int, subref: str = None) -> str:
     if index == NO_INDEX:
@@ -68,17 +87,38 @@ def get_enddevice_href(index: int, subref: str = None) -> str:
 
 @lru_cache()
 def get_registration_href(index: int) -> str:
-    return SEP.join([DEFAULT_EDEV_ROOT, f"{index}", "reg"])
+    return get_enddevice_href(index, "reg")
 
 
 @lru_cache()
 def get_configuration_href(index: int) -> str:
-    return SEP.join([DEFAULT_EDEV_ROOT, f"{index}", "cfg"])
+    return get_enddevice_href(index, "cfg")
+
+
+@lru_cache()
+def get_power_status_href(index: int) -> str:
+    return get_enddevice_href(index, "ps")
+
+
+@lru_cache()
+def get_device_status(index: int) -> str:
+    return get_enddevice_href(index, "ds")
+
+
+@lru_cache()
+def get_device_information(index: int) -> str:
+    return get_enddevice_href(index, "di")
 
 
 @lru_cache()
 def get_time_href() -> str:
-    return f"{DEFAULT_DCAP_ROOT}{SEP}tm"
+    # return f"{DEFAULT_DCAP_ROOT}{SEP}tm"
+    return f"/tm"
+
+
+@lru_cache()
+def get_log_list_href(index: int) -> str:
+    return SEP.join([DEFAULT_LOG_EVENT_ROOT, str(index)])
 
 
 @lru_cache()
@@ -86,8 +126,8 @@ def get_dcap_href() -> str:
     return f"{DEFAULT_DCAP_ROOT}"
 
 
-def get_derc_default_href():
-    return f"{DER}{SEP}/dderc"
+def get_derc_default_href(derp_index: int) -> str:
+    return SEP.join([DEFAULT_DER_ROOT, DDERC, f"{derp_index}"])
 
 
 def get_derc_href(index: int) -> str:
@@ -96,8 +136,9 @@ def get_derc_href(index: int) -> str:
     if NO_INDEX then don't include the index in the result.
     """
     if index == NO_INDEX:
-        return f"{DER}{SEP}/derc"
-    return f"{DER}{SEP}/derc/{index}"
+        return SEP.join([DEFAULT_DER_ROOT, DERC])
+
+    return SEP.join([DEFAULT_DER_ROOT, DERC, f"{index}"])
 
 
 def get_program_href(index: int, subref: str = None):
@@ -115,7 +156,6 @@ def get_program_href(index: int, subref: str = None):
         else:
             ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}"
     return ref
-
 
 
 # TimeLink
@@ -176,7 +216,9 @@ def get_program_href(index: int, subref: str = None):
 sdev: str = DEFAULT_SELF_ROOT
 
 
-def build_der_link(edev_id: Optional[int] = None, id: Optional[int] = None, suffix: Optional[str] = None) -> str:
+def build_der_link(edev_id: Optional[int] = None,
+                   id: Optional[int] = None,
+                   suffix: Optional[str] = None) -> str:
     if edev_id is None:
         raise ValueError("edev_id must be specified.")
     if id is not None and suffix is not None:

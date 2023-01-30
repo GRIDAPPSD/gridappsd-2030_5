@@ -91,7 +91,8 @@ def get_tls_repository(cfg: ServerConfiguration,
             else:
                 already_represented.add(k)
                 tlsrepo.create_cert(k.id)
-                _log.debug(f"for {k.id}\nlfdi -> {tlsrepo.lfdi(k.id)}\nsfdi -> {tlsrepo.sfdi(k.id)}")
+                _log.debug(
+                    f"for {k.id}\nlfdi -> {tlsrepo.lfdi(k.id)}\nsfdi -> {tlsrepo.sfdi(k.id)}")
     return tlsrepo
 
 
@@ -127,12 +128,10 @@ def _main():
         "--no-create-certs",
         action="store_true",
         help="If specified certificates for for client and server will not be created.")
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Debug level of the server"
-    )
-    parser.add_argument("--production", action="store_true", default=False,
+    parser.add_argument("--debug", action="store_true", help="Debug level of the server")
+    parser.add_argument("--production",
+                        action="store_true",
+                        default=False,
                         help="Run the server in a threaded environment.")
     opts = parser.parse_args()
 
@@ -145,10 +144,10 @@ def _main():
     cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
 
     config = ServerConfiguration(**cfg_dict)
-    
+
     if config.lfdi_mode == "lfdi_mode_from_file":
         os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
-        
+
     assert config.tls_repository
     assert len(config.devices) > 0
     assert config.server_hostname
@@ -184,8 +183,13 @@ def _main():
 
     if not opts.production:
         try:
-            run_server(config, tls_repo, end_devices, debug=opts.debug, use_reloader=False,
-                       use_debugger=True, threaded=False)
+            run_server(config,
+                       tls_repo,
+                       end_devices,
+                       debug=opts.debug,
+                       use_reloader=False,
+                       use_debugger=True,
+                       threaded=False)
         except KeyboardInterrupt:
             _log.info("Shutting down server")
     else:

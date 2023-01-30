@@ -57,7 +57,6 @@ class ServerOperation:
 class RequestOp(ServerOperation):
     def __init__(self, server_endpoints: eps.ServerEndpoints):
         super().__init__()
-        self._end_devices = server_endpoints.end_devices
         self._tls_repository = server_endpoints.tls_repo
         self._server_endpoints = server_endpoints
 
@@ -96,11 +95,6 @@ class RequestOp(ServerOperation):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
 
         return pth
-
-    @property
-    def is_admin_client(self) -> bool:
-        ed = self._end_devices.get_device_by_lfdi(self.lfdi)
-        return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
 
     def build_response_from_dataclass(self, obj: dataclass) -> Response:
         return Response(dataclass_to_xml(obj), headers=self._headers)

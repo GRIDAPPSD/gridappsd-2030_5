@@ -29,17 +29,19 @@ _log = logging.getLogger(__name__)
 
 @dataclass
 class DeviceConfiguration(m.EndDevice):
-    # This id will be used to create certificates. 
+    # This id will be used to create certificates.
     id: str = None
-    
-    # device_category_type: m.DeviceCategoryType
-    # pin: int
+
+    # This is used in the Registration function set but is
+    # configured on the server and used to verify the correct location
+    # on the client
+    pin: int = None
     # hostname: str = None
     # ip: str = None
     # poll_rate: int = 900
     # # TODO: Direct control means that only one FSA will be available to the client.
     # direct_control: bool = True
-    # programs: List[str] = field(default_factory=list)
+    programs: List[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, env):
@@ -73,10 +75,17 @@ class DERControlBaseConfiguration(m.DERControlBase):
 
 @dataclass
 class DERControlConfiguration(m.DERControl):
+    description: str = None
+    base: Dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, env):
-        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
+        return cls(
+            **{
+                k: v
+                for k, v in env.items() if k in inspect.signature(m.DERControl).parameters
+                or k in inspect.signature(cls).parameters
+            })
 
     def __hash__(self):
         return self.description.__hash__()
@@ -85,13 +94,16 @@ class DERControlConfiguration(m.DERControl):
 @dataclass
 class DERProgramConfiguration(m.DERProgram):
 
+    default_control: str = None
+    controls: List[str] = field(default_factory=list)
+    curves: List[str] = field(default_factory=list)
+
     @classmethod
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
         return self.description.__hash__()
-
 
 
 @dataclass_json
@@ -149,8 +161,9 @@ class ServerConfiguration:
         Literal["enddevices_create_on_start"],
         Literal["enddevices_register_access_only"]] = "enddevices_register_access_only"
 
-    lfdi_mode: Union[Literal["lfdi_mod_from_file"],
-                     Literal["lfdi_mod_from_cert_fingerprint"]] = "lfdi_mod_from_cert_fingerprint"
+    lfdi_mode: Union[
+        Literal["lfdi_mode_from_file"],
+        Literal["lfdi_mode_from_cert_fingerprint"]] = "lfdi_mode_from_cert_fingerprint"
 
     programs: List[DERProgramConfiguration] = field(default_factory=list)
     controls: List[DERControlConfiguration] = field(default_factory=list)

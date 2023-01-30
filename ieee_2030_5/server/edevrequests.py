@@ -3,10 +3,10 @@ from typing import Optional
 import werkzeug.exceptions
 from flask import Response, request
 
-from ieee_2030_5 import hrefs
-from ieee_2030_5.data.indexer import get_href
 import ieee_2030_5.models as m
 import ieee_2030_5.models.adapters as adpt
+from ieee_2030_5 import hrefs
+from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.models import Registration
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.types_ import Lfdi
@@ -20,8 +20,15 @@ class DERRequests(RequestOp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get(self, edev_id: Optional[int] = None, id: Optional[int] = None) -> Response:
-        return Response("Foo")
+    def get(self) -> Response:
+        pth = request.environ['PATH_INFO']
+
+        if not pth.startswith(hrefs.DEFAULT_DER_ROOT):
+            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
+        
+        value = get_href(pth)
+
+        return self.build_response_from_dataclass(value)
 
 
 class EDevRequests(RequestOp):
@@ -57,19 +64,17 @@ class EDevRequests(RequestOp):
         if not isinstance(ed, m.EndDevice):
             raise werkzeug.exceptions.Forbidden()
 
-        # device_id = request.environ['ieee_2030_5_subject']
-
         # This is what we should be using to get the device id of the registered end device.
         device_id = self.tls_repo.find_device_id_from_sfdi(ed.sFDI)
         ed.lFDI = self.tls_repo.lfdi(device_id)
-        if end_device := self._end_devices.get_device_by_lfdi(ed.lFDI):
+        if end_device := adpt.EndDeviceAdapter.get_by_lfdi(ed.lFDI):
             status = 200
             ed_href = end_device.href
         else:            
             if not ed.href:
                 ed = adpt.EndDeviceAdapter.store(device_id, ed)
                   
-            ed_href = self._end_devices.add_end_device(ed)
+            ed_href = ed.href
             status = 201
 
         return Response(status=status, headers={'Location': ed_href})
@@ -93,7 +98,9 @@ class EDevRequests(RequestOp):
         # top level /edev should return specific end device list based upon
         # the lfdi of the connection.
         if pth == hrefs.DEFAULT_EDEV_ROOT:
-            retval = self._end_devices.get_end_device_list(self.lfdi)            
+            retval = adpt.EndDeviceAdapter.get_list(self.lfdi, 
+                                                    s=request.args.get('s'), 
+                                                    l=request.args.get('l'))
         else:
             retval = get_href(pth)
         return self.build_response_from_dataclass(retval)

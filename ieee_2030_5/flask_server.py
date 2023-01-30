@@ -10,6 +10,8 @@ import werkzeug.exceptions
 from flask import Flask, render_template, request, redirect, Response, url_for
 from werkzeug.serving import make_server, BaseWSGIServer
 
+from ieee_2030_5.utils import dataclass_to_xml
+
 __all__ = ["build_server"]
 
 # templates = Jinja2Templates(directory="templates")
@@ -35,6 +37,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
     The output from that method is what we want to make available elsewhere
     in the application.
     """
+    config: ServerConfiguration
     tlsrepo: TLSRepository
 
     def make_environ(self):
@@ -60,7 +63,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             environ['ieee_2030_5_peercert'] = x509
             environ['ieee_2030_5_subject'] = x509.get_subject().CN
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
-            if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
+            if self.config.lfdi_mode == "lfdi_mode_from_file":
                 _log.info("Using hash from combined file.")
                 pth = self.tlsrepo.__get_combined_file__(x509.get_subject().CN)
                 sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
@@ -74,14 +77,14 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             assert found_device_id == environ['ieee_2030_5_subject']
         except OpenSSL.crypto.Error:
             # Only if we have a debug_device do we want to expose this device through the admin page.
-            if self.debug_device:
-                cert_file, key_file = self.tlsrepo.get_file_pair(self.debug_device)
-                x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, Path(cert_file).read_bytes())
-                environ['ieee_2030_5_peercert'] = x509
-                environ['ieee_2030_5_subject'] = x509.get_subject().CN
+            # if self.debug_device:
+            #     cert_file, key_file = self.tlsrepo.get_file_pair(self.debug_device)
+            #     x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, Path(cert_file).read_bytes())
+            #     environ['ieee_2030_5_peercert'] = x509
+            #     environ['ieee_2030_5_subject'] = x509.get_subject().CN
 
-            else:
-                environ['peercert'] = None
+            # else:
+            environ['peercert'] = None
 
         return environ
 
@@ -218,7 +221,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             return render_template("admin/resource_list.html",
                                    resource_urls=all_resources,
                                    href_shown=resource,
-                                   object=obj)
+                                   object=dataclass_to_xml(obj))
         else:
             return render_template("admin/resource_list.html", resource_urls=all_resources)
 
@@ -261,6 +264,7 @@ def run_server(config: ServerConfiguration,
         host = config.server_hostname
         port = 8443
 
+    PeerCertWSGIRequestHandler.config = config
     PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
     app.run(host=host,
             ssl_context=ssl_context,

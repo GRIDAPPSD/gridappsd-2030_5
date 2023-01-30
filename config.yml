@@ -1,6 +1,6 @@
 ---
 server_hostname: 127.0.0.1:8070
-proxy_hostname: 0.0.0.0:7443
+proxy_hostname: 0.0.0.0:8443
 #server_hostname: 0.0.0.0:7443
 # server_hostname: gridappsd_dev_2004:7443
 
@@ -13,160 +13,151 @@ server_mode: enddevices_create_on_start
 # lfdi_mode: Determines what piece of information is used to calculate the lfdi
 #
 # Options:
-#   lfdi_mod_from_file             - sha256 hash of certificate file's content.
-#   lfdi_mod_from_cert_fingerprint - sha256 hash of the certificates fingerprint.
+#   lfdi_mode_from_file             - sha256 hash of certificate file's content.
+#   lfdi_mode_from_cert_fingerprint - sha256 hash of the certificates fingerprint.
 #
-# default: lfdi_mod_from_cert_fingerprint
+# default: lfdi_mode_from_cert_fingerprint
 lfdi_mode: lfdi_mode_from_file
 
-# End Device 
+# End Device
 devices:
   # SolarEdge SE6000H HD-Wave SetApp Enabled Inverter
-  - id: enphase1
+  - id: dev1
+    # DeviceCategoryType from ieee_2030_5.models.device_category
     deviceCategory: FUEL_CELL
     pin: 111115
-    nameplate:
-      rtgMaxW: 6000
+
+    programs:
+      - description: Program 1
+
+    # nameplate:
+    #   rtgMaxW: 6000
     ders:
-    - capabilities:
-      modesSupported: '1110000000000000'
-      type: 83
+      - capabilities:
+        modesSupported: "1110000000000000"
+        type: 83
 
+      - capabilities:
+        # Bitmask with the following structure.
+        # Indication of support for each control mode function DERCapability::modesSupported
+        #
+        # 0 - Charge mode
+        # 1 - Discharge mode
+        # 2 - opModConnect (Connect / Disconnect -
+        # implies galvanic isolation)
+        # 3 - opModEnergize (Energize / De-Energize)
+        # 4 - opModFixedPFAbsorbW (Fixed Power
+        # Factor Setpoint when absorbing active
+        # power)
+        # 5 - opModFixedPFInjectW (Fixed Power
+        # Factor Setpoint when injecting active
+        # power)
+        # 6 - opModFixedVar (Reactive Power
+        # Setpoint)
+        # 7 - opModFixedW (Charge / Discharge
+        # Setpoint)
+        # 8 - opModFreqDroop (Frequency-Watt
+        # Parameterized Mode)
+        # 9 - opModFreqWatt (Frequency-Watt
+        # Curve Mode)
+        # 10 - opModHFRTMayTrip (High Frequency
+        # Ride Through, May Trip Mode)
+        # 11 - opModHFRTMustTrip (High
+        # Frequency Ride Through, Must Trip Mode)
+        # 12 - opModHVRTMayTrip (High Voltage
+        # Ride Through, May Trip Mode)
+        # 13 - opModHVRTMomentaryCessation
+        # (High Voltage Ride Through, Momentary
+        # Cessation Mode)
+        # 14 - opModHVRTMustTrip (High Voltage
+        # Ride Through, Must Trip Mode)
+        # 15 - opModLFRTMayTrip (Low Frequency
+        # Ride Throu
+        modesSupported: "1110000000000000"
 
-    - capabilities:
-      # Bitmask with the following structure.
-      # Indication of support for each control mode function DERCapability::modesSupported
-      #
-      # 0 - Charge mode
-      # 1 - Discharge mode
-      # 2 - opModConnect (Connect / Disconnect -
-      # implies galvanic isolation)
-      # 3 - opModEnergize (Energize / De-Energize)
-      # 4 - opModFixedPFAbsorbW (Fixed Power
-      # Factor Setpoint when absorbing active
-      # power)
-      # 5 - opModFixedPFInjectW (Fixed Power
-      # Factor Setpoint when injecting active
-      # power)
-      # 6 - opModFixedVar (Reactive Power
-      # Setpoint)
-      # 7 - opModFixedW (Charge / Discharge
-      # Setpoint)
-      # 8 - opModFreqDroop (Frequency-Watt
-      # Parameterized Mode)
-      # 9 - opModFreqWatt (Frequency-Watt
-      # Curve Mode)
-      # 10 - opModHFRTMayTrip (High Frequency
-      # Ride Through, May Trip Mode)
-      # 11 - opModHFRTMustTrip (High
-      # Frequency Ride Through, Must Trip Mode)
-      # 12 - opModHVRTMayTrip (High Voltage
-      # Ride Through, May Trip Mode)
-      # 13 - opModHVRTMomentaryCessation
-      # (High Voltage Ride Through, Momentary
-      # Cessation Mode)
-      # 14 - opModHVRTMustTrip (High Voltage
-      # Ride Through, Must Trip Mode)
-      # 15 - opModLFRTMayTrip (Low Frequency
-      # Ride Throu
-      modesSupported: '1110000000000000'
-      
-      # Item type for the DER.
-      # 0 - Not applicable / Unknown
-      # 1 - Virtual or mixed DER
-      # 2 - Reciprocating engine
-      # 3 - Fuel cell
-      # 4 - Photovoltaic system
-      # 5 - Combined heat and power
-      # 6 - Other generation system
-      # 80 - Other storage system
-      # 81 - Electric vehicle
-      # 82 - EVSE
-      # 83 - Combined PV and storage
-      type: 83
+        # Item type for the DER.
+        # 0 - Not applicable / Unknown
+        # 1 - Virtual or mixed DER
+        # 2 - Reciprocating engine
+        # 3 - Fuel cell
+        # 4 - Photovoltaic system
+        # 5 - Combined heat and power
+        # 6 - Other generation system
+        # 80 - Other storage system
+        # 81 - Electric vehicle
+        # 82 - EVSE
+        # 83 - Combined PV and storage
+        type: 83
 
-      # Default available nameplate options where at a manufacturer's set.
-      # Active power rating in watts an unity power factor
-      rtgMaxW: 600
+        # Default available nameplate options where at a manufacturer's set.
+        # Active power rating in watts an unity power factor
+        rtgMaxW: 600
 
-      # Active power rating in watts at specified over-excited power factor
-      # rtgOverExcitedW:
-      
-      # Over-excited power factor DERCapability::rtgOverExcitedPF
-      # rtgOverExcitedPF:
-      
-      # Active power rating in watts at specified under-excited power factor DERCapability::rtgUnderExcitedW
-      # rtgUnderExcitedW:
-      
-      # Under-excited power factor DERCapability::rtgUnderExcitedPF
-      # rtgUnderExcitedPF:
-      
-      # Maximum apparent power rating in voltamperes DERCapability::rtgMaxVA
-      rtgMaxVA: 600
-      
-      # Indication of reactive power and voltage/power control capability DERCapability::rtgNormalCategory
-      rtgNormalCategory: 1
-      
-      # Indication of voltage and frequencyride-through capability category I, II, or III DERCapability::rtgAbnormalCategory
-      rtgAbnormalCategory: 1
-      
-      # Maximum injected reactive power rating in vars DERCapability::rtgMaxVar
-      rtgMaxVar: 600
-      
-      # Maximum absorbed reactive power rating in vars DERCapability::rtgMaxVarNeg
-      rtgMaxVarNeg: 600
-      
-      # Maximum active power charge rating in watts DERCapability::rtgMaxChargeRateW
-      rtgMaxChargeRateW: 600
-      
-      # Maximum apparent power charge rating in voltamperes; may differ from the apparent power maximum rating
-      # DERCapability::rtgMaxChargeRateVA
-      rtgMaxChargeRateVA: 600
+        # Active power rating in watts at specified over-excited power factor
+        # rtgOverExcitedW:
 
-      # Nominal ac voltage rating in rms volts DERCapability::rtgVNom
-      rtgVNom: 120
+        # Over-excited power factor DERCapability::rtgOverExcitedPF
+        # rtgOverExcitedPF:
 
-      # Maximum ac voltage rating in rms volts DERCapability::rtgMaxV
-      rtgMaxV: 128
+        # Active power rating in watts at specified under-excited power factor DERCapability::rtgUnderExcitedW
+        # rtgUnderExcitedW:
 
-      # Minimum ac voltage rating in rms volts DERCapability::rtgMinV
-      rtgMinV: 116
-      
-      # Reactive susceptance that remains connected to the Area EPS in the cease to energize and trip state
-      # DERCapability::rtgReactiveSusceptance
-      # rtgReactiveSusceptance: 
+        # Under-excited power factor DERCapability::rtgUnderExcitedPF
+        # rtgUnderExcitedPF:
 
-      # # Manufacturer DeviceInformation::mfID
-      # mfID:
-      
-      # # Model DeviceInformation::mfModel
-      # mfModel:
-      
-      # # Serial number DeviceInformation::mfSerNum
-      # mfSerNum:
-      
-      # # Version DeviceInformation::mfHwVer DeviceInformation::swVer
-      # mfHwVer:
-      # swVer:
-      
+        # Maximum apparent power rating in voltamperes DERCapability::rtgMaxVA
+        rtgMaxVA: 600
 
+        # Indication of reactive power and voltage/power control capability DERCapability::rtgNormalCategory
+        rtgNormalCategory: 1
+
+        # Indication of voltage and frequencyride-through capability category I, II, or III DERCapability::rtgAbnormalCategory
+        rtgAbnormalCategory: 1
+
+        # Maximum injected reactive power rating in vars DERCapability::rtgMaxVar
+        rtgMaxVar: 600
+
+        # Maximum absorbed reactive power rating in vars DERCapability::rtgMaxVarNeg
+        rtgMaxVarNeg: 600
+
+        # Maximum active power charge rating in watts DERCapability::rtgMaxChargeRateW
+        rtgMaxChargeRateW: 600
+
+        # Maximum apparent power charge rating in voltamperes; may differ from the apparent power maximum rating
+        # DERCapability::rtgMaxChargeRateVA
+        rtgMaxChargeRateVA: 600
+
+        # Nominal ac voltage rating in rms volts DERCapability::rtgVNom
+        rtgVNom: 120
+
+        # Maximum ac voltage rating in rms volts DERCapability::rtgMaxV
+        rtgMaxV: 128
+
+        # Minimum ac voltage rating in rms volts DERCapability::rtgMinV
+        rtgMinV: 116
+
+        # Reactive susceptance that remains connected to the Area EPS in the cease to energize and trip state
+        # DERCapability::rtgReactiveSusceptance
+        # rtgReactiveSusceptance:
+
+        # # Manufacturer DeviceInformation::mfID
+        # mfID:
+
+        # # Model DeviceInformation::mfModel
+        # mfModel:
+
+        # # Serial number DeviceInformation::mfSerNum
+        # mfSerNum:
+
+        # # Version DeviceInformation::mfHwVer DeviceInformation::swVer
+        # mfHwVer:
+        # swVer:
 
   - id: dev2
     deviceCategory: FUEL_CELL
     pin: 12345
     nameplate:
-      
 
-  - id: dev1
-    # DeviceCategoryType from ieee_2030_5.models.device_category
-    deviceCategory: FUEL_CELL
-    pin: 12345
-
-    programs:
-      - description: Program 1
-      - description: Program 2
-
-# DemandResponseProgram
 programs:
   - description: Program 1
     default_control: Control 1
@@ -176,27 +167,32 @@ programs:
     curves:
       - Curve 1
     primacy: 89
-      
-  - description: Program 2
-  - description: Program 3
+
+  # - description: Program 2
+  #   default_control: Control 2
+  # - description: Program 3
+  #   default_control: Control 2
 
 controls:
   - description: Control 1
+    setESDelay: 30
     base:
-      setESDelay: 30
-      setESHighFreq: UInt16 [0..1]
-      setESHighVolt: Int16 [0..1]
-      setESLowFreq: UInt16 [0..1]
-      setESLowVolt: Int16 [0..1]
-      setESRampTms: UInt32 [0..1]
-      setESRandomDelay: UInt32 [0..1]
-      setGradW: UInt16 [0..1]
-      setSoftGradW: UInt16 [0..1]
+      opModConnect: True
+      opModMaxLimW: 9500
+
+      # setESHighFreq: UInt16 [0..1]
+      # setESHighVolt: Int16 [0..1]
+      # setESLowFreq: UInt16 [0..1]
+      # setESLowVolt: Int16 [0..1]
+      # setESRampTms: UInt32 [0..1]
+      # setESRandomDelay: UInt32 [0..1]
+      # setGradW: UInt16 [0..1]
+      # setSoftGradW: UInt16 [0..1]
   - description: Control 2
   - description: Control 3
 
 events:
-- control: 0
+  - control: 0
 
 curves:
   # Each element will can have the following structure.
@@ -263,21 +259,19 @@ curves:
   # 12 - opModVoltWatt (Volt-Watt Mode)
   # 13 - opModWattPF (Watt-PowerFactor Mode)
   # 14 - opModWattVar (Watt-Var Mode)
-- description: Curve 1
-  curveType: opModVoltVar
-  CurveData:
-  - xvalue: 5
-    yvalue: 5
+  - description: Curve 1
+    curveType: opModVoltVar
+    CurveData:
+      - xvalue: 5
+        yvalue: 5
 
-- description: Curve 2
-  curveType: opModFreqWatt
-  CurveData:
-  # exitation is only available if yvalue is power factor
-  - exitation: 10
-    xvalue: 5
-    yvalue: 5
-
-
+  - description: Curve 2
+    curveType: opModFreqWatt
+    CurveData:
+      # exitation is only available if yvalue is power factor
+      - exitation: 10
+        xvalue: 5
+        yvalue: 5
 #{
 #    "devices": [
 #                    {

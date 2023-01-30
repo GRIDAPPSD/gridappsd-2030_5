@@ -5,17 +5,17 @@ from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Flag, auto
-from typing import Dict, Optional, List, Set
+from typing import Dict, List, Optional, Set
 
 import werkzeug.exceptions
 
+import ieee_2030_5.models as m
 from ieee_2030_5 import hrefs
 from ieee_2030_5.certs import TLSRepository, sfdi_from_lfdi
-from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration, ProgramList
+from ieee_2030_5.config import (DeviceConfiguration, ProgramList, ServerConfiguration)
 from ieee_2030_5.data.indexer import add_href, get_href
-import ieee_2030_5.models as m
-from ieee_2030_5.models.adapters import DERControlAdapter, DERProgramAdapter, DeviceCapabilityAdapter, EndDeviceAdapter, BaseAdapter
-
+from ieee_2030_5.models.adapters import (BaseAdapter, DERControlAdapter, DERProgramAdapter,
+                                         DeviceCapabilityAdapter, EndDeviceAdapter)
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import Lfdi
 
@@ -100,10 +100,11 @@ def create_group(level: GroupLevel, name: Optional[str] = None) -> Group:
     # TODO: Standardize urls so we can get them from a central spot.
     program_href = f"/sep2/A{index}/derp/1"
     program = m.DERProgram(mRID=mrid.encode('utf-8'),
-                         description=name,
-                         primacy=index * 10,
-                         href=program_href)
-    program.active_dercontrol_list_link = m.ActiveDERControlListLink(href=f"{program_href}/actderc")
+                           description=name,
+                           primacy=index * 10,
+                           href=program_href)
+    program.active_dercontrol_list_link = m.ActiveDERControlListLink(
+        href=f"{program_href}/actderc")
     program.default_dercontrol_link = m.DefaultDERControlLink(href=f"{program_href}/dderc")
     program.dercontrol_list_link = m.DERControlListLink(href=f"{program_href}/derc")
     program.dercurve_list_link = m.DERCurveListLink(href=f"{program_href}/dc")
@@ -142,12 +143,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     """
     _log.debug("Initializing 2030.5")
     _log.debug("Adding server level urls to cache")
-    
-    # start intializing the system 
+
+    # start intializing the system
     BaseAdapter.initialize(config, tlsrepo)
-    
-    
-    
+
     # # DERControlAdapter.initialize_from_storage()
     # add_href(hrefs.get_time_href(), m.TimeLink(href=hrefs.get_time_href()))
     # add_href(hrefs.get_enddevice_list_href(), m.EndDeviceListLink(hrefs.get_enddevice_list_href()))
@@ -157,7 +156,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     # for index, curve in enumerate(config.curves):
     #     curve.href = hrefs.get_curve_href(index)
     #     add_href(curve.href, curve)
-        
+
     # _log.debug("Registering EndDevices")
     # end_devices = EndDevices()
     # # Initialize all the enddevices on startup or load them
@@ -186,13 +185,14 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 @dataclass
 class EndDeviceData:
     index: int
-    mRID: str  # mrid for the device.
+    mRID: str    # mrid for the device.
     end_device: m.EndDevice
     registration: m.Registration
     device_capability: m.DeviceCapability = None
     der_programs: Optional[List[m.DERProgram]] = field(default_factory=list)
     ders: Optional[List[m.DER]] = field(default_factory=list)
-    function_set_assignments: Optional[List[m.FunctionSetAssignments]] = field(default_factory=list)
+    function_set_assignments: Optional[List[m.FunctionSetAssignments]] = field(
+        default_factory=list)
     device_information: Optional[m.DeviceInformation] = None
 
 
@@ -247,7 +247,8 @@ class EndDevices:
 
         return deepcopy(data)
 
-    def get_fsa_list(self, lfdi: Optional[Lfdi] = None,
+    def get_fsa_list(self,
+                     lfdi: Optional[Lfdi] = None,
                      edevid: Optional[int] = None) -> List[m.FunctionSetAssignments] | []:
         if not ((lfdi is not None) ^ edevid is not None):
             raise ValueError("Either lfdi or edevid must be passed not both.")
@@ -371,24 +372,26 @@ class EndDevices:
             lFDI=lfdi,
             sFDI=sfdi_from_lfdi(lfdi),
             RegistrationLink=m.RegistrationLink(hrefs.get_registration_href(new_dev_number)),
-            ConfigurationLink=m.ConfigurationLink(hrefs.get_configuration_href(new_dev_number))
-        )
+            ConfigurationLink=m.ConfigurationLink(hrefs.get_configuration_href(new_dev_number)))
         add_href(enddevice_href, end_device)
         fsa_link_href = hrefs.get_fsa_list_href(end_device.href)
-        end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=fsa_link_href,
-                                                                                     all=len(device_config.fsa_list))
+        end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+            href=fsa_link_href, all=len(device_config.fsa_list))
         if device_config.fsa_list:
 
-            fsa_list = m.FunctionSetAssignmentsList(href=fsa_link_href, all=len(device_config.fsa_list))
+            fsa_list = m.FunctionSetAssignmentsList(href=fsa_link_href,
+                                                    all=len(device_config.fsa_list))
             for fsa_index, fsa_config in enumerate(device_config.fsa_list):
                 fsa_href = hrefs.get_fsa_href(fsa_list.href, fsa_index)
                 fsa = m.FunctionSetAssignments(href=fsa_href,
-                                             mRID=fsa_config.get("mRID"),
-                                             description=fsa_config.get("description"))
+                                               mRID=fsa_config.get("mRID"),
+                                               description=fsa_config.get("description"))
 
                 # TODO: Load other programs
-                fsa.DERProgramListLink = m.DERProgramListLink(href=hrefs.get_der_program_list(fsa_href))
-                fsa.DemandResponseProgramListLink = m.DemandResponseProgramListLink(href=hrefs.get_dr_program_list(fsa_href))
+                fsa.DERProgramListLink = m.DERProgramListLink(
+                    href=hrefs.get_der_program_list(fsa_href))
+                fsa.DemandResponseProgramListLink = m.DemandResponseProgramListLink(
+                    href=hrefs.get_dr_program_list(fsa_href))
                 # for pl in program_lists:
                 #     fsa.Pro
                 #     _log.debug(pl)
@@ -397,8 +400,7 @@ class EndDevices:
             add_href(fsa_link_href, fsa_list)
 
         add_href(hrefs.get_registration_href(new_dev_number),
-                 m.Registration(pIN=device_config.pin,
-                                pollRate=device_config.poll_rate))
+                 m.Registration(pIN=device_config.pin, pollRate=device_config.poll_rate))
         self.__all_end_devices__[new_dev_number] = end_device
         self._lfdi_index_map[lfdi] = new_dev_number
 
@@ -486,6 +488,8 @@ class EndDevices:
         #                     device_capability=device_capability)
         # self.__all_end_devices__[new_dev_number] = edd
         # self._lfdi_index_map[lfdi] = new_dev_number
+
+
 #        return get_href(end_device_href)
 
     def get(self, index: int) -> m.EndDevice:
@@ -526,13 +530,15 @@ class EndDevices:
             devices = [ed]
 
         # TODO Handle start, length list things.
-        dl = m.EndDeviceList(EndDevice=devices, all=len(devices), results=len(devices),
-                             href=hrefs.get_enddevice_list_href(), pollRate=900)
+        dl = m.EndDeviceList(EndDevice=devices,
+                             all=len(devices),
+                             results=len(devices),
+                             href=hrefs.get_enddevice_list_href(),
+                             pollRate=900)
         return dl
 
     def add_connectable(self, lfdi: Lfdi):
         self._lfdi_connection_allowed.add(lfdi)
-
 
 if __name__ == '__main__':
     print(get_groups())
