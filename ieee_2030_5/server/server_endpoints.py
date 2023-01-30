@@ -22,6 +22,7 @@ from ieee_2030_5.server.der_program import DERProgramRequests
 from ieee_2030_5.server.edevrequests import EDevRequests, SDevRequests, DERRequests
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
+import ieee_2030_5.models.adapters as adpt
 
 # module level instance of hrefs class.
 from ieee_2030_5.server.usage_points import MUP, UTP
@@ -52,8 +53,9 @@ class Dcap(RequestOp):
         # TODO: Test for allowed dcap here.
         # if not self._end_devices.allowed_to_connect(self.lfdi):
         #     raise werkzeug.exceptions.Unauthorized()
+        dcap = adpt.DeviceCapabilityAdapter.get_by_lfdi(self.lfdi)
 
-        return self.build_response_from_dataclass(self._end_devices.get_device_capability(self.lfdi))
+        return self.build_response_from_dataclass(dcap)
 
 
 class TimeRequest(RequestOp):
@@ -195,7 +197,7 @@ class ServerEndpoints:
         return MUP(server_endpoints=self).execute(path=path)
 
     def _der(self, path) -> Response:
-        return DERRequests(server_endpoints=self).execute(path=path)
+        return DERRequests(server_endpoints=self).execute()
 
     def _dcap(self) -> Response:
         return Dcap(server_endpoints=self).execute()
