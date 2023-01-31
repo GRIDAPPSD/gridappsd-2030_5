@@ -132,14 +132,10 @@ def get_groups() -> Dict[GroupLevel, Group]:
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
-    """
-    Initialize the 2030.5 server side.  After this function call the following items
-    will be initialized.
-
-    - Curve List
-    - Program Lists
-    If server_mode == "enddevices_create_on_start"
-    - End Devices will be initialized and created
+    """Initialize the 2030.5 server.  
+    
+    This method initializes the adapters from the configuration objects into
+    the persistence adapters.
     """
     _log.debug("Initializing 2030.5")
     _log.debug("Adding server level urls to cache")

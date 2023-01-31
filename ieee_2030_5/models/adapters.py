@@ -57,7 +57,15 @@ class BaseAdapter:
 
     @staticmethod
     def initialize(server_config: cfg.ServerConfiguration, tlsrepo: TLSRepository):
-        """Initialize all of the adapters."""
+        """Initialize all of the adapters
+        
+        The initialization means that there are concrete object backing the storage system based upon
+        urls that can be read during the http call to the spacific end point.  In other words a
+        DERCurve dataclass can be retrieved from storage by going to the href /dc/1 rather than
+        having to get it through an object.  
+        
+        The adapters are responsible for storing data into the object store using add_href function.
+        """
         BaseAdapter.__server_configuration__ = server_config
         BaseAdapter.__device_configurations__ = server_config.devices
         BaseAdapter.__lfdi__mapped_configuration__ = {}
@@ -166,19 +174,19 @@ class EndDeviceAdapter(BaseAdapter):
 
             cfg = m.Configuration(href=hrefs.get_configuration_href(next_index))
             add_href(cfg.href, cfg)
-            # edev.ConfigurationLink = m.ConfigurationLink(cfg.href)
+            edev.ConfigurationLink = m.ConfigurationLink(cfg.href)
 
             ps = m.PowerStatus(href=hrefs.get_power_status_href(next_index))
             add_href(ps.href, ps)
-            #edev.PowerStatusLink = m.PowerStatusLink(href=ps.href)
+            edev.PowerStatusLink = m.PowerStatusLink(href=ps.href)
 
             ds = m.DeviceStatus(href=hrefs.get_device_status(next_index))
             add_href(ds.href, ds)
-            #edev.DeviceStatusLink = m.DeviceStatusLink(href=ds.href)
+            edev.DeviceStatusLink = m.DeviceStatusLink(href=ds.href)
 
             di = m.DeviceInformation(href=hrefs.get_device_information(next_index))
             add_href(di.href, di)
-            #edev.DeviceInformationLink = m.DeviceInformationLink(href=di.href)
+            edev.DeviceInformationLink = m.DeviceInformationLink(href=di.href)
 
             ts = int(round(datetime.utcnow().timestamp()))
             reg = m.Registration(href=hrefs.get_registration_href(next_index),
@@ -374,6 +382,8 @@ class DERCurveAdapter(BaseAdapter):
     __count__ = 0
 
     def initialize():
+        """Initialize the DERCurve objects based upon the BaseAdapter.__device_configuration__"""
+
         if BaseAdapter.__device_configurations__ is None:
             raise ValueError("Initialize BaseAdapter before initializing the Curves.")
 
@@ -396,7 +406,7 @@ class DERProgramAdapter(BaseAdapter):
 
     @staticmethod
     def initialize():
-
+        """Initialize the DERProgram objects based upon the BaseAdapter.__server_configuration__"""
         cfg_programs = BaseAdapter.__server_configuration__.programs
         cfg_der_controls = BaseAdapter.__server_configuration__.controls
         _log.debug("Update m.DERPrograms' adding links to the different program pieces.")
@@ -513,6 +523,7 @@ class DERControlAdapter(BaseAdapter):
 
     @staticmethod
     def initialize():
+        """Initialize the DERControl and DERControlBase objects based upon the BaseAdapter.__server_configuration__"""
         config = DERControlAdapter.__server_configuration__.controls
 
         for index, ctl in enumerate(config):
