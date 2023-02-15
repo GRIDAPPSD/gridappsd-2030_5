@@ -149,13 +149,16 @@ class ProgramList:
 @dataclass
 class ServerConfiguration:
     openssl_cnf: str
-    # Can include ip address as well
-    server_hostname: str
 
     devices: List[DeviceConfiguration]
 
     tls_repository: str
     openssl_cnf: str
+
+    server: str
+    https_port: int
+
+    http_port: int = None
 
     server_mode: Union[
         Literal["enddevices_create_on_start"],
@@ -164,6 +167,9 @@ class ServerConfiguration:
     lfdi_mode: Union[
         Literal["lfdi_mode_from_file"],
         Literal["lfdi_mode_from_cert_fingerprint"]] = "lfdi_mode_from_cert_fingerprint"
+
+    # Can include ip address as well
+    server_hostname: str = None
 
     programs: List[DERProgramConfiguration] = field(default_factory=list)
     controls: List[DERControlConfiguration] = field(default_factory=list)
@@ -187,6 +193,7 @@ class ServerConfiguration:
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __post_init__(self):
+        self.server_hostname = f"{self.server}:{self.https_port}"
         self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
         self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
         self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]

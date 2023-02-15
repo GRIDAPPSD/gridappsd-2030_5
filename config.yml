@@ -1,6 +1,11 @@
 ---
-server_hostname: 127.0.0.1:8070
-proxy_hostname: 0.0.0.0:8443
+#server_hostname: 0.0.0.0:8443
+
+server: 0.0.0.0
+http_port: 8080
+https_port: 8443
+
+#proxy_hostname: 0.0.0.0:8443
 #server_hostname: 0.0.0.0:7443
 # server_hostname: gridappsd_dev_2004:7443
 
