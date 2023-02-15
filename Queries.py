@@ -1,7 +1,75 @@
+import sys
+from pprint import pprint
 from typing import Optional
 
+import cimlab.data_profile.rc4_2021 as cim
+from cimlab.loaders import ConnectionParameters, Parameter
+from cimlab.loaders.blazegraph.blazegraph import BlazegraphConnection
+from cimlab.models import DistributedModel
 from gridappsd import GridAPPSD
+
+# import importlib
+# cim_profile = 'rc4_2021'
+# cim = importlib.import_module('cimlab.data_profile.' + cim_profile)
+
+
+# sort PowerElectronicsUnits
+def get_inverter_buses(network_area):
+    if cim.PowerElectronicsConnection in network_area.typed_catalog:
+        network_area.get_all_attributes(cim.PowerElectronicsConnection)
+        network_area.get_all_attributes(cim.PowerElectronicsConnectionPhase)
+        network_area.get_all_attributes(cim.Terminal)
+        network_area.get_all_attributes(cim.Analog)
+
+        print('\n \n EXAMPLE 6: GET ALL INVERTER PHASES AND BUSES')
+        for pec in network_area.typed_catalog[cim.PowerElectronicsConnection].values():
+            print('\n name: ', pec.name, pec.mRID)
+            print('p = ', pec.p, 'q = ', pec.q)
+            node1 = pec.Terminals[0].ConnectivityNode
+            print('bus: ', node1.name, node1.mRID)
+            for pec_phs in pec.PowerElectronicsConnectionPhases:
+                print('phase ', pec_phs.phase, ': ', pec_phs.mRID)
+
+            for meas in pec.Measurements:
+                print('Measurement: ', meas.name, meas.mRID)
+                print('type:', meas.measurementType, 'phases:', meas.phases)
+
+
+topic = "goss.gridappsd.request.data.topology"
+#feeder_mrid = "_C07972A7-600D-4AA5-B254-4CAA4263560E"    # Ochre 13-node
+feeder_mrid = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"    # 13-node
+# feeder_mrid = "_E407CBB6-8C8D-9BC9-589C-AB83FBF0826D"    # 123-node
+message = {"requestType": "GET_SWITCH_AREAS", "modelID": feeder_mrid, "resultFormat": "JSON"}
+
+gapps = GridAPPSD(username="system", password="manager")
+
+print(gapps.query_model_names())
+sys.exit()
+
+topology_response = gapps.get_response(topic, message, timeout=30)
+# Blazegraph connection for running outside the container
+params = ConnectionParameters(
+    [Parameter(key="url", value="http://localhost:8889/bigdata/namespace/kb/sparql")])
+bg = BlazegraphConnection(params, 'rc4_2021')
+
+# Initialize Model
+feeder = cim.Feeder(mRID=feeder_mrid)
+network = DistributedModel(connection=bg, feeder=feeder, topology=topology_response['feeders'])
+
+for switch_area in network.switch_areas:
+    get_inverter_buses(switch_area)
+    for secondary_area in switch_area.secondary_areas:
+        get_inverter_buses(secondary_area)
+
+print(network.typed_catalog.get(cim.PowerElectronicsConnection))
+
+# feeder = cim.Feeder(mRID=feeder_mrid)
+# network = DistributedModel(connection=bg, feeder=feeder, topology=topology_response['feeders'])
+
+sys.exit()
 import atexit
+
+from gridappsd import GridAPPSD
 
 conn: Optional[GridAPPSD] = None
 
