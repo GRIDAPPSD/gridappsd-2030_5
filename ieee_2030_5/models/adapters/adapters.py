@@ -8,6 +8,8 @@ import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from datetime import datetime, timezone
+from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,38 +20,59 @@ import ieee_2030_5.models as m
 from ieee_2030_5 import hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.data.indexer import add_href, get_href, get_href_filtered
+from ieee_2030_5.models.adapters import populate_from_kwargs
 from ieee_2030_5.models.enums import DeviceCategoryType
 from ieee_2030_5.types_ import Lfdi, StrPath, format_time
 
 _log = logging.getLogger(__name__)
 
 
-class InvalidConfigFile(Exception):
-    pass
-
-
-def __populate_from_kwargs__(obj: dataclass, **kwargs) -> Dict[str, Any]:
-    for k in fields(obj):
-        if k.name in kwargs:
-            type_eval = eval(k.type)
-
-            if typing.get_args(type_eval) is typing.get_args(Optional[int]):
-                setattr(obj, k.name, int(kwargs[k.name]))
-            elif typing.get_args(k.type) is typing.get_args(Optional[bool]):
-                setattr(obj, k.name, bool(kwargs[k.name]))
-            # elif bytes in args:
-            #     setattr(obj, k.name, bytes(kwargs[k.name]))
-            else:
-                setattr(obj, k.name, kwargs[k.name])
-            kwargs.pop(k.name)
-    return kwargs
+class ReturnCode(Enum):
+    OK = 200
+    CREATED = 201
+    NO_CONTENT = 204
 
 
 class BaseAdapter:
-
+    __count__: int = 0
     __server_configuration__: cfg.ServerConfiguration
-    __device_configurations__: List[cfg.DeviceConfiguration] = None
     __tls_repository__: cfg.TLSRepository = None
+    __lfdi__mapped_configuration__: Dict[str, cfg.DeviceConfiguration] = {}
+
+    @classmethod
+    def get_next_index(cls) -> int:
+        """Retrieve the next index for an adapter list."""
+        return cls.__count__
+
+    @classmethod
+    def increment_index(cls) -> int:
+        """Increment the list to the next index and return the result to the caller.
+        
+        
+        """
+        next = cls.get_next_index()
+        cls.__count__ += 1
+        return next
+
+    @classmethod
+    def get_current_index(cls) -> int:
+        return cls.__count__
+
+    @staticmethod
+    def server_config() -> cfg.ServerConfiguration:
+        return BaseAdapter.__server_configuration__
+
+    @staticmethod
+    def device_configs() -> cfg.DeviceConfiguration:
+        return BaseAdapter.__server_configuration__.devices
+
+    @staticmethod
+    def tls_repo() -> cfg.TLSRepository:
+        return BaseAdapter.__tls_repository__
+
+    @staticmethod
+    def get_config_from_lfdi(lfdi: str) -> Optional[cfg.DeviceConfiguration]:
+        return BaseAdapter.__lfdi__mapped_configuration__.get(lfdi)
 
     @staticmethod
     def is_initialized():
@@ -67,7 +90,6 @@ class BaseAdapter:
         The adapters are responsible for storing data into the object store using add_href function.
         """
         BaseAdapter.__server_configuration__ = server_config
-        BaseAdapter.__device_configurations__ = server_config.devices
         BaseAdapter.__lfdi__mapped_configuration__ = {}
         BaseAdapter.__tls_repository__ = tlsrepo
 
@@ -75,26 +97,12 @@ class BaseAdapter:
         for cfg in server_config.devices:
             BaseAdapter.__lfdi__mapped_configuration__[tlsrepo.lfdi(cfg.id)] = cfg
 
-        DERCurveAdapter.initialize()
-        DERControlAdapter.initialize()
-        DERProgramAdapter.initialize()
-        EndDeviceAdapter.initialize()
-        DeviceCapabilityAdapter.initialize()
+        # Find subclasses of us and initialize them calling _initalize method
+        # TODO make this non static
+        EndDeviceAdapter._initialize()
 
     @staticmethod
     def build(**kwargs) -> dataclass:
-        raise NotImplementedError()
-
-    @staticmethod
-    def get_by_href(href: str) -> dataclass:
-        return get_href(href)
-
-    @staticmethod
-    def get_index(data: dataclass):
-        raise NotImplemented()
-
-    @staticmethod
-    def get_next_index() -> int:
         raise NotImplementedError()
 
     @staticmethod
@@ -111,33 +119,70 @@ class BaseAdapter:
         })
 
 
-class DeviceCapabilityAdapter(BaseAdapter):
-    __dcap__: m.DeviceCapability = None
+class LogAdapter(BaseAdapter):
 
     @staticmethod
-    def initialize():
-        dcap = m.DeviceCapability(href=hrefs.get_dcap_href())
+    def store(path: str, logevent: m.LogEvent):
+        """Store a logevent to the given path.
+        
+        The 2030.5 Logevent is based upon a specific device so /edev/edevid/log is the event
+        list that should be stored.  The store method only stores a single event at a time.  The
+        2030.5 standard says we should hold at least 10 logs per logevent level."""
+        event_list: m.LogEventList = get_href(path)
+        if event_list is None:
+            event_list = m.LogEventList(
+                href=path, pollRate=BaseAdapter.server_config().log_event_list_poll_rate)
+            event_list.LogEvent = []
+
+        event_list.LogEvent.append(logevent)
+        event_list.LogEvent = sorted(event_list.LogEvent, key="createdDateTime")
+        add_href(path, event_list)
+
+    @staticmethod
+    def fetch_list(path: str, start: int = 0, after: int = 0, limit: int = 1) -> m.LogEventList:
+        # TODO: implement start length
+        event_list: m.LogEventList = get_href(path)
+
+        if event_list is None:
+            return m.LogEventList(href=path,
+                                  all=0,
+                                  results=0,
+                                  pollRate=BaseAdapter.server_config().log_event_list_poll_rate)
+
+        event_list.all = len(event_list.LogEvent)
+        event_list.results = len(event_list.LogEvent)
+
+        return event_list
+
+
+class DeviceCapabilityAdapter(BaseAdapter):
+
+    @classmethod
+    @lru_cache
+    def get_default_dcap(cls) -> m.DeviceCapability:
+        dcap = m.DeviceCapability(href=hrefs.get_dcap_href(),
+                                  pollRate=BaseAdapter.server_config().device_capability_poll_rate)
         dcap.ResponseSetListLink = m.ResponseSetListLink(href=hrefs.get_response_set_href(), all=0)
         dcap.TimeLink = m.TimeLink(href=hrefs.get_time_href())
         dcap.EndDeviceListLink = m.EndDeviceListLink(href=hrefs.get_enddevice_href(hrefs.NO_INDEX),
                                                      all=0)
-        # dcap.UsagePointListLink = m.UsagePointListLink(href=hrefs.)
-        # dcap.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.get_mup)
-        DeviceCapabilityAdapter.__dcap__ = dcap
+        dcap.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
+            href=hrefs.get_mirror_usage_list_href(hrefs.NO_INDEX))
+        return dcap
 
     @staticmethod
     def get_by_lfdi(lfdi: Lfdi) -> m.DeviceCapability:
-        dc = deepcopy(DeviceCapabilityAdapter.__dcap__)
-        if lfdi in BaseAdapter.__lfdi__mapped_configuration__:
+        dc = DeviceCapabilityAdapter.get_default_dcap()
+        config = BaseAdapter.get_config_from_lfdi(lfdi)
+        if config:
             dc.EndDeviceListLink.all = 1
         return dc
 
 
 class EndDeviceAdapter(BaseAdapter):
-    __count__: int = 0
 
     @staticmethod
-    def initialize():
+    def _initialize():
         """ Intializes the following based upon the device configuration and the tlsrepository.
         
         Each EndDevice will have the following sub-components initialized:
@@ -160,9 +205,15 @@ class EndDeviceAdapter(BaseAdapter):
         # stored_devices = EndDeviceAdapter.get_all()
         programs = DERProgramAdapter.get_all()
 
-        for dev in BaseAdapter.__device_configurations__:
-            next_index = EndDeviceAdapter.get_next_index()
-            edev = m.EndDevice(href=hrefs.get_enddevice_href(next_index))
+        edev_list = m.EndDeviceList(
+            href=hrefs.get_enddevice_list_href(),
+            all=0,
+            pollRate=EndDeviceAdapter.server_config().end_device_list_poll_rate,
+            EndDevice=[])
+
+        for dev in BaseAdapter.device_configs():
+            index = EndDeviceAdapter.increment_index()
+            edev = m.EndDevice(href=hrefs.get_enddevice_href(index))
             edev.lFDI = BaseAdapter.__tls_repository__.lfdi(dev.id)
             edev.sFDI = BaseAdapter.__tls_repository__.sfdi(dev.id)
             # TODO handle enum eval in a better way.
@@ -172,30 +223,37 @@ class EndDeviceAdapter(BaseAdapter):
             # TODO remove subscribable
             edev.subscribable = None
 
-            cfg = m.Configuration(href=hrefs.get_configuration_href(next_index))
+            log = m.LogEventList(href=hrefs.get_log_list_href(index),
+                                 all=0,
+                                 results=0,
+                                 pollRate=BaseAdapter.server_config().log_event_list_poll_rate)
+            edev.LogEventListLink = m.LogEventListLink(href=log.href)
+            add_href(log.href, log)
+
+            cfg = m.Configuration(href=hrefs.get_configuration_href(index))
             add_href(cfg.href, cfg)
             edev.ConfigurationLink = m.ConfigurationLink(cfg.href)
 
-            ps = m.PowerStatus(href=hrefs.get_power_status_href(next_index))
+            ps = m.PowerStatus(href=hrefs.get_power_status_href(index))
             add_href(ps.href, ps)
             edev.PowerStatusLink = m.PowerStatusLink(href=ps.href)
 
-            ds = m.DeviceStatus(href=hrefs.get_device_status(next_index))
+            ds = m.DeviceStatus(href=hrefs.get_device_status(index))
             add_href(ds.href, ds)
             edev.DeviceStatusLink = m.DeviceStatusLink(href=ds.href)
 
-            di = m.DeviceInformation(href=hrefs.get_device_information(next_index))
+            di = m.DeviceInformation(href=hrefs.get_device_information(index))
             add_href(di.href, di)
             edev.DeviceInformationLink = m.DeviceInformationLink(href=di.href)
 
             ts = int(round(datetime.utcnow().timestamp()))
-            reg = m.Registration(href=hrefs.get_registration_href(next_index),
+            reg = m.Registration(href=hrefs.get_registration_href(index),
                                  pIN=dev.pin,
                                  dateTimeRegistered=ts)
             add_href(reg.href, reg)
             edev.RegistrationLink = m.RegistrationLink(reg.href)
 
-            log = m.LogEventList(href=hrefs.get_log_list_href(next_index), all=0)
+            log = m.LogEventList(href=hrefs.get_log_list_href(index), all=0)
             add_href(log.href, log)
             edev.LogEventListLink = m.LogEventListLink(log.href)
 
@@ -225,7 +283,7 @@ class EndDeviceAdapter(BaseAdapter):
             # Allow der list here
             # # TODO: instantiate from config file.
             der_list = m.DERList(
-                href=hrefs.get_der_list_href(next_index),
+                href=hrefs.get_der_list_href(index),
             #pollRate=900,
                 results=0,
                 all=0)
@@ -235,49 +293,33 @@ class EndDeviceAdapter(BaseAdapter):
             add_href(fsa.href, fsa)
             add_href(fsa_list.href, fsa_list)
             add_href(der_program_list.href, der_program_list)
-
             add_href(edev.href, edev)
-            EndDeviceAdapter.__count__ += 1
 
-        #TODO Fix This!
+            edev_list.EndDevice.append(edev)
+        edev_list.all = edev_list.results = len(edev_list.EndDevice)
+        add_href(edev_list.href, edev_list)
 
-        # for index, device in enumerate(devices):
-        #     device: cfg.DeviceConfiguration = device
-        #     EndDeviceAdapter.__config_devices__[device.id] = device
+    @staticmethod
+    def fetch_list(path: str,
+                   start: int = 0,
+                   after: int = 0,
+                   limit: int = 1,
+                   lfdi: Lfdi = None) -> m.LogEventList:
+        # TODO: implement start length
+        edev_list: m.EndDeviceList = get_href(path)
 
-        #     ed = m.EndDevice()
+        if edev_list is None:
+            return m.EndDeviceList(href=path,
+                                   all=0,
+                                   results=0,
+                                   pollRate=BaseAdapter.server_config().end_device_list_poll_rate)
 
-        #     ds = m.DeviceStatus(href=hrefs.get_enddevice_href(index, "dstat"))
-        #     # TODO add other stuff to device status
-        #     add_href(ds.href, ds)
-        #     ed.DeviceStatusLink = m.DeviceStatusLink(ds.href)
+        edev_list.EndDevice = list(filter(lambda x: x.lFDI == lfdi, edev_list.EndDevice))
+        edev_list.all = len(edev_list.EndDevice)
+        edev_list.results = len(edev_list.EndDevice)
 
-        #     ps = m.PowerStatus(href=hrefs.get_enddevice_href(index, "ps"))
-        #     # TODO add other stuff to power status
-        #     add_href(ps.href, ps)
-        #     ed.PowerStatusLink = m.PowerStatusLink(ps.href)
+        return edev_list
 
-        #     reg = m.Registration(href=hrefs.get_enddevice_href(index, "reg"))
-        #     reg.pIN = device.pin
-        #     reg.pollRate = device.poll_rate
-        #     add_href(reg.href, reg)
-        #     ed.RegistrationLink = m.RegistrationLink(reg.href)
-
-        #     log = m.LogEventList(href=hrefs.get_enddevice_href(index, "log"))
-        #     add_href(log.href, log)
-        #     ed.LogEventListLink = m.LogEventListLink(log.href)
-
-        # try:
-        #     dev_programs = device['programs']
-        #     drp = m.DemandResponseProgramList(href=hrefs.get_enddevice_href(index, "derp"), all=len(dev_programs))
-        #     for dev_program in dev_programs:
-        #         for program in programs:
-        #             if dev_program['description'] == program.description:
-
-        # except KeyError:
-        #     _log.info(f"No programs for device: {device.id}")
-
-        # _log.debug(f"Config program\n{device}")
     @staticmethod
     def get_list(lfdi: Lfdi, s: int = 0, l: int = 1) -> m.EndDeviceList:
         ed_list = m.EndDeviceList(href=hrefs.get_enddevice_list_href(), all=0, results=0)
@@ -302,11 +344,11 @@ class EndDeviceAdapter(BaseAdapter):
     @staticmethod
     def build(**kwargs) -> m.EndDevice:
         ed = m.EndDevice()
-        __populate_from_kwargs__(ed, **kwargs)
+        populate_from_kwargs(ed, **kwargs)
         return ed
 
     @staticmethod
-    def get_index(end_device: m.EndDevices) -> int:
+    def find_index(end_device: m.EndDevices) -> int:
         for i in range(EndDeviceAdapter.__count__ + 1):
             if end_device.href == hrefs.get_enddevice_href(i):
                 return i
@@ -316,10 +358,6 @@ class EndDeviceAdapter(BaseAdapter):
     @staticmethod
     def get_by_index(index: int) -> m.EndDevice:
         return get_href(hrefs.get_enddevice_href(index))
-
-    @staticmethod
-    def get_next_index() -> int:
-        return EndDeviceAdapter.__count__
 
     @staticmethod
     def get_next_href() -> str:
@@ -357,7 +395,7 @@ class EndDeviceAdapter(BaseAdapter):
                     break
 
             mreg = m.Registration(href=hrefs.get_registration_href(
-                EndDeviceAdapter.get_index(value)),
+                EndDeviceAdapter.find_index(value)),
                                   pIN=pin,
                                   dateTimeRegistered=format_time(reg_time))
             add_href(mreg.href, mreg)
@@ -379,7 +417,6 @@ class EndDeviceAdapter(BaseAdapter):
 
 
 class DERCurveAdapter(BaseAdapter):
-    __count__ = 0
 
     def initialize():
         """Initialize the DERCurve objects based upon the BaseAdapter.__device_configuration__"""
@@ -401,8 +438,6 @@ class DERCurveAdapter(BaseAdapter):
 
 
 class DERProgramAdapter(BaseAdapter):
-    __count__ = 0
-    # __config_programs__: Dict[str, cfg.DERProgram] = {}
 
     @staticmethod
     def initialize():
@@ -506,7 +541,7 @@ class DERProgramAdapter(BaseAdapter):
         """
         program = m.DERProgram()
 
-        kwargs = __populate_from_kwargs__(program, **kwargs)
+        kwargs = populate_from_kwargs(program, **kwargs)
 
         href_default = kwargs.pop('default_der_control', None)
         hrefs_controls = [kwargs[k] for k in kwargs if k.startswith('der_control_checked')]
@@ -519,7 +554,33 @@ class DERProgramAdapter(BaseAdapter):
 
 
 class DERControlAdapter(BaseAdapter):
-    __count__ = 0
+
+    @staticmethod
+    def fetch_default() -> m.DefaultDERControl:
+        dderc = get_href(hrefs.get_dderc_href())
+
+        if dderc is None:
+            derbase = m.DERControlBase(opModConnect=True, opModEnergize=False)
+
+            # Defaults from Jakaria on 1/26/2023
+            dderc = m.DefaultDERControl(href=hrefs.get_dderc_href(),
+                                        mRID=uuid.uuid4(),
+                                        description="Default DER Control Mode",
+                                        setESDelay=300,
+                                        setESLowVolt=0.917,
+                                        setESHighVolt=1.05,
+                                        setESLowFreq=59.5,
+                                        setESHighFreq=60.1,
+                                        setESRampTms=300,
+                                        setESRandomDelay=0,
+                                        DERControlBase=derbase)
+            add_href(dderc.href, dderc)
+
+        return dderc
+
+    @staticmethod
+    def store_default(dderc: m.DefaultDERControl):
+        add_href(hrefs.get_dderc_href(), dderc)
 
     @staticmethod
     def initialize():
@@ -553,6 +614,24 @@ class DERControlAdapter(BaseAdapter):
         dercs_href = hrefs.get_derc_href(hrefs.NO_INDEX)
         der_controls = get_href_filtered(dercs_href)
         DERControlAdapter.__count__ = len(der_controls)
+
+    @staticmethod
+    def create_from_parameters(**kwargs) -> m.DERControl:
+        """Create and store a new DERControl object from the passed kwargs
+        
+        If invalid parameters are passed then a ValueError should be raised.        
+        """
+        control = m.DERControl()
+        base_control = m.DERControlBase()
+        control.DERControlBase = base_control
+        field_list = fields(control)
+        for k, v in kwargs.items():
+            for f in field_list:
+                if k == f.name:
+                    setattr(control, k, v)
+            for f in fields(base_control):
+                if k == f.name:
+                    setattr(base_control, k, v)
 
     @staticmethod
     def build_der_control(**kwargs) -> m.DERControl:
@@ -677,3 +756,103 @@ class DERControlAdapter(BaseAdapter):
             raise InvalidConfigFile(f"{yaml_file} must have at least one DERControl specified.")
 
         return derc_list, None    # default_derc
+
+
+class UsagePointAdapter(BaseAdapter):
+    __by_mrid__: Dict[str, int] = {}
+
+    @staticmethod
+    def initialize():
+        pass
+
+    @staticmethod
+    def update_from_mirror(mirror: m.MirrorUsagePoint):
+        if not UsagePointAdapter.__by_mrid__.get(mirror.mRID):
+            href = hrefs.get_usage_point_href(UsagePointAdapter.get_next_index())
+            upt = m.UsagePoint(href=href,
+                               description=mirror.description,
+                               serviceCategoryKind=mirror.serviceCategoryKind,
+                               status=mirror.status,
+                               deviceLFDI=mirror.deviceLFDI,
+                               mRID=mirror.mRID,
+                               version=mirror.version)
+            add_href(href, upt)
+            UsagePointAdapter.__count__ += 1
+
+
+class MirrorUsagePointAdapter(BaseAdapter):
+
+    @staticmethod
+    def initialize():
+        if not MirrorUsagePointAdapter.get_all():
+            mupl = m.MirrorUsagePointList(all=MirrorUsagePointAdapter.__count__,
+                                          href=hrefs.get_mirror_usage_list_href())
+            add_href(mupl.href, mupl)
+
+    @staticmethod
+    def get_list(start: Optional[int] = None,
+                 after: Optional[int] = None,
+                 length: Optional[int] = None) -> m.MirrorUsagePointList:
+        if start is not None and after is not None:
+            # after takes precedence
+            index = after + 1 + start
+        elif start is not None:
+            index = start
+        elif after is not None:
+            index = after + 1
+        else:
+            index = 0
+        value = get_href(href=hrefs.get_mirror_usage_list_href(index))
+
+        if not value:
+            mupl = m.MirrorUsagePointList(href=hrefs.get_mirror_usage_list_href())
+            mupl.all = 0
+            add_href(hrefs.get_mirror_usage_list_href(), mupl)
+
+        return get_href(href=hrefs.get_mirror_usage_list_href(index))
+
+    @staticmethod
+    def create(mup: m.MirrorUsagePoint) -> ReturnCode:
+
+        found_mup = MirrorUsagePointAdapter.get_by_mRID(mup.mRID)
+        created = False
+        if found_mup is None:
+            next_index = MirrorUsagePointAdapter.get_next_index()
+            mup.href = hrefs.get_mirror_usage_list_href(next_index)
+            add_href(mup.href, mup)
+            MirrorUsagePointAdapter.__count__ += 1
+            mupl = get_href(hrefs.get_mirror_usage_list_href())
+            if not mupl:
+                mupl = m.MirrorUsagePointList(all=MirrorUsagePointAdapter.__count__,
+                                              href=hrefs.get_mirror_usage_list_href())
+
+            mupl.MirrorUsagePoint.append(mup)
+            add_href(mupl.href, mupl)
+            created = ReturnCode.CREATED
+        else:
+            found_mup.description = mup.description
+            found_mup.deviceLFDI = mup.deviceLFDI
+            found_mup.MirrorMeterReading = mup.MirrorMeterReading
+            created = ReturnCode.NO_CONTENT
+
+        return created
+
+    @staticmethod
+    def create_reading(href, data):
+        _log.debug(href)
+        _log.debug(data)
+
+    @staticmethod
+    def get_by_mRID(mRID: str) -> Optional[m.MirrorUsagePoint]:
+        for mup in MirrorUsagePointAdapter.get_all().MirrorUsagePoint:
+            if mup.mRID == mRID:
+                return mup
+        return None
+
+    @staticmethod
+    def get_by_index(index: int) -> m.MirrorUsagePoint:
+        return get_href(hrefs.get_mirror_usage_list_href(index))
+
+    @staticmethod
+    def get_all() -> m.MirrorUsagePointList:
+        return get_href(hrefs.get_mirror_usage_list_href(hrefs.NO_INDEX))
