@@ -1,0 +1,21 @@
+@startuml Common Classes
+
+class BaseAdapter {
+    -__count__: int = 0
+    -__server_configuration__: ServerConfiguration
+    -__device_configuration__: DeviceConfiguration
+    -__tls_repository__: TLSRepository
+    -__lfdi_mapped_configuration__: Dict[str, DeviceConfiguration]
+
+    {classmethod} +get_next_index(cls) -> int
+    {classmethod} +increment_index(cls) -> int
+    {classmethod} +get_current_index(cls) -> int
+    --
+    {staticmethod} +initialize(server_config: ServerConfiguration, tlsrepo: TLSRepository)
+    {staticmethod} +get_config_from_lfdi(lfdi: str) -> DeviceConfiguration?
+    {staticmethod} +server_config() -> ServerConfiguration
+
+}
+
+
+@enduml

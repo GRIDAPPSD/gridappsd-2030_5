@@ -158,6 +158,12 @@ class ServerConfiguration:
     server: str
     https_port: int
 
+    log_event_list_poll_rate: int = 900
+    device_capability_poll_rate: int = 900
+    end_device_list_poll_rate: int = 86400  # daily check-in
+
+    generate_admin_cert: bool = False
+
     http_port: int = None
 
     server_mode: Union[

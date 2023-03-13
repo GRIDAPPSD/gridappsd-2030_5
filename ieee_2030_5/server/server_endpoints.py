@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
+from http.client import BAD_REQUEST
 from typing import Optional
 
 import pytz
@@ -12,27 +13,27 @@ from flask import Flask, Response, request
 from werkzeug.exceptions import Forbidden
 from werkzeug.routing import BaseConverter
 
-from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.data.indexer import get_href, get_href_filtered
-from ieee_2030_5.models import Time, DERCurveList, DERProgramList
-from ieee_2030_5.server.server_constructs import EndDevices
 import ieee_2030_5.hrefs as hrefs
-from ieee_2030_5.server.der_program import DERProgramRequests
-from ieee_2030_5.server.edevrequests import EDevRequests, SDevRequests, DERRequests
-from ieee_2030_5.server.base_request import RequestOp
-from ieee_2030_5.server.uuid_handler import UUIDHandler
+import ieee_2030_5.models as m
 import ieee_2030_5.models.adapters as adpt
-
+from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5.config import ServerConfiguration
+from ieee_2030_5.data.indexer import get_href, get_href_filtered
+from ieee_2030_5.server.base_request import RequestOp
+from ieee_2030_5.server.der_program import DERProgramRequests
+from ieee_2030_5.server.edevrequests import (DERRequests, EDevRequests, SDevRequests)
+from ieee_2030_5.server.server_constructs import EndDevices
 # module level instance of hrefs class.
 from ieee_2030_5.server.usage_points import MUP, UTP
+from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import TimeOffsetType, format_time
-from ieee_2030_5.utils import dataclass_to_xml
+from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
 _log = logging.getLogger(__name__)
 
 
 class Admin(RequestOp):
+
     def get(self):
         if not self.is_admin_client:
             raise Forbidden()
@@ -42,6 +43,29 @@ class Admin(RequestOp):
         if not self.is_admin_client:
             raise Forbidden()
         return Response(json.dumps({'abc': 'def'}), headers={'Content-Type': 'application/json'})
+
+
+class Log(RequestOp):
+
+    def get(self) -> Response:
+        pth = request.environ['PATH_INFO']
+        return self.build_response_from_dataclass(adpt.LogAdapter.fetch_list(pth))
+
+    def post(self) -> Response:
+        """Posting of log event allows client to store information for a display to get.
+        
+        For 2030.5 this is posted at an end device level so that its available to the
+        server.
+        """
+        path = request.environ['PATH_INFO']
+        data: m.LogEvent = xml_to_dataclass(request.data.decode('utf-8'))
+        data_type = type(data)
+        if data_type not in (m.LogEvent):
+            raise BAD_REQUEST()
+        
+        if not data.createdDateTime:
+            data.createdDateTime = format_time(datetime.utcnow().replace(tzinfo=pytz.utc))
+        adpt.LogAdapter.store(path, data)
 
 
 class Dcap(RequestOp):
@@ -59,6 +83,7 @@ class Dcap(RequestOp):
 
 
 class TimeRequest(RequestOp):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -80,17 +105,18 @@ class TimeRequest(RequestOp):
         dst_offset = local_tz.utcoffset(start_dst_utc + timedelta(days=1)) - utc_offset
         local_but_utc = datetime.now().replace(tzinfo=pytz.utc)
 
-        tm = Time(currentTime=format_time(now_utc),
-                  dstEndTime=format_time(end_dst_utc.replace(tzinfo=pytz.utc)),
-                  dstOffset=TimeOffsetType(int(dst_offset.total_seconds())),
-                  localTime=format_time(local_but_utc),
-                  quality=None,
-                  tzOffset=TimeOffsetType(utc_offset.total_seconds()))
+        tm = m.Time(currentTime=format_time(now_utc),
+                    dstEndTime=format_time(end_dst_utc.replace(tzinfo=pytz.utc)),
+                    dstOffset=TimeOffsetType(int(dst_offset.total_seconds())),
+                    localTime=format_time(local_but_utc),
+                    quality=None,
+                    tzOffset=TimeOffsetType(utc_offset.total_seconds()))
 
         return self.build_response_from_dataclass(tm)
 
 
 class ServerList(RequestOp):
+
     def __init__(self, list_type: str, **kwargs):
         super().__init__(**kwargs)
         self._list_type = list_type
@@ -107,6 +133,7 @@ class ServerList(RequestOp):
 
 
 class RegexConverter(BaseConverter):
+
     def __init__(self, url_map, *items):
         super(RegexConverter, self).__init__(url_map)
         self.regex = items[0]
@@ -134,18 +161,25 @@ class ServerEndpoints:
         # app.add_url_rule(hrefs.derp, view_func=self._derp)
 
         # All the energy devices
-        app.add_url_rule(f"/{hrefs.EDEV}", methods=["GET", "POST"],
-                         view_func=self._edev)
+        app.add_url_rule(f"/{hrefs.EDEV}", methods=["GET", "POST"], view_func=self._edev)
         app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._edev, methods=["GET"])
+                         view_func=self._edev,
+                         methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.DER}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._der, methods=["GET"])
+                         view_func=self._der,
+                         methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.MUP}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._mup, methods=["GET"])
+                         view_func=self._mup,
+                         methods=["GET", "POST"])
         app.add_url_rule(f"/<regex('{hrefs.CURVE}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._curves, methods=["GET"])
+                         view_func=self._curves,
+                         methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.PROGRAM}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._programs, methods=["GET"])
+                         view_func=self._programs,
+                         methods=["GET"])
+        app.add_url_rule(f"/<regex('{hrefs.LOG}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._log,
+                         methods=["GET", "POST"])
         # rulers = (
         #     (hrefs.der_urls, self._der),
         #     #(hrefs.edev_urls, self._edev),
@@ -181,11 +215,15 @@ class ServerEndpoints:
         #     self.add_endpoint(hrefs.edev + f"/{index}", view_func=self._edev)
         #     self.add_endpoint(hrefs.mup + f"/{index}", view_func=self._mup)
 
+    def _log(self, path):
+        return
+
     def _foo(self, bar):
         return Response("Foo Response")
 
     def _generate_uuid(self) -> Response:
         return Response(UUIDHandler().generate())
+
     #
     # def _admin(self) -> Response:
     #     return Admin(server_endpoints=self).execute()
@@ -204,6 +242,7 @@ class ServerEndpoints:
 
     def _edev(self, path: Optional[str] = None) -> Response:
         return EDevRequests(server_endpoints=self).execute(path=path)
+
     # def _edev(self, index: Optional[int] = None, category: Optional[str] = None) -> Response:
     #     return EDevRequests(server_endpoints=self).execute(index=index, category=category)
 

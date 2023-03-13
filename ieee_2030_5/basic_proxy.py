@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import ssl
 from dataclasses import dataclass
 from http.client import HTTPSConnection
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import ssl
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Tuple
 from urllib.parse import urlparse
@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 import OpenSSL
 import yaml
 
-from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
+from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi)
 from ieee_2030_5.config import ServerConfiguration
 
 _log = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         # context.load_verify_locations(cafile="/home/gridappsd/tls/certs/ca.crt")
         assert cert_file
-        ca_file = str(Path(cert_file).parent.joinpath("ca.crt"))
+        ca_file = str(Path(cert_file).parent.joinpath("ca.pem"))
         context.load_verify_locations(cafile=ca_file)
         if cert_file is not None and key_file is not None and \
                 Path(cert_file).exists() and Path(key_file).exists():
@@ -61,8 +61,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         ccp = self.get_context_cert_pair()
 
         host, port = self.server.proxy_target
-        conn = HTTPSConnection(host=host, port=port,
-                               context=ccp.context)
+        conn = HTTPSConnection(host=host, port=port, context=ccp.context)
         conn.connect()
         return conn
 
@@ -76,7 +75,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         for k, v in response.headers.items():
 
-            if k not in ('Connection',):
+            if k not in ('Connection', ):
                 if k == 'Content-Length':
                     self.send_header(k, str(len(data)))
                 else:
@@ -93,10 +92,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         conn = self.__start_request__()
 
-        conn.request(method="GET",
-                     url=self.path,
-                     headers=self.headers,
-                     encode_chunked=True)
+        conn.request(method="GET", url=self.path, headers=self.headers, encode_chunked=True)
 
         self.__handle_response__(conn)
 
@@ -131,7 +127,8 @@ class ProxyServer(HTTPServer):
         return self._tls_repo
 
 
-def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository, proxy_target: Tuple[str, int]):
+def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
+                proxy_target: Tuple[str, int]):
     logging.getLogger().info(f"Serving {server_address} proxied to {proxy_target}")
     RequestForwarder.protocol_version = "HTTP/1.1"
     httpd = ProxyServer(server_address=server_address,
@@ -147,9 +144,8 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository, proxy_
     sslctx.verify_mode = ssl.CERT_OPTIONAL
     sslctx.load_verify_locations(cafile=tls_repo.ca_cert_file)
 
-    sslctx.check_hostname = False  # If set to True, only the hostname that matches the certificate will be accepted
-    sslctx.load_cert_chain(certfile=tls_repo.server_cert_file,
-                           keyfile=tls_repo.server_key_file)
+    sslctx.check_hostname = False    # If set to True, only the hostname that matches the certificate will be accepted
+    sslctx.load_cert_chain(certfile=tls_repo.server_cert_file, keyfile=tls_repo.server_key_file)
     httpd.socket = sslctx.wrap_socket(httpd.socket, server_side=True)
     httpd.serve_forever()
 
@@ -177,7 +173,9 @@ def _main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(dest="config", help="Configuration file for the server.")
-    parser.add_argument("--debug", action="store_true", default=False,
+    parser.add_argument("--debug",
+                        action="store_true",
+                        default=False,
                         help="Turns debugging on for logging of the proxy.")
 
     opts = parser.parse_args()

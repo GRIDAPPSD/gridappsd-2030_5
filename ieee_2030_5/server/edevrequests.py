@@ -17,6 +17,7 @@ class DERRequests(RequestOp):
     """
     Class supporting end devices and any of the subordinate calls to it.
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -25,7 +26,7 @@ class DERRequests(RequestOp):
 
         if not pth.startswith(hrefs.DEFAULT_DER_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
-        
+
         value = get_href(pth)
 
         return self.build_response_from_dataclass(value)
@@ -35,6 +36,7 @@ class EDevRequests(RequestOp):
     """
     Class supporting end devices and any of the subordinate calls to it.
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -58,7 +60,7 @@ class EDevRequests(RequestOp):
         # request.data should have xml data.
         if not request.data:
             raise werkzeug.exceptions.Forbidden()
-        
+
         ed: m.EndDevice = xml_to_dataclass(request.data.decode('utf-8'))
 
         if not isinstance(ed, m.EndDevice):
@@ -70,10 +72,10 @@ class EDevRequests(RequestOp):
         if end_device := adpt.EndDeviceAdapter.get_by_lfdi(ed.lFDI):
             status = 200
             ed_href = end_device.href
-        else:            
+        else:
             if not ed.href:
                 ed = adpt.EndDeviceAdapter.store(device_id, ed)
-                  
+
             ed_href = ed.href
             status = 201
 
@@ -98,9 +100,11 @@ class EDevRequests(RequestOp):
         # top level /edev should return specific end device list based upon
         # the lfdi of the connection.
         if pth == hrefs.DEFAULT_EDEV_ROOT:
-            retval = adpt.EndDeviceAdapter.get_list(self.lfdi, 
-                                                    s=request.args.get('s'), 
-                                                    l=request.args.get('l'))
+            retval = adpt.EndDeviceAdapter.fetch_list(path=pth,
+                                                      start=request.args.get("s"),
+                                                      limit=request.args.get("l"),
+                                                      after=request.args.get("a"),
+                                                      lfdi=self.lfdi)
         else:
             retval = get_href(pth)
         return self.build_response_from_dataclass(retval)
@@ -110,6 +114,7 @@ class SDevRequests(RequestOp):
     """
     SelfDevice is an alias for the end device of a client.
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

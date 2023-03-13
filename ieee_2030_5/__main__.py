@@ -50,8 +50,10 @@ from time import sleep
 import yaml
 from werkzeug.serving import BaseWSGIServer
 
+import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
+from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.flask_server import build_server, run_server
 from ieee_2030_5.models.adapters import InvalidConfigFile
 from ieee_2030_5.server.server_constructs import initialize_2030_5
@@ -80,7 +82,9 @@ def get_tls_repository(cfg: ServerConfiguration,
                             cfg.openssl_cnf,
                             cfg.server_hostname,
                             cfg.proxy_hostname,
-                            clear=create_certificates_for_devices)
+                            clear=create_certificates_for_devices,
+                            generate_admin_cert=cfg.generate_admin_cert)
+
     if create_certificates_for_devices:
         already_represented = set()
 
@@ -151,6 +155,8 @@ def _main():
     assert config.tls_repository
     assert len(config.devices) > 0
     assert config.server_hostname
+
+    add_href(hrefs.get_server_config_href(), config)
     unknown = []
     # Only check for resolvability if not passed --no-validate
     if not opts.no_validate:

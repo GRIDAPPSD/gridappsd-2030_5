@@ -1,9 +1,9 @@
 import subprocess
-
 from pathlib import Path
 
 
 class TLSWrap:
+
     @staticmethod
     def tls_create_private_key(file_path: Path):
         """
@@ -19,9 +19,7 @@ class TLSWrap:
         raise NotImplementedError()
 
     @staticmethod
-    def tls_create_ca_certificate(common_name: str,
-                                  private_key_file: Path,
-                                  ca_cert_file: Path):
+    def tls_create_ca_certificate(common_name: str, private_key_file: Path, ca_cert_file: Path):
         """
         Create a ca certificate from using common name private key and ca certificate file.
 
@@ -36,9 +34,7 @@ class TLSWrap:
         raise NotImplementedError()
 
     @staticmethod
-    def tls_create_csr(common_name: str,
-                       private_key_file: Path,
-                       server_csr_file: Path):
+    def tls_create_csr(common_name: str, private_key_file: Path, server_csr_file: Path):
         """
 
         Args:
@@ -87,7 +83,8 @@ class TLSWrap:
         raise NotImplementedError()
 
     @staticmethod
-    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path, combined_file: Path):
+    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
+                                       combined_file: Path):
         """
 
         Args:
@@ -122,9 +119,7 @@ class OpensslWrapper(TLSWrap):
         return subprocess.check_output(cmd, text=True)
 
     @staticmethod
-    def tls_create_ca_certificate(common_name: str,
-                                  private_key_file: Path,
-                                  ca_cert_file: Path):
+    def tls_create_ca_certificate(common_name: str, private_key_file: Path, ca_cert_file: Path):
         OpensslWrapper.__set_cnf_from_cert_path___(ca_cert_file)
         # openssl req -new -x509 -days 3650 -config openssl.cnf \
         #   -extensions v3_ca -key private/ec-cakey.pem -out certs/ec-cacert.pem
@@ -138,8 +133,7 @@ class OpensslWrapper(TLSWrap):
         return subprocess.check_output(cmd, text=True)
 
     @staticmethod
-    def tls_create_csr(common_name: str, private_key_file: Path,
-                       server_csr_file: Path):
+    def tls_create_csr(common_name: str, private_key_file: Path, server_csr_file: Path):
         OpensslWrapper.__set_cnf_from_cert_path___(private_key_file)
         subject_name = common_name.split(":")[0]
         # openssl req -new -key server.key -out server.csr -sha256
@@ -159,7 +153,7 @@ class OpensslWrapper(TLSWrap):
                                       cert_file: Path,
                                       as_server: bool = False):
         OpensslWrapper.__set_cnf_from_cert_path___(cert_file)
-        subject_name = common_name.split(":")[0]
+        subject_name = common_name.split(":")
         csr_file = Path(f"/tmp/{common_name}")
         OpensslWrapper.tls_create_csr(common_name, private_key_file, csr_file)
         # openssl ca -keyfile /root/tls/private/ec-cakey.pem -cert /root/tls/certs/ec-cacert.pem \
@@ -179,12 +173,12 @@ class OpensslWrapper(TLSWrap):
             str(cert_file),
             "-config",
             str(OpensslWrapper.opensslcnf),
-            # For no prompt use -batch
+        # For no prompt use -batch
             "-batch"
         ]
         # if as_server:
         #     "-server"
-        # print(" ".join(cmd))
+        #print(" ".join(cmd))
         ret_value = subprocess.check_output(cmd, text=True)
         csr_file.unlink()
         return ret_value
@@ -204,18 +198,27 @@ class OpensslWrapper(TLSWrap):
         return ret_value
 
     @staticmethod
-    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path, combined_file: Path):
+    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
+                                       combined_file: Path):
         OpensslWrapper.__set_cnf_from_cert_path___(cert_file)
         # openssl pkcs12 -export -in certificate.pem -inkey privatekey.pem -out cert-and-key.pfx
         tmpfile = Path("/tmp/tmp.p12")
         tmpfile2 = Path("/tmp/all.pem")
         tmpfile.unlink(missing_ok=True)
-        cmd = ["openssl", "pkcs12", "-export", "-in", str(cert_file), "-inkey", str(private_key_file), "-out",
-               str(tmpfile), "-passout", "pass:"]
+        cmd = [
+            "openssl", "pkcs12", "-export", "-in",
+            str(cert_file), "-inkey",
+            str(private_key_file), "-out",
+            str(tmpfile), "-passout", "pass:"
+        ]
         subprocess.check_output(cmd, text=True)
 
         # openssl pkcs12 -in path.p12 -out newfile.pem -nodes
-        cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(tmpfile2), "-nodes", "-passin", "pass:"]
+        cmd = [
+            "openssl", "pkcs12", "-in",
+            str(tmpfile), "-out",
+            str(tmpfile2), "-nodes", "-passin", "pass:"
+        ]
         # cmd = ["openssl", "pkcs12", "-in", str(tmpfile),
         # "-out", str(combined_file), "-clcerts", "-nokeys", "-passin", "pass:"]
         # -clcerts -nokeys

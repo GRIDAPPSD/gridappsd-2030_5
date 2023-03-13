@@ -1,36 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Administration Area</title>
 </head>
+
 <body>
-<h1>Administration Area</h1>
-<div>
-    <a href="{{ url_for('admin_der_control') }}">Add DER Control</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_der_program') }}">Add DER Program</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_fsa') }}">Add FSA</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_end_device') }}">Add End Device</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_resource_list') }}">Resource Tree</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_clients') }}">Clients</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_groups') }}">DER Program Lists</a>
-</div>
-<div>
-    <a href="{{ url_for('admin_aggregators') }}">Aggregators</a>
-</div>
+    <h1>Administration Area</h1>
+    <div>
+        <a href="{{ url_for('admin_default_der_control') }}">Default DER Control</a>
+    </div>
+    <!-- <div>
+        <a href="{{ url_for('execute_method')}}">Execute Call</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_default_der_control') }}">Add DER Control</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_der_program') }}">Add DER Program</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_fsa') }}">Add FSA</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_end_device') }}">Add End Device</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_resource_list') }}">Resource Tree</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_clients') }}">Clients</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_groups') }}">DER Program Lists</a>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_aggregators') }}">Aggregators</a>
+    </div> -->
 
 
 </body>
+
 </html>

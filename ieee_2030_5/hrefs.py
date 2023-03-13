@@ -37,6 +37,11 @@ NO_INDEX = -1
 
 
 @lru_cache()
+def get_server_config_href() -> str:
+    return "/server/cfg"
+
+
+@lru_cache()
 def get_enddevice_list_href() -> str:
     return DEFAULT_EDEV_ROOT
 
@@ -47,6 +52,22 @@ def get_curve_href(index: int) -> str:
 
 def get_fsa_href(fsa_list_href: str, index: int) -> str:
     return SEP.join([fsa_list_href, str(index)])
+
+
+def get_mirror_usage_list_href(index: int = NO_INDEX) -> str:
+    if index == NO_INDEX:
+        ret = DEFAULT_MUP_ROOT
+    else:
+        ret = SEP.join([DEFAULT_MUP_ROOT, str(index)])
+    return ret
+
+
+def get_usage_point_href(index: int) -> str:
+    return SEP.join([DEFAULT_UPT_ROOT, index])
+
+
+def get_usage_point_list_href() -> str:
+    return DEFAULT_UPT_ROOT
 
 
 def get_der_program_list(fsa_href: str) -> str:
@@ -75,39 +96,39 @@ def get_der_list_href(index: int) -> str:
 
 
 @lru_cache()
-def get_enddevice_href(index: int, subref: str = None) -> str:
-    if index == NO_INDEX:
+def get_enddevice_href(edev_indx: int, subref: str = None) -> str:
+    if edev_indx == NO_INDEX:
         ret = DEFAULT_EDEV_ROOT
     elif subref:
-        ret = SEP.join([DEFAULT_EDEV_ROOT, f"{index}", f"{subref}"])
+        ret = SEP.join([DEFAULT_EDEV_ROOT, f"{edev_indx}", f"{subref}"])
     else:
-        ret = SEP.join([DEFAULT_EDEV_ROOT, f"{index}"])
+        ret = SEP.join([DEFAULT_EDEV_ROOT, f"{edev_indx}"])
     return ret
 
 
 @lru_cache()
-def get_registration_href(index: int) -> str:
-    return get_enddevice_href(index, "reg")
+def get_registration_href(edev_index: int) -> str:
+    return get_enddevice_href(edev_index, "reg")
 
 
 @lru_cache()
-def get_configuration_href(index: int) -> str:
-    return get_enddevice_href(index, "cfg")
+def get_configuration_href(edev_index: int) -> str:
+    return get_enddevice_href(edev_index, "cfg")
 
 
 @lru_cache()
-def get_power_status_href(index: int) -> str:
-    return get_enddevice_href(index, "ps")
+def get_power_status_href(edev_index: int) -> str:
+    return get_enddevice_href(edev_index, "ps")
 
 
 @lru_cache()
-def get_device_status(index: int) -> str:
-    return get_enddevice_href(index, "ds")
+def get_device_status(edev_index: int) -> str:
+    return get_enddevice_href(edev_index, "ds")
 
 
 @lru_cache()
-def get_device_information(index: int) -> str:
-    return get_enddevice_href(index, "di")
+def get_device_information(edev_index: int) -> str:
+    return get_enddevice_href(edev_index, "di")
 
 
 @lru_cache()
@@ -117,13 +138,17 @@ def get_time_href() -> str:
 
 
 @lru_cache()
-def get_log_list_href(index: int) -> str:
-    return SEP.join([DEFAULT_LOG_EVENT_ROOT, str(index)])
+def get_log_list_href(edev_index: int) -> str:
+    return get_enddevice_href(edev_index, "lel")
 
 
 @lru_cache()
 def get_dcap_href() -> str:
     return f"{DEFAULT_DCAP_ROOT}"
+
+
+def get_dderc_href() -> str:
+    return SEP.join([DEFAULT_DER_ROOT, DDERC])
 
 
 def get_derc_default_href(derp_index: int) -> str:
