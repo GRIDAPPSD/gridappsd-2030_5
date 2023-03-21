@@ -23,8 +23,8 @@ server_mode: enddevices_create_on_start
 #   lfdi_mode_from_cert_fingerprint - sha256 hash of the certificates fingerprint.
 #
 # default: lfdi_mode_from_cert_fingerprint
-#lfdi_mode: lfdi_mode_from_file
-lfdi_mode: lfdi_mode_from_cert_fingerprint
+lfdi_mode: lfdi_mode_from_file
+#lfdi_mode: lfdi_mode_from_cert_fingerprint
 
 # Create an administrator certificate that can be used from
 # browser/api to connect to the platform.
