@@ -1,11 +1,20 @@
 [tool.poetry]
 name = "gridappsd-2030_5"
-version = "0.4.0"
+version = "0.5.0"
 description = ""
 authors = ["C. Allwardt <3979063+craig8@users.noreply.github.com>"]
 packages = [
     { include = "ieee_2030_5" }
 ]
+license = "BSD-3-Clause"
+maintainers = [
+    "C. Allwardt <3979063+craig8@users.noreply.github.com>"
+]
+readme = "README.md"
+homepage = "https://github.com/GRIDAPPSD/gridappsd-2030_5"
+repository = "https://github.com/GRIDAPPSD/gridappsd-2030_5"
+documentation = "https://github.com/GRIDAPPSD/gridappsd-2030_5"
+
 
 [tool.poetry.dependencies]
 python = "^3.8"
