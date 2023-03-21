@@ -54,7 +54,7 @@ import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
-from ieee_2030_5.flask_server import build_server, run_server
+from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.models.adapters import InvalidConfigFile
 from ieee_2030_5.server.server_constructs import initialize_2030_5
 
@@ -187,33 +187,33 @@ def _main():
     # Initialize the repository of 2030.5 devices.
     end_devices = initialize_2030_5(config, tls_repo)
 
-    if not opts.production:
-        try:
-            run_server(config,
-                       tls_repo,
-                       end_devices,
-                       debug=opts.debug,
-                       use_reloader=False,
-                       use_debugger=True,
-                       threaded=False)
-        except KeyboardInterrupt:
-            _log.info("Shutting down server")
-    else:
-        server = build_server(config, tls_repo, enddevices=end_devices)
+    #if not opts.production:
+    try:
+        run_server(config,
+                    tls_repo,
+                    end_devices,
+                    debug=opts.debug,
+                    use_reloader=False,
+                    use_debugger=True,
+                    threaded=False)
+    except KeyboardInterrupt:
+        _log.info("Shutting down server")
+    # else:
+    #     server = build_server(config, tls_repo, enddevices=end_devices)
 
-        thread = None
-        try:
-            remove_stop_file()
-            thread = ServerThread(server)
-            thread.start()
-            while not should_stop():
-                sleep(0.5)
-        except KeyboardInterrupt as ex:
-            _log.info("Exiting program.")
-        finally:
-            if thread:
-                thread.shutdown()
-                thread.join()
+    #     thread = None
+    #     try:
+    #         remove_stop_file()
+    #         thread = ServerThread(server)
+    #         thread.start()
+    #         while not should_stop():
+    #             sleep(0.5)
+    #     except KeyboardInterrupt as ex:
+    #         _log.info("Exiting program.")
+    #     finally:
+    #         if thread:
+    #             thread.shutdown()
+    #             thread.join()
 
 
 if __name__ == '__main__':

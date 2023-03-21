@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 __all__ = ["ServerConfiguration"]
 
-from ieee_2030_5.models.adapters import DERControlAdapter
+#from ieee_2030_5.models.adapters import DERControlAdapter
 
 try:
     from gridappsd.field_interface import MessageBusDefinition

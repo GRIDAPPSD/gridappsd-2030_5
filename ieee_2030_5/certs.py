@@ -111,9 +111,12 @@ class TLSRepository:
         if not clear:
             #_log.debug(list(self._certs_dir.glob('*.pem')))
             
-            for f in self._certs_dir.glob('*.pem'):
+            # creating certs has something screwy so we are going
+            # to create the cert_paths based upon the private key
+            # files.
+            for f in self._private_dir.glob('*.pem'):
                 f = Path(f)
-                self._cert_paths.append(f)
+                f = self._certs_dir.joinpath(f.name)
                 cn = self.get_common_name(f.stem)
                 if cn not in ('ca', serverhost):
                     self._client_common_name_set.add(cn)
@@ -242,11 +245,13 @@ class TLSRepository:
         """
         device_id = None
         _log.debug(f"Attempting to find sfid: {sfdi}")
-        for d in self._cert_paths:
-            from_stem = self.sfdi(d.stem)
-            if sfdi == self.sfdi(d.stem):
-                device_id = d.stem
-                break
+        for d in self._certs_dir.glob("*.pem"):
+            try:
+                if sfdi == self.sfdi(d.stem):
+                    device_id = d.stem
+                    break
+            except FileNotFoundError:
+                pass
         return device_id
 
     def __get_cert_file__(self, common_name: str) -> Path:

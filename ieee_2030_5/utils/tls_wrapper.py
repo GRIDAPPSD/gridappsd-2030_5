@@ -153,7 +153,7 @@ class OpensslWrapper(TLSWrap):
                                       cert_file: Path,
                                       as_server: bool = False):
         OpensslWrapper.__set_cnf_from_cert_path___(cert_file)
-        subject_name = common_name.split(":")
+        subject_name = common_name.split(":")[0]
         csr_file = Path(f"/tmp/{common_name}")
         OpensslWrapper.tls_create_csr(common_name, private_key_file, csr_file)
         # openssl ca -keyfile /root/tls/private/ec-cakey.pem -cert /root/tls/certs/ec-cacert.pem \
