@@ -1,8 +1,15 @@
 from dataclasses import fields, is_dataclass
+from enum import Enum
 from typing import Any, Dict, Optional
 
 import ieee_2030_5.config as cfg
 
+
+class ReturnCode(Enum):
+    OK = 200
+    CREATED = 201
+    NO_CONTENT = 204
+    BAD_REQUEST = 400
 
 class InvalidConfigFile(Exception):
     pass
@@ -28,5 +35,5 @@ def populate_from_kwargs(obj: object, **kwargs) -> Dict[str, Any]:
             kwargs.pop(k.name)
     return kwargs
 
-
 from ieee_2030_5.models.adapters.adapters import *
+from ieee_2030_5.models.adapters.mupupt import MirrorUsagePointAdapter

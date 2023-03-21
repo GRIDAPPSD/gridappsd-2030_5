@@ -1,9 +1,12 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import List, Optional
 
 EDEV = "edev"
 DCAP = "dcap"
-UTP = "utp"
+UTP = "upt"
 MUP = "mup"
 DRP = "drp"
 SDEV = "sdev"
@@ -53,21 +56,103 @@ def get_curve_href(index: int) -> str:
 def get_fsa_href(fsa_list_href: str, index: int) -> str:
     return SEP.join([fsa_list_href, str(index)])
 
-
-def get_mirror_usage_list_href(index: int = NO_INDEX) -> str:
-    if index == NO_INDEX:
+        
+def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX):
+    """Mirror Usage Point hrefs
+    
+       /mup
+       /mup/{mirror_usage_point_index}
+       
+    
+    """
+    if mirror_usage_point_index == NO_INDEX:
         ret = DEFAULT_MUP_ROOT
     else:
-        ret = SEP.join([DEFAULT_MUP_ROOT, str(index)])
+        ret = SEP.join([DEFAULT_MUP_ROOT, str(mirror_usage_point_index)])
+    
     return ret
 
+@dataclass
+class UsagePointHref:
+    usage_point_index: int= NO_INDEX
+    meter_reading_list_index: int= NO_INDEX
+    meter_reading_index: int= NO_INDEX
+    reading_set_index: int= NO_INDEX
+    reading_index: int= NO_INDEX
+    
+    @staticmethod
+    def parse(href: str) -> UsagePointHref:
+        items = href.split(SEP)
+        if len(items) == 1:
+            return UsagePointHref()
+        
+        if len(items) == 2:
+            return UsagePointHref(usage_point_index = int(items[1]))
 
-def get_usage_point_href(index: int) -> str:
-    return SEP.join([DEFAULT_UPT_ROOT, index])
+@dataclass
+class MirrorUsagePointHref:
+    mirror_usage_point_index: int = NO_INDEX
+    meter_reading_list_index: int= NO_INDEX
+    meter_reading_index: int= NO_INDEX
+    reading_set_index: int= NO_INDEX
+    reading_index: int= NO_INDEX
+    
+    @staticmethod
+    def parse(href: str) -> MirrorUsagePointHref:
+        items = href.split(SEP)
+        if len(items) == 1:
+            return MirrorUsagePointHref()
+        
+        if len(items) == 2:
+            return MirrorUsagePointHref(items[1])
+            
 
+def usage_point_href(usage_point_index: int | str = NO_INDEX,
+                     meter_reading_list: bool = False,
+                     meter_reading_list_index: int = NO_INDEX,
+                     meter_reading_index: int = NO_INDEX,
+                     meter_reading_type: bool = False,
+                     reading_set: bool = False,
+                     reading_set_index: int = NO_INDEX,
+                     reading_index: int = NO_INDEX):
+    """Usage point hrefs 
 
-def get_usage_point_list_href() -> str:
-    return DEFAULT_UPT_ROOT
+       /upt
+       /upt/{usage_point_index}
+       /upt/{usage_point_index}/mr
+       /upt/{usage_point_index}/mr/{meter_reading_index}
+       /upt/{usage_point_index}/mr/{meter_reading_index}/rt
+       /upt/{usage_point_index}/mr/{meter_reading_index}/rs
+       /upt/{usage_point_index}/mr/{meter_reading_index}/rs/{reading_set_index}
+       /upt/{usage_point_index}/mr/{meter_reading_index}/rs/{reading_set_index}/r
+       /upt/{usage_point_index}/mr/{meter_reading_index}/rs/{reading_set_index}/r/{reading_index}
+       
+       
+
+    """
+    if isinstance(usage_point_index, str):
+        base_upt = usage_point_index
+    else:
+        base_upt = DEFAULT_UPT_ROOT
+        
+    if usage_point_index == NO_INDEX:
+        ret = base_upt        
+    else:
+        if isinstance(usage_point_index, str):
+            arr = [base_upt]
+        else:
+            arr = [DEFAULT_UPT_ROOT, str(usage_point_index)]
+            
+        if meter_reading_list:
+            if meter_reading_list_index == NO_INDEX:
+                arr.extend(["mr"])
+            else:
+                arr.extend(["mr", str(meter_reading_list_index)])
+                
+                
+        
+        ret = SEP.join(arr)
+    return ret
 
 
 def get_der_program_list(fsa_href: str) -> str:

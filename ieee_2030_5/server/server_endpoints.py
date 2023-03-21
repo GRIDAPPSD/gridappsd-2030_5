@@ -20,11 +20,15 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.data.indexer import get_href, get_href_filtered
 from ieee_2030_5.server.base_request import RequestOp
+from ieee_2030_5.server.dcapfs import Dcap
 from ieee_2030_5.server.der_program import DERProgramRequests
-from ieee_2030_5.server.edevrequests import (DERRequests, EDevRequests, SDevRequests)
-from ieee_2030_5.server.server_constructs import EndDevices
+from ieee_2030_5.server.edevrequests import (DERRequests, EDevRequests,
+                                             SDevRequests)
 # module level instance of hrefs class.
-from ieee_2030_5.server.usage_points import MUP, UTP
+from ieee_2030_5.server.meteringfs import (MirrorUsagePointRequest,
+                                           UsagePointRequest)
+from ieee_2030_5.server.server_constructs import EndDevices
+
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import TimeOffsetType, format_time
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
@@ -62,24 +66,10 @@ class Log(RequestOp):
         data_type = type(data)
         if data_type not in (m.LogEvent):
             raise BAD_REQUEST()
-        
+
         if not data.createdDateTime:
             data.createdDateTime = format_time(datetime.utcnow().replace(tzinfo=pytz.utc))
         adpt.LogAdapter.store(path, data)
-
-
-class Dcap(RequestOp):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def get(self) -> Response:
-        # TODO: Test for allowed dcap here.
-        # if not self._end_devices.allowed_to_connect(self.lfdi):
-        #     raise werkzeug.exceptions.Unauthorized()
-        dcap = adpt.DeviceCapabilityAdapter.get_by_lfdi(self.lfdi)
-
-        return self.build_response_from_dataclass(dcap)
 
 
 class TimeRequest(RequestOp):
@@ -171,6 +161,9 @@ class ServerEndpoints:
         app.add_url_rule(f"/<regex('{hrefs.MUP}{hrefs.MATCH_REG}'):path>",
                          view_func=self._mup,
                          methods=["GET", "POST"])
+        app.add_url_rule(f"/<regex('{hrefs.UTP}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._upt,
+                         methods=["GET", "POST"])
         app.add_url_rule(f"/<regex('{hrefs.CURVE}{hrefs.MATCH_REG}'):path>",
                          view_func=self._curves,
                          methods=["GET"])
@@ -229,10 +222,10 @@ class ServerEndpoints:
     #     return Admin(server_endpoints=self).execute()
 
     def _upt(self, path) -> Response:
-        return UTP(server_endpoints=self).execute(path=path)
+        return UsagePointRequest(server_endpoints=self).execute()
 
     def _mup(self, path) -> Response:
-        return MUP(server_endpoints=self).execute(path=path)
+        return MirrorUsagePointRequest(server_endpoints=self).execute(path=path)
 
     def _der(self, path) -> Response:
         return DERRequests(server_endpoints=self).execute()

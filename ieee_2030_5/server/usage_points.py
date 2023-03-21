@@ -146,7 +146,7 @@ class MUP(RequestOp):
         ret_value = get_href(pth_info)
         if pth_info == hrefs.DEFAULT_MUP_ROOT:
             # TODO add list ability here.
-            ret_value = adpt.MirrorUsagePointAdapter.get_all()
+            ret_value = adpt.MirrorUsagePointAdapter.fetch_all()
             # # Getting list of elements
             # start = request.args.get("s")
             # after = request.args.get("a")

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Container, Dict, List, Optional, Protocol, Sized
 
 import yaml
 
@@ -20,17 +20,11 @@ import ieee_2030_5.models as m
 from ieee_2030_5 import hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.data.indexer import add_href, get_href, get_href_filtered
-from ieee_2030_5.models.adapters import populate_from_kwargs
-from ieee_2030_5.models.enums import DeviceCategoryType
+from ieee_2030_5.models import DeviceCategoryType
+from ieee_2030_5.models.adapters import ReturnCode, populate_from_kwargs
 from ieee_2030_5.types_ import Lfdi, StrPath, format_time
 
 _log = logging.getLogger(__name__)
-
-
-class ReturnCode(Enum):
-    OK = 200
-    CREATED = 201
-    NO_CONTENT = 204
 
 
 class BaseAdapter:
@@ -95,7 +89,8 @@ class BaseAdapter:
 
         # Map from the configuration id and lfdi to the device configuration.
         for cfg in server_config.devices:
-            BaseAdapter.__lfdi__mapped_configuration__[tlsrepo.lfdi(cfg.id)] = cfg
+            lfdi = tlsrepo.lfdi(cfg.id)
+            BaseAdapter.__lfdi__mapped_configuration__[lfdi] = cfg
 
         # Find subclasses of us and initialize them calling _initalize method
         # TODO make this non static
@@ -167,7 +162,8 @@ class DeviceCapabilityAdapter(BaseAdapter):
         dcap.EndDeviceListLink = m.EndDeviceListLink(href=hrefs.get_enddevice_href(hrefs.NO_INDEX),
                                                      all=0)
         dcap.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
-            href=hrefs.get_mirror_usage_list_href(hrefs.NO_INDEX))
+            href=hrefs.mirror_usage_point_href())
+        dcap.UsagePointListLink = m.UsagePointListLink(href=hrefs.usage_point_href())
         return dcap
 
     @staticmethod
@@ -758,101 +754,19 @@ class DERControlAdapter(BaseAdapter):
         return derc_list, None    # default_derc
 
 
-class UsagePointAdapter(BaseAdapter):
-    __by_mrid__: Dict[str, int] = {}
+if __name__ == '__main__':
+    import yaml
 
-    @staticmethod
-    def initialize():
-        pass
+    from ieee_2030_5.__main__ import get_tls_repository
+    from ieee_2030_5.config import ServerConfiguration
+    
+    cfg_pth = Path("/home/os2004/repos/gridappsd-2030_5/config.yml")
+    cfg_dict = yaml.safe_load(cfg_pth.read_text())
 
-    @staticmethod
-    def update_from_mirror(mirror: m.MirrorUsagePoint):
-        if not UsagePointAdapter.__by_mrid__.get(mirror.mRID):
-            href = hrefs.get_usage_point_href(UsagePointAdapter.get_next_index())
-            upt = m.UsagePoint(href=href,
-                               description=mirror.description,
-                               serviceCategoryKind=mirror.serviceCategoryKind,
-                               status=mirror.status,
-                               deviceLFDI=mirror.deviceLFDI,
-                               mRID=mirror.mRID,
-                               version=mirror.version)
-            add_href(href, upt)
-            UsagePointAdapter.__count__ += 1
+    config = ServerConfiguration(**cfg_dict)
 
+    tls_repo = get_tls_repository(config, False)
 
-class MirrorUsagePointAdapter(BaseAdapter):
-
-    @staticmethod
-    def initialize():
-        if not MirrorUsagePointAdapter.get_all():
-            mupl = m.MirrorUsagePointList(all=MirrorUsagePointAdapter.__count__,
-                                          href=hrefs.get_mirror_usage_list_href())
-            add_href(mupl.href, mupl)
-
-    @staticmethod
-    def get_list(start: Optional[int] = None,
-                 after: Optional[int] = None,
-                 length: Optional[int] = None) -> m.MirrorUsagePointList:
-        if start is not None and after is not None:
-            # after takes precedence
-            index = after + 1 + start
-        elif start is not None:
-            index = start
-        elif after is not None:
-            index = after + 1
-        else:
-            index = 0
-        value = get_href(href=hrefs.get_mirror_usage_list_href(index))
-
-        if not value:
-            mupl = m.MirrorUsagePointList(href=hrefs.get_mirror_usage_list_href())
-            mupl.all = 0
-            add_href(hrefs.get_mirror_usage_list_href(), mupl)
-
-        return get_href(href=hrefs.get_mirror_usage_list_href(index))
-
-    @staticmethod
-    def create(mup: m.MirrorUsagePoint) -> ReturnCode:
-
-        found_mup = MirrorUsagePointAdapter.get_by_mRID(mup.mRID)
-        created = False
-        if found_mup is None:
-            next_index = MirrorUsagePointAdapter.get_next_index()
-            mup.href = hrefs.get_mirror_usage_list_href(next_index)
-            add_href(mup.href, mup)
-            MirrorUsagePointAdapter.__count__ += 1
-            mupl = get_href(hrefs.get_mirror_usage_list_href())
-            if not mupl:
-                mupl = m.MirrorUsagePointList(all=MirrorUsagePointAdapter.__count__,
-                                              href=hrefs.get_mirror_usage_list_href())
-
-            mupl.MirrorUsagePoint.append(mup)
-            add_href(mupl.href, mupl)
-            created = ReturnCode.CREATED
-        else:
-            found_mup.description = mup.description
-            found_mup.deviceLFDI = mup.deviceLFDI
-            found_mup.MirrorMeterReading = mup.MirrorMeterReading
-            created = ReturnCode.NO_CONTENT
-
-        return created
-
-    @staticmethod
-    def create_reading(href, data):
-        _log.debug(href)
-        _log.debug(data)
-
-    @staticmethod
-    def get_by_mRID(mRID: str) -> Optional[m.MirrorUsagePoint]:
-        for mup in MirrorUsagePointAdapter.get_all().MirrorUsagePoint:
-            if mup.mRID == mRID:
-                return mup
-        return None
-
-    @staticmethod
-    def get_by_index(index: int) -> m.MirrorUsagePoint:
-        return get_href(hrefs.get_mirror_usage_list_href(index))
-
-    @staticmethod
-    def get_all() -> m.MirrorUsagePointList:
-        return get_href(hrefs.get_mirror_usage_list_href(hrefs.NO_INDEX))
+    BaseAdapter.initialize(config, tls_repo)    
+    
+    print(EndDeviceAdapter.fetch_list('/edev'))
