@@ -4,8 +4,8 @@ from typing import Container, List, Optional, Sized, Tuple
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
+from ieee_2030_5.adapters import ReturnCode
 from ieee_2030_5.data.indexer import add_href, get_href
-from ieee_2030_5.models.adapters import ReturnCode
 
 _log = logging.getLogger(__name__)
 

@@ -44,6 +44,7 @@ import socket
 import sys
 import threading
 from argparse import ArgumentParser
+from multiprocessing import Process
 from pathlib import Path
 from time import sleep
 
@@ -52,10 +53,9 @@ from werkzeug.serving import BaseWSGIServer
 
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.config import ServerConfiguration
+from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.flask_server import run_server
-from ieee_2030_5.models.adapters import InvalidConfigFile
 from ieee_2030_5.server.server_constructs import initialize_2030_5
 
 _log = logging.getLogger()
@@ -120,6 +120,11 @@ def remove_stop_file():
     if pth.exists():
         os.remove(pth)
 
+
+def _run_ui():
+    
+    os.system('python gui/spa/main.py')
+    
 
 def _main():
     parser = ArgumentParser()
@@ -189,6 +194,10 @@ def _main():
 
     #if not opts.production:
     try:
+        # p = Process(target = _run_ui)
+        # p.daemon = True
+        # p.start()
+        
         run_server(config,
                     tls_repo,
                     end_devices,

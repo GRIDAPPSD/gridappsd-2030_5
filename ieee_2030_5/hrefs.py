@@ -18,6 +18,8 @@ RSPS = "rsps"
 LOG = "log"
 DERC = "derc"
 DDERC = "dderc"
+FSA = "fsa"
+DERP = "derp"
 
 DEFAULT_DCAP_ROOT = f"/{DCAP}"
 DEFAULT_EDEV_ROOT = f"/{EDEV}"
@@ -31,6 +33,8 @@ DEFAULT_CURVE_ROOT = f"/{CURVE}"
 DEFAULT_PROGRAM_ROOT = f"/{PROGRAM}"
 DEFAULT_RSPS_ROOT = f"/{RSPS}"
 DEFAULT_LOG_EVENT_ROOT = f"/{LOG}"
+DEFAULT_FSA_ROOT = f"/{FSA}"
+DEFAULT_DERP_ROOT = f"/{DERP}"
 
 SEP = "_"
 MATCH_REG = "[a-zA-Z0-9_]*"
@@ -48,15 +52,39 @@ def get_server_config_href() -> str:
 def get_enddevice_list_href() -> str:
     return DEFAULT_EDEV_ROOT
 
-
-def get_curve_href(index: int) -> str:
+@lru_cache()
+def curve_href(index: int = NO_INDEX) -> str:
+    if index == NO_INDEX:
+        return DEFAULT_CURVE_ROOT
+    
     return SEP.join([DEFAULT_CURVE_ROOT, str(index)])
 
-
-def get_fsa_href(fsa_list_href: str, index: int) -> str:
-    return SEP.join([fsa_list_href, str(index)])
-
-        
+@lru_cache()
+def fsa_href(index: int = NO_INDEX, edev_index: int=NO_INDEX):
+    if index == NO_INDEX and edev_index == NO_INDEX:
+        return DEFAULT_FSA_ROOT
+    elif index != NO_INDEX and edev_index == NO_INDEX:
+        return SEP.join([DEFAULT_FSA_ROOT, str(index)])
+    elif index == NO_INDEX and edev_index != NO_INDEX:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA])
+    else:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(index)])
+    
+def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int = NO_INDEX):
+    if index == NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
+        return DEFAULT_DER_ROOT
+    elif index != NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
+        return SEP.join([DEFAULT_DER_ROOT, str(index)])
+    elif index == NO_INDEX and fsa_index != NO_INDEX and edev_index == NO_INDEX:
+        return SEP.join([DEFAULT_FSA_ROOT, str(fsa_index), DERP])
+    elif edev_index != NO_INDEX and fsa_index == NO_INDEX and index == NO_INDEX:
+        return SEP.join([DEFAULT_EDEV_ROOT, int(edev_index), FSA])
+    elif edev_index != NO_INDEX and fsa_index != NO_INDEX and index == NO_INDEX:
+        return SEP.join([DEFAULT_EDEV_ROOT, int(edev_index), FSA, int(fsa_index)])
+    else:
+        raise ValueError(f"index={index}, fsa_index={fsa_index}, edev_index={edev_index}")
+    
+@lru_cache()    
 def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX):
     """Mirror Usage Point hrefs
     
@@ -192,8 +220,8 @@ def get_enddevice_href(edev_indx: int, subref: str = None) -> str:
 
 
 @lru_cache()
-def get_registration_href(edev_index: int) -> str:
-    return get_enddevice_href(edev_index, "reg")
+def registration_href(edev_index: int) -> str:
+    return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), "rg"])
 
 
 @lru_cache()

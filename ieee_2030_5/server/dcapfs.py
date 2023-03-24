@@ -1,6 +1,6 @@
 from flask import Response
 
-import ieee_2030_5.models.adapters as adpt
+import ieee_2030_5.adapters as adpt
 from ieee_2030_5.server.base_request import RequestOp
 
 

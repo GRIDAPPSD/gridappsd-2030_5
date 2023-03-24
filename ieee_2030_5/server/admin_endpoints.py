@@ -2,21 +2,30 @@ import json
 
 from flask import Flask, Response, render_template
 
+from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.server.server_constructs import EndDevices
+from ieee_2030_5.utils import dataclass_to_xml
 
 
 class AdminEndpoints:
     def __init__(self, app: Flask, tls_repo: TLSRepository, config: ServerConfiguration):
         self.tls_repo = tls_repo
         self.server_config = config
-
+        
+        app.add_url_rule("/admin/enddevices", view_func=self._enddevices)
+        app.add_url_rule("/admin/enddevices/<int:index>", view_func=self._enddevices)    
         app.add_url_rule("/admin/end-device-list", view_func=self._end_device_list)
         app.add_url_rule("/admin/program-lists", view_func=self._program_lists)
         app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
         app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._edev_fsa)
 
+
+    def _enddevices(self, index:int = None) -> Response:
+        
+        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_list()))
+    
     def _lfdi_lists(self) -> Response:
         items = []
 

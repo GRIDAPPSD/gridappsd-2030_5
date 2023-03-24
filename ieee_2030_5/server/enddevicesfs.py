@@ -3,33 +3,15 @@ from typing import Optional
 import werkzeug.exceptions
 from flask import Response, request
 
+import ieee_2030_5.adapters as adpt
+import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-import ieee_2030_5.models.adapters as adpt
-from ieee_2030_5 import hrefs
+from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.models import Registration
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.types_ import Lfdi
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
-
-
-class DERRequests(RequestOp):
-    """
-    Class supporting end devices and any of the subordinate calls to it.
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def get(self) -> Response:
-        pth = request.environ['PATH_INFO']
-
-        if not pth.startswith(hrefs.DEFAULT_DER_ROOT):
-            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
-
-        value = get_href(pth)
-
-        return self.build_response_from_dataclass(value)
 
 
 class EDevRequests(RequestOp):
@@ -69,7 +51,7 @@ class EDevRequests(RequestOp):
         # This is what we should be using to get the device id of the registered end device.
         device_id = self.tls_repo.find_device_id_from_sfdi(ed.sFDI)
         ed.lFDI = self.tls_repo.lfdi(device_id)
-        if end_device := adpt.EndDeviceAdapter.get_by_lfdi(ed.lFDI):
+        if end_device := adpt.EndDeviceAdapter.fetch_by_lfdi(ed.lfdi):
             status = 200
             ed_href = end_device.href
         else:
@@ -81,7 +63,7 @@ class EDevRequests(RequestOp):
 
         return Response(status=status, headers={'Location': ed_href})
 
-    def get(self, path: Optional[str] = None) -> Response:
+    def get(self) -> Response:
         """
         Supports the get request for end_devices(EDev) and end_device_list_link.
 
@@ -89,24 +71,26 @@ class EDevRequests(RequestOp):
             /edev
             /edev/0
             /edev/0/di
-            /edev/0/reg
+            /edev/0/rg
 
         """
-        pth = request.environ['PATH_INFO']
+        pth = request.path
 
         if not pth.startswith(hrefs.DEFAULT_EDEV_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
 
-        # top level /edev should return specific end device list based upon
-        # the lfdi of the connection.
-        if pth == hrefs.DEFAULT_EDEV_ROOT:
-            retval = adpt.EndDeviceAdapter.fetch_list(path=pth,
-                                                      start=request.args.get("s"),
-                                                      limit=request.args.get("l"),
-                                                      after=request.args.get("a"),
-                                                      lfdi=self.lfdi)
-        else:
-            retval = get_href(pth)
+        pth_split = pth.split(hrefs.SEP)
+        
+        if len(pth_split) == 1:
+            retval = adpt.EndDeviceAdapter.fetch_list_by_lfdi(self.lfdi)
+        elif len(pth_split) == 3:
+            if pth_split[2] == "rg":
+                retval = adpt.EndDeviceAdapter.fetch_registration(int(pth_split[1]))
+            elif pth_split[2] == "di":
+                retval = "foo"
+            elif pth_split[2] == "fsa":
+                retval = adpt.EndDeviceAdapter.fetch_fsa_list(end_device_index=int(pth_split[1]))
+            
         return self.build_response_from_dataclass(retval)
 
 
@@ -128,3 +112,23 @@ class SDevRequests(RequestOp):
         """
         end_device = self._end_devices.get_end_device_list(self.lfdi).EndDevice[0]
         return self.build_response_from_dataclass(end_device)
+
+class FSARequests(RequestOp):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+    def get(self):
+        pth_split = request.path.split(hrefs.SEP)
+        
+        if len(pth_split) == 1:
+            retval = FSAAdapter.fetch_list()
+        elif len(pth_split) == 2:
+            retval = FSAAdapter.fetch_at(int(pth_split[1]))
+        elif len(pth_split) == 3:
+            retval = FSAAdapter.fetch_program_list(int(pth_split[1]))
+        elif len(pth_split) == 4:
+            retval = FSAAdapter.fetch_program_list(int(pth_split[1]))[int(pth_split[3])]
+        else:
+            raise ValueError(f"Path split is {pth_split}")
+            
+        return self.build_response_from_dataclass(retval)

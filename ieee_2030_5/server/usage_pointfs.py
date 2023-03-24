@@ -10,14 +10,13 @@ from typing import Dict, List, Optional
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
 
+import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
-import ieee_2030_5.models.adapters as adpt
 from ieee_2030_5 import hrefs
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
-
 
 
 class Error(Exception):
