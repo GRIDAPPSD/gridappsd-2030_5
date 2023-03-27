@@ -45,6 +45,8 @@ class DeviceConfiguration(m.EndDevice):
     # # TODO: Direct control means that only one FSA will be available to the client.
     # direct_control: bool = True
     programs: List[str] = field(default_factory=list)
+    
+    ders: List[Dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, env):

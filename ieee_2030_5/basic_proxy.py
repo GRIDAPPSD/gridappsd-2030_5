@@ -13,7 +13,8 @@ from urllib.parse import urlparse
 import OpenSSL
 import yaml
 
-from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi)
+from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint,
+                               sfdi_from_lfdi)
 from ieee_2030_5.config import ServerConfiguration
 
 _log = logging.getLogger(__name__)
@@ -103,6 +104,34 @@ class RequestForwarder(BaseHTTPRequestHandler):
         read_data = self.rfile.read(int(self.headers.get('Content-Length')))
 
         conn.request(method="POST",
+                     url=self.path,
+                     headers=self.headers,
+                     body=read_data,
+                     encode_chunked=True)
+
+        self.__handle_response__(conn)
+        
+    def do_DELETE(self):
+        _log.info(f"DELETE {self.path} Content-Length: {self.headers.get('Content-Length')}")
+
+        conn = self.__start_request__()
+        read_data = self.rfile.read(int(self.headers.get('Content-Length')))
+
+        conn.request(method="DELETE",
+                     url=self.path,
+                     headers=self.headers,
+                     body=read_data,
+                     encode_chunked=True)
+
+        self.__handle_response__(conn)
+        
+    def do_PUT(self):
+        _log.info(f"PUT {self.path} Content-Length: {self.headers.get('Content-Length')}")
+
+        conn = self.__start_request__()
+        read_data = self.rfile.read(int(self.headers.get('Content-Length')))
+
+        conn.request(method="PUT",
                      url=self.path,
                      headers=self.headers,
                      body=read_data,
