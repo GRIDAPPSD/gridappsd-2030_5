@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 import werkzeug.exceptions
@@ -14,6 +15,7 @@ from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.types_ import Lfdi
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
+_log = logging.getLogger(__name__)
 
 class EDevRequests(RequestOp):
     """
@@ -22,7 +24,18 @@ class EDevRequests(RequestOp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        
+    def put(self) -> Response:
+        parsed = hrefs.edev_parse(request.path)
+        
+        if parsed.der_sub not in [x.value for x in hrefs.DERSubType]:
+            raise ValueError("Invalid subtype specified.")
+        
+        response_code = adpt.DERAdapter.store(parsed, xml_to_dataclass(request.data.decode('utf-8')))
+        return Response(status=int(response_code))                                              
+                                              
+                        
+        
     def post(self, path: Optional[str] = None) -> Response:
         """
         Handle post request to /edev
@@ -73,6 +86,7 @@ class EDevRequests(RequestOp):
             /edev/0
             /edev/0/di
             /edev/0/rg
+            /edev/0/der
 
         """
         pth = request.path
@@ -86,11 +100,13 @@ class EDevRequests(RequestOp):
             retval = adpt.EndDeviceAdapter.fetch_list_by_lfdi(self.lfdi)
         elif len(pth_split) == 3:
             if pth_split[2] == "rg":
-                retval = adpt.EndDeviceAdapter.fetch_registration(int(pth_split[1]))
+                retval = adpt.EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
             elif pth_split[2] == "di":
                 retval = "foo"
             elif pth_split[2] == "fsa":
-                retval = adpt.EndDeviceAdapter.fetch_fsa_list(end_device_index=int(pth_split[1]))
+                retval = adpt.EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
+            elif pth_split[2] == "der":
+                retval = adpt.DERAdapter.fetch_list(edev_index=int(pth_split[1]))
             
         return self.build_response_from_dataclass(retval)
 
@@ -126,9 +142,9 @@ class FSARequests(RequestOp):
         elif len(pth_split) == 2:
             retval = FSAAdapter.fetch_at(int(pth_split[1]))
         elif len(pth_split) == 3:
-            retval = EndDeviceAdapter.fetch_fsa_list(end_device_index=int(pth_split[1]))
+            retval = EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
         elif len(pth_split) == 4:
-            retval = EndDeviceAdapter.fetch_fsa(int(pth_split[1]), int(pth_split[3]))
+            retval = EndDeviceAdapter.fetch_fsa(edev_index=int(pth_split[1]), fsa_index=int(pth_split[3]))
         else:
             raise ValueError(f"Path split is {pth_split}")
             

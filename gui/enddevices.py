@@ -1,6 +1,7 @@
 from dataclasses import fields
 
 from nicegui import ui
+from session import backend_session, endpoint
 
 import ieee_2030_5.models as m
 
@@ -8,6 +9,9 @@ columns = [
     {'name': 'property', 'label': 'Property', 'field': 'property', 'required': False},
     {'value': 'value', 'label': 'Value', 'field': 'property', 'required': False},
 ]
+
+def show_end_device(enddevice: m.EndDevice):
+    ui.label(enddevice.href)
 
 def show_list(enddevices: m.EndDeviceList):
     if len(enddevices.EndDevice) == 0:
@@ -26,6 +30,7 @@ def show_list(enddevices: m.EndDeviceList):
                     # value = getattr(ed, fld.name)
                     # if value and value.decode('utf-8'):
                     #     ui.label(f"{fld.name} => {value.decode('utf-8')}")
+
        
 def add_end_device():
     
@@ -33,6 +38,7 @@ def add_end_device():
         ui.label(f"Posted {id} and {pin}")
     
     with ui.column():
+        
         id = ui.input(label="Id")
         pin = ui.input(label="Pin")
         ui.button("Save", on_click=lambda a: submit_end_device(id.value, pin.value))

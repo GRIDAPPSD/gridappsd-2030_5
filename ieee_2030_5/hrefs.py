@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, NamedTuple, Optional
 
 EDEV = "edev"
 DCAP = "dcap"
@@ -42,6 +43,14 @@ MATCH_REG = "[a-zA-Z0-9_]*"
 # Used as a sentinal value when we only want the href of the root
 NO_INDEX = -1
 
+class DERSubType(Enum):
+    Capability = "dercap"
+    Settings = "derg"
+    Status = "ders"
+    Availability = "dera"
+    CurrentProgram = "derp"
+    
+    
 
 @lru_cache()
 def get_server_config_href() -> str:
@@ -83,6 +92,39 @@ def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int =
         return SEP.join([DEFAULT_EDEV_ROOT, int(edev_index), FSA, int(fsa_index)])
     else:
         raise ValueError(f"index={index}, fsa_index={fsa_index}, edev_index={edev_index}")
+    
+def edev_der_href(edev_index: int, der_index: int = NO_INDEX) -> str:
+    if der_index == NO_INDEX:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER])
+    return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER, str(der_index)])
+
+class EdevHref(NamedTuple):
+    edev_index: int
+    der_index: int = NO_INDEX
+    der_sub: DERSubType = None
+    
+def edev_parse(path: str) -> EdevHref:
+    split_pth = path.split(SEP)
+    
+    if len(split_pth) == 1:
+        return EdevHref(NO_INDEX)
+    elif len(split_pth) == 2:
+        return EdevHref(int(split_pth[1]))
+    elif len(split_pth) == 3:
+        return EdevHref(int(split_pth[1]))
+    elif len(split_pth) == 4:
+        return EdevHref(int(split_pth[1]), int(split_pth[3]))
+    elif len(split_pth) == 5:
+        return EdevHref(int(split_pth[1]), int(split_pth[3]), split_pth[4])
+    
+    
+def der_sub_href(edev_index: int, index: int = NO_INDEX, subtype: DERSubType = None):
+    if subtype is None and index == NO_INDEX:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER])
+    elif subtype is None:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER, str(index)])
+    else:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER, str(index), subtype.value])
     
 @lru_cache()    
 def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX):

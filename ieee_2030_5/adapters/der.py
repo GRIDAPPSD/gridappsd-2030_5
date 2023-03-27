@@ -25,7 +25,6 @@ __all__: List[str] = [
 ]
 
 
-
 class _DERCurveAdapter(BaseAdapter, AdapterListProtocol):
     
     def __init__(self) -> None:
@@ -412,20 +411,91 @@ ready_signal.connect(DERProgramAdapter.__initialize__, DERControlAdapter)
 class _DERAdapter(BaseAdapter, AdapterListProtocol):
     def __init__(self) -> None:
         super().__init__()
-        self._ders: List[m.DER] = []
+        
+        self._edev_ders: Dict[int, List[m.DER]] = {}
+        self._der_capabilities: Dict[int, List[m.DERCapability]] = {}
+        self._der_settings: Dict[int, List[m.DERSettings]] = {}
+        self._der_status: Dict[int, List[m.DERStatus]] = {}
+        self._der_availabilites: Dict[int, List[m.DERAvailability]] = {}
         
     def __initialize__(self, sender):
         # TODO: Load ders
         cfg = BaseAdapter.server_config()
         
+    def create(self, edev_index: int, der_index: int,  modesSupported: str, deviceType: int) -> m.DER:
         
+        der = m.DER(href=hrefs.edev_der_href(edev_index=edev_index, der_index=der_index))
+        der.DERCapabilityLink = m.DERCapabilityLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Capability))
+        der.DERSettingsLink = m.DERSettingsLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Settings))
+        der.DERStatusLink = m.DERStatusLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Status))
+        der.DERAvailabilityLink = m.DERAvailabilityLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Availability))
+        der.CurrentDERProgramLink = m.CurrentDERProgramLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.CurrentProgram))
+        if not self._edev_ders.get(edev_index):
+            self._edev_ders[edev_index] = []
+            
+        self._edev_ders[edev_index].append(der)
+        
+        if not self._der_capabilities.get(edev_index):
+            self._der_capabilities[edev_index] = []
+        self._der_capabilities[edev_index].append(m.DERCapability(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Capability),
+                                                             modesSupported=modesSupported,
+                                                             type=deviceType))
+        
+        if not self._der_settings.get(edev_index):
+            self._der_settings[edev_index] = []
+            
+        self._der_settings[edev_index].append(m.DERSettings(href=hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Settings)))
+        
+        if not self._der_status.get(edev_index):
+            self._der_status[edev_index] = []
+        
+        self._der_status[edev_index].append(m.DERStatus(href=hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Status)))
+        
+        if not self._der_availabilites.get(edev_index):
+            self._der_availabilites[edev_index] = []
+        
+        self._der_availabilites[edev_index].append(m.DERAvailability(href=hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Availability)))
+        
+        return der
         
     def fetch_all(self) -> List:
         return self._ders
     
-    def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.DERList:
-        der_list = m.DERList(href=hrefs.get_der_list_href(), all=len(self._ders), results=len(self._ders), DER=self._ders)
+    def fetch_list(self, edev_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERList:
+        
+        der_list = m.DERList(href=hrefs.der_sub_href(edev_index), 
+                             all=len(self._edev_ders[edev_index]), results=len(self._edev_ders[edev_index]), DER=self._edev_ders[edev_index])
         return der_list
+    
+    def fetch_at(self, edev_index: int, der_index: int) -> m.DER:
+        return self._edev_ders[edev_index][der_index]
+    
+    def fetch_status_at(self, edev_index: int, der_index: int) -> m.DERStatus:
+        return self._der_status[edev_index][der_index]
+    
+    def fetch_capability_at(self, edev_index: int, der_index: int) -> m.DERCapability:
+        return self._der_capabilities[edev_index][der_index]
+    
+    def fetch_availibility_at(self, edev_index: int, der_index: int) -> m.DERAvailability:
+        return self._der_availabilites[edev_index][der_index]
+    
+    def store(self, parsed_edev: hrefs.EdevHref, data) -> int:
+        if parsed_edev.der_sub == hrefs.DERSubType.Availability.value:
+            self._der_availabilites[parsed_edev.edev_index][parsed_edev.der_index] = data
+        elif parsed_edev.der_sub == hrefs.DERSubType.Capability.value:
+            self._der_capabilities[parsed_edev.edev_index][parsed_edev.der_index] = data
+        elif parsed_edev.der_sub == hrefs.DERSubType.Status.value:
+            self._der_status[parsed_edev.edev_index][parsed_edev.der_index] = data
+        elif parsed_edev.der_sub == hrefs.DERSubType.Settings.value:
+            self._der_settings[parsed_edev.edev_index][parsed_edev.der_index] = data
+        else:
+            raise ValueError(data)
+        
+        return 200
+    
+    def get_list(self, edev_index: int):
+        return self._edev_ders[edev_index]
+    
     
 DERAdapter = _DERAdapter()
 ready_signal.connect(DERAdapter.__initialize__, BaseAdapter)

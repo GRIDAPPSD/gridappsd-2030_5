@@ -29,7 +29,7 @@ class DERRequests(RequestOp):
             value = adpt.DERAdapter.fetch_at(int(pth_split[1]))
 
         return self.build_response_from_dataclass(value)
-
+    
 
 class DERProgramRequests(RequestOp):
     """

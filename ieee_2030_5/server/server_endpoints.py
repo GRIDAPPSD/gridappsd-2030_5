@@ -22,7 +22,8 @@ from ieee_2030_5.data.indexer import get_href, get_href_filtered
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.dcapfs import Dcap
 from ieee_2030_5.server.derfs import DERProgramRequests, DERRequests
-from ieee_2030_5.server.enddevicesfs import EDevRequests, FSARequests, SDevRequests
+from ieee_2030_5.server.enddevicesfs import (EDevRequests, FSARequests,
+                                             SDevRequests)
 # module level instance of hrefs class.
 from ieee_2030_5.server.meteringfs import (MirrorUsagePointRequest,
                                            UsagePointRequest)
@@ -100,13 +101,13 @@ class ServerEndpoints:
         # app.add_url_rule(hrefs.derp, view_func=self._derp)
 
         # All the energy devices
-        app.add_url_rule(f"/{hrefs.EDEV}", methods=["GET", "POST"], view_func=self._edev)
+        #app.add_url_rule(f"/{hrefs.EDEV}", methods=["GET", "POST", "PUT"], view_func=self._edev)
         app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>",
                          view_func=self._edev,
-                         methods=["GET"])
+                         methods=["GET", "PUT", "POST"])
         app.add_url_rule(f"/<regex('{hrefs.DER}{hrefs.MATCH_REG}'):path>",
                          view_func=self._der,
-                         methods=["GET"])
+                         methods=["GET", "PUT"])
         app.add_url_rule(f"/<regex('{hrefs.MUP}{hrefs.MATCH_REG}'):path>",
                          view_func=self._mup,
                          methods=["GET", "POST"])
@@ -183,6 +184,7 @@ class ServerEndpoints:
         return MirrorUsagePointRequest(server_endpoints=self).execute()
 
     def _der(self, path) -> Response:
+        _log.debug(request.method)
         return DERRequests(server_endpoints=self).execute()
 
     def _dcap(self) -> Response:

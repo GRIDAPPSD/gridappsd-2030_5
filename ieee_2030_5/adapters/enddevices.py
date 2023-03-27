@@ -6,7 +6,7 @@ from typing import List
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.adapters import AdapterListProtocol, BaseAdapter, ready_signal
-from ieee_2030_5.adapters.der import DERProgramAdapter
+from ieee_2030_5.adapters.der import DERAdapter, DERProgramAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.models.enums import DeviceCategoryType
@@ -20,19 +20,17 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
         self._reg: Dict[int, m.Registration] = {}
         self._fsa: List[m.FunctionSetAssignments] = []
         self._edev_fsa: Dict[int, List[m.FunctionSetAssignments]] = {}
+            
+    def fetch_registration(self, edev_index: int) -> m.Registration:
+        return self._reg[edev_index]
     
-    def fetch_registration(self, end_device_index: int) -> m.Registration:
-        return self._reg[end_device_index]
-    
-    def fetch_fsa_list(self, end_device_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:
-        fsa_list = m.FunctionSetAssignmentsList(href=hrefs.fsa_href(edev_index=end_device_index), FunctionSetAssignments=self._fsa)
+    def fetch_fsa_list(self, edev_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:
+        fsa_list = m.FunctionSetAssignmentsList(href=hrefs.fsa_href(edev_index=edev_index), FunctionSetAssignments=self._fsa)
         return fsa_list
     
-    def fetch_fsa(self, end_device_index: int, fsa_index: int) -> m.FunctionSetAssignments:
-        return self._edev_fsa[end_device_index][fsa_index]
+    def fetch_fsa(self, edev_index: int, fsa_index: int) -> m.FunctionSetAssignments:
+        return self._edev_fsa[edev_index][fsa_index]
         
-    
-    
     def __initialize__(self, sender):
         """ Intializes the following based upon the device configuration and the tlsrepository.
         
@@ -94,7 +92,14 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
                     self._edev_fsa[index] = [fsa]
                 else:
                     self._edev_fsa[index].append(fsa)
-                                
+            
+            has_der = False
+            for der_indx, der in enumerate(dev.ders):                
+                DERAdapter.create(edev_index=index, der_index=der_indx, modesSupported=der["modesSupported"], deviceType=der["type"])
+                has_der = True
+            if has_der:
+                edev.DERListLink = m.DERListLink(hrefs.edev_der_href(edev_index=index))  # hrefs.der_sub_href(index=index))
+                
             #self._end_devices.append(edev)
                             
 
