@@ -83,7 +83,7 @@ class _DERControlAdapter(BaseAdapter, AdapterListProtocol):
 
             # Defaults from Jakaria on 1/26/2023
             dderc = m.DefaultDERControl(href=hrefs.get_dderc_href(),
-                                        mRID=uuid.uuid4(),
+                                        mRID=str(uuid.uuid4()),
                                         description="Default DER Control Mode",
                                         setESDelay=300,
                                         setESLowVolt=0.917,
@@ -177,7 +177,7 @@ class _DERControlAdapter(BaseAdapter, AdapterListProtocol):
     @staticmethod
     def store_single(der_control: m.DERControl | m.DefaultDERControl):
         if not der_control.mRID:
-            der_control.mRID = uuid.uuid4()
+            der_control.mRID = str(uuid.uuid4())
 
         if not der_control.href:
             der_control.href = hrefs.get_derc_href(DERControlAdapter.__count__)

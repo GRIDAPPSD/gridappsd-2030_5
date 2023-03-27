@@ -6,6 +6,7 @@ from flask import Response, request
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
+from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.models import Registration
@@ -125,9 +126,9 @@ class FSARequests(RequestOp):
         elif len(pth_split) == 2:
             retval = FSAAdapter.fetch_at(int(pth_split[1]))
         elif len(pth_split) == 3:
-            retval = FSAAdapter.fetch_program_list(int(pth_split[1]))
+            retval = EndDeviceAdapter.fetch_fsa_list(end_device_index=int(pth_split[1]))
         elif len(pth_split) == 4:
-            retval = FSAAdapter.fetch_program_list(int(pth_split[1]))[int(pth_split[3])]
+            retval = EndDeviceAdapter.fetch_fsa(int(pth_split[1]), int(pth_split[3]))
         else:
             raise ValueError(f"Path split is {pth_split}")
             

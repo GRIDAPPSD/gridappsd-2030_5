@@ -19,13 +19,18 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
         self._end_devices: List[m.EndDevice] = []
         self._reg: Dict[int, m.Registration] = {}
         self._fsa: List[m.FunctionSetAssignments] = []
+        self._edev_fsa: Dict[int, List[m.FunctionSetAssignments]] = {}
     
     def fetch_registration(self, end_device_index: int) -> m.Registration:
         return self._reg[end_device_index]
     
     def fetch_fsa_list(self, end_device_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:
         fsa_list = m.FunctionSetAssignmentsList(href=hrefs.fsa_href(edev_index=end_device_index), FunctionSetAssignments=self._fsa)
-        return fsa_list        
+        return fsa_list
+    
+    def fetch_fsa(self, end_device_index: int, fsa_index: int) -> m.FunctionSetAssignments:
+        return self._edev_fsa[end_device_index][fsa_index]
+        
     
     
     def __initialize__(self, sender):
@@ -75,7 +80,7 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
             fsa_programs = []
             for cfg_program in dev.programs:
                 for program in programs:
-                    program.mRID = uuid.uuid4()
+                    program.mRID = str(uuid.uuid4())
                     if cfg_program["description"] == program.description:
                         fsa_programs.append(program)
                         break
@@ -84,6 +89,11 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
                 fsa = FSAAdapter.create(fsa_programs)
                 edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
                 self._fsa.append(fsa)
+                
+                if not self._edev_fsa.get(index):
+                    self._edev_fsa[index] = [fsa]
+                else:
+                    self._edev_fsa[index].append(fsa)
                                 
             #self._end_devices.append(edev)
                             
