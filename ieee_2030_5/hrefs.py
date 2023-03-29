@@ -49,8 +49,17 @@ class DERSubType(Enum):
     Status = "ders"
     Availability = "dera"
     CurrentProgram = "derp"
+
+class FSASubType(Enum):
+    DERProgram = "derp"
     
     
+def der_program_href(index: int = NO_INDEX) -> str:
+    if index == NO_INDEX:
+        return DEFAULT_DERP_ROOT
+    
+    return SEP.join([DEFAULT_DERP_ROOT, index])
+
 
 @lru_cache()
 def get_server_config_href() -> str:
@@ -116,7 +125,22 @@ def edev_parse(path: str) -> EdevHref:
         return EdevHref(int(split_pth[1]), int(split_pth[3]))
     elif len(split_pth) == 5:
         return EdevHref(int(split_pth[1]), int(split_pth[3]), split_pth[4])
+
+class FSAHref(NamedTuple):
+    fsa_index: NO_INDEX
+    fsa_sub: FSASubType = None
     
+def fsa_parse(path: str) -> FSAHref:
+    split_pth = path.split(SEP)
+    
+    if len(split_pth) == 1:
+        return FSAHref(NO_INDEX)
+    elif len(split_pth) == 2:
+        return FSAHref(int(split_pth[1]))
+    elif len(split_pth) == 3:
+        return FSAHref(int(split_pth[1]), fsa_sub=split_pth[2])
+    
+    raise ValueError("Invalid parsing path.")
     
 def der_sub_href(edev_index: int, index: int = NO_INDEX, subtype: DERSubType = None):
     if subtype is None and index == NO_INDEX:

@@ -230,6 +230,9 @@ class _MirrorUsagePointAdapter:
         #    In addition, we use this as the base url for the upt url that is returned after
         #    the reading is created.
         try:
+            #pths = href.split(hrefs.SEP)
+            #mup = self.__mirror_usage_points__[pths[1]]
+            href = href.replace(hrefs.MUP, hrefs.UTP)
             upt = self.__upt_container__.fetch_by_href(href)
             assert upt
             result = self.__upt_container__.create_or_replace_reading(upt, data)

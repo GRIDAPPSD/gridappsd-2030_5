@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import fields
-from typing import Dict, List, Tuple
+from enum import Enum
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 from blinker import Signal
 
@@ -23,6 +24,17 @@ __all__: List[str] = [
     "DERCurveAdapter",
     "DERAdapter"
 ]
+
+class CreateStatus(Enum):
+    Error = "Error"
+    Created = "Created"
+    Updated = "Updated"
+
+class CreateResponse(NamedTuple):
+    data: Any
+    index: int
+    status: str = CreateStatus.Created
+    
 
 
 class _DERCurveAdapter(BaseAdapter, AdapterListProtocol):
@@ -377,11 +389,30 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
         return self._der_programs
     
     def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.DERProgramList:
-        program_list = m.DERProgramList(href=hrefs.get_program_href(), DERProgram=self._der_programs,
+        program_list = m.DERProgramList(href=hrefs.der_program_href(), DERProgram=self._der_programs,
                                         all=len(self._der_programs),
                                         results=len(self._der_programs))
         return program_list
     
+    def create(self, data: m.DERProgram) -> CreateResponse:
+        
+        found_index = -1
+        if data.mRID:
+            for index, ele in enumerate(self._der_programs):
+                if ele.mRID == data.mRID:
+                    found_index = index
+                    break
+        
+        if found_index:
+            self._der_programs[found_index] = data
+            data.href = hrefs.der_program_href(found_index)
+            response = CreateResponse(data, found_index, CreateStatus.Updated.value)
+        else:
+            self._der_programs.append(data)
+            data.href = hrefs.der_program_href(len(self._der_program) - 1)
+            response = CreateResponse(data, len(self._der_program) - 1)
+
+        return response
 
     @staticmethod
     def build(**kwargs) -> m.DERProgram:
@@ -417,6 +448,7 @@ class _DERAdapter(BaseAdapter, AdapterListProtocol):
         self._der_settings: Dict[int, List[m.DERSettings]] = {}
         self._der_status: Dict[int, List[m.DERStatus]] = {}
         self._der_availabilites: Dict[int, List[m.DERAvailability]] = {}
+        self._der_current_program: Dict[int, List[m.DERProgram]] = {}
         
     def __initialize__(self, sender):
         # TODO: Load ders
@@ -456,6 +488,11 @@ class _DERAdapter(BaseAdapter, AdapterListProtocol):
         
         self._der_availabilites[edev_index].append(m.DERAvailability(href=hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Availability)))
         
+        if not self._der_current_program.get(edev_index):
+            self._der_current_program[edev_index] = []
+        
+        self._der_current_program[edev_index].append(m.DERProgram(href=hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.CurrentProgram)))
+        
         return der
         
     def fetch_all(self) -> List:
@@ -478,6 +515,9 @@ class _DERAdapter(BaseAdapter, AdapterListProtocol):
     
     def fetch_availibility_at(self, edev_index: int, der_index: int) -> m.DERAvailability:
         return self._der_availabilites[edev_index][der_index]
+    
+    def fetch_current_program_at(self, edev_index: int, der_index: int) -> m.DERProgram:
+        return self._der_current_program[edev_index][der_index]
     
     def store(self, parsed_edev: hrefs.EdevHref, data) -> int:
         if parsed_edev.der_sub == hrefs.DERSubType.Availability.value:
