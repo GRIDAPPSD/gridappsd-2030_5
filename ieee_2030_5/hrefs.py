@@ -21,6 +21,7 @@ DERC = "derc"
 DDERC = "dderc"
 FSA = "fsa"
 DERP = "derp"
+DERCA = "derca"
 
 DEFAULT_DCAP_ROOT = f"/{DCAP}"
 DEFAULT_EDEV_ROOT = f"/{EDEV}"
@@ -53,13 +54,48 @@ class DERSubType(Enum):
 class FSASubType(Enum):
     DERProgram = "derp"
     
+class DERProgramSubType(Enum):
+    NoLink = 0
+    ActiveDERControlListLink = 1
+    DefaultDERControlLink = 2
+    DERControlListLink = 3
+    DERCurveListLink= 4
+    DERControlReplyTo = 5
     
-def der_program_href(index: int = NO_INDEX) -> str:
+def der_program_href(index: int = NO_INDEX, sub: DERProgramSubType = DERProgramSubType.NoLink, subindex: int = NO_INDEX) -> str:
     if index == NO_INDEX:
         return DEFAULT_DERP_ROOT
     
-    return SEP.join([DEFAULT_DERP_ROOT, index])
+    if sub == DERProgramSubType.NoLink:
+        return SEP.join([DEFAULT_DERP_ROOT, str(index)])
+    
+    if sub == DERProgramSubType.ActiveDERControlListLink:
+        if subindex == NO_INDEX:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DERCA])
+        else:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DERCA, str(subindex)])
+    
+    if sub == DERProgramSubType.DefaultDERControlLink:
+        if subindex == NO_INDEX:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DDERC])
+        else:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DDERC, str(subindex)])
 
+    if sub == DERProgramSubType.DERCurveListLink:
+        if subindex == NO_INDEX:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index),  CURVE])
+        else:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), CURVE, str(subindex)])
+        
+    if sub == DERProgramSubType.DERControlListLink:
+        if subindex == NO_INDEX:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index),  DERC])
+        else:
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DERC, str(subindex)])
+        
+    if sub == DERProgramSubType.DERControlReplyTo:
+        return DEFAULT_RSPS_ROOT
+        
 
 @lru_cache()
 def get_server_config_href() -> str:

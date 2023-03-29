@@ -4,6 +4,7 @@ from typing import Optional
 from flask import Flask, Response, render_template, request
 
 import ieee_2030_5.hrefs as hrefs
+import ieee_2030_5.models as m
 from ieee_2030_5.adapters.der import DERAdapter, DERProgramAdapter
 from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
@@ -25,6 +26,8 @@ class AdminEndpoints:
         app.add_url_rule("/admin/program-lists", view_func=self._program_lists)
         app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
         app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._edev_fsa)
+        app.add_url_rule("/admin/derp/<int:index>/derc",  methods=['GET', 'POST'], view_func=self._derp_derc)
+        app.add_url_rule("/admin/derp/<int:index>/dderc",  methods=['GET', 'POST'], view_func=self._derp_derc)
         app.add_url_rule("/admin/derp",  methods=['GET', 'POST'], view_func=self._derp)
         #app.add_url_rule("/admin/derp/<int:index>",  methods=['GET', 'POST'], view_func=self._derp)
         #app.add_url_rule("/admin/derp/<int:index>/derc", methods=['GET', 'POST'], view_func=self._derp_derc)
@@ -41,13 +44,23 @@ class AdminEndpoints:
             
             response = DERProgramAdapter.create(data)
             
-            return Response(f"{response.index}, {response.status}")
-            
+            return Response(headers={'Location': response.href}, status=response.statusint)
             
             
         return Response(f"I am {index}, {request.method}")
 
-    def _derp_derc(self) -> Response:
+    def _derp_derc(self, index: int) -> Response:
+        if request.method == "POST":
+            xml = request.data.decode('utf-8')
+            data = xml_to_dataclass(request.data.decode('utf-8'))
+            
+            if isinstance(data, m.DefaultDERControl):
+                results = DERProgramAdapter.create_default_der_control(index, data)
+                return Response(headers={'Location': results.href}, status=results.statusint)
+            elif isinstance(data, m.DERControl):
+                results = DERProgramAdapter.create_der_control(index, data)
+                return Response(headers={'Location': results.href}, status=results.statusint)
+                
         return Response("bar")
         
 

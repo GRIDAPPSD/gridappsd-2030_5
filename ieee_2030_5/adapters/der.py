@@ -11,6 +11,7 @@ from blinker import Signal
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.adapters import AdapterListProtocol, BaseAdapter, ready_signal
+from ieee_2030_5.adapters.timeadapter import TimeAdapter
 from ieee_2030_5.config import InvalidConfigFile
 from ieee_2030_5.data.indexer import add_href, get_href_filtered
 from ieee_2030_5.models.sep import DERProgram
@@ -32,8 +33,19 @@ class CreateStatus(Enum):
 
 class CreateResponse(NamedTuple):
     data: Any
-    index: int
-    status: str = CreateStatus.Created
+    href: str
+    index: int = -1
+    status: str = CreateStatus.Created.value
+    
+    @property
+    def statusint(self) -> int:
+        if self.status == CreateStatus.Created.value:
+            return 201
+        elif self.status == CreateStatus.Updated.value:
+            return 204
+        elif self.status == CreateStatus.Error:
+            return 400
+        
     
 
 
@@ -298,7 +310,38 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
         super().__init__()
         
         self._der_programs: List[DERProgram] = []
+        self._der_default_control: Dict[int, m.DefaultDERControl] = {}
+        self._der_control: Dict[int, List[m.DERControl]] = {}
+        TimeAdapter.tick.connect(self._time_updated)
         
+    def _time_updated(self, timestamp):
+        
+        for indx, ctrl_list in self._der_control.items():
+            event_removed = []
+            for ctrl_index, ctrl in enumerate(ctrl_list):
+                if not ctrl.EventStatus:
+                    if ctrl.interval.start > timestamp and timestamp < ctrl.interval.start + ctrl.interval.duration:
+                        ctrl.EventStatus = m.EventStatus(currentStatus=1, dateTime=timestamp, potentiallySuperseded=False, reason="Active") 
+                    else:
+                        ctrl.EventStatus = m.EventStatus(currentStatus=0, dateTime=timestamp, potentiallySuperseded=False, reason="Scheduled") 
+
+                # Active control
+                if ctrl.interval.start < timestamp and timestamp < ctrl.interval.start + ctrl.interval.duration:
+                    # TODO send active control event
+                    if ctrl.EventStatus.currentStatus == 0:
+                        ctrl.EventStatus.currentStatus = 1 # Active
+                        ctrl.EventStatus.dateTime = timestamp
+                        ctrl.EventStatus.reason = f"Control event active {ctrl.mRID}"
+                        
+                elif timestamp > ctrl.interval.start + ctrl.interval.duration:
+                    if ctrl.EventStatus.currentStatus == 1: # Only remove if we were active (otherwise we need to delete differently)
+                        event_removed.append(ctrl_index)
+                    
+            for i in sorted(event_removed, reverse=True):
+                ctrl_list.pop(i)
+                    
+                    
+                    
     
     def __initialize__(self, sender):
         """Initialize the DERProgram objects based upon the BaseAdapter.__server_configuration__"""
@@ -394,6 +437,69 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
                                         results=len(self._der_programs))
         return program_list
     
+    def fetch_der_default_control(self, program_index: int) -> m.DefaultDERControl:
+        return self._der_default_control.get(program_index, m.DefaultDERControl())
+    
+    def fetch_der_control_list(self, program_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERControlList:
+        der_controls = self.get_der_controls(program_index)
+        all=len(der_controls)
+        return m.DERControlList(href=hrefs.der_program_href(program_index, hrefs.DERProgramSubType.DERControlListLink), all=all, results=all,
+                                DERControl=der_controls)
+        
+    def fetch_der_active_control_list(self, program_index: int, int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERControlList:
+        der_control_list = m.DERControlList(href=hrefs.der_program_href(program_index, hrefs.DERProgramSubType.ActiveDERControlListLink),
+                                            DERControl=self.get_der_active_controls(program_index=program_index))
+        
+        der_control_list.all = len(der_control_list.DERControl)
+        der_control_list.results = len(der_control_list.DERControl)
+        return der_control_list
+    
+    def get_der_active_controls(self, program_index: int) -> List[m.DERControl]:
+        lst: List[m.DERControl] = []
+        for ctrl in self._der_control[program_index]:
+            if ctrl.EventStatus.currentStatus == 1: # Active
+                lst.append(ctrl)
+        return lst
+    
+    def get_default_der_control(self, program_index) -> m.DefaultDERControl:
+        return self._der_default_control.get(program_index)
+    
+    def get_der_controls(self, program_index) -> List[m.DERControl]:
+        return self._der_control.get(program_index, [])
+    
+    def create_default_der_control(self, program_index, data: m.DefaultDERControl) -> CreateResponse:
+        if program_index in self._der_default_control:
+            status = CreateStatus.Updated.value
+        else:
+            status = CreateStatus.Created.value
+        data.href = hrefs.der_program_href(program_index, hrefs.DERProgramSubType.DefaultDERControlLink)
+        self._der_default_control[program_index] = data
+        return CreateResponse(data, href=data.href, status=status)
+    
+    def create_der_control(self, program_index, data: m.DERControl)  -> CreateResponse:
+        found_derc_index = -1
+        
+        if program_index in self._der_control:
+            for index, derc in enumerate(self._der_control[program_index]):
+                if derc.mRID == data.mRID:
+                    found_derc_index = index
+                    break
+        else:
+            self._der_control[program_index] = []
+        
+        data.replyTo = hrefs.der_program_href(program_index, hrefs.DERProgramSubType.DERControlReplyTo) 
+        if found_derc_index == -1:
+            status = CreateStatus.Created.value
+            found_derc_index = len(self._der_control[program_index])
+            self._der_control[program_index].append(data)
+        else:
+            status = CreateStatus.Updated.value
+            self._der_control[program_index][found_derc_index] = data
+    
+        data.href = hrefs.der_program_href(program_index, hrefs.DERProgramSubType.DERControlListLink, found_derc_index)
+        
+        return CreateResponse(data, href=data.href, status=status)
+    
     def create(self, data: m.DERProgram) -> CreateResponse:
         
         found_index = -1
@@ -402,16 +508,34 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
                 if ele.mRID == data.mRID:
                     found_index = index
                     break
+                
+        def update_hrefs(index: int, data: m.DERProgram):
+            data.href = hrefs.der_program_href(index)
+            
+            if active := self.get_der_active_controls(index):
+                data.ActiveDERControlListLink = m.ActiveDERControlListLink(hrefs.der_program_href(index, hrefs.DERProgramSubType.ActiveDERControlListLink), 
+                                                                           all=len(active))
+            if ctrl := self.get_der_controls(index):
+                data.DERControlListLink = m.DERControlListLink(hrefs.der_program_href(index, hrefs.DERProgramSubType.DERControlListLink),
+                                                               all=len(ctrl))
+            
+            if dctrl := self.get_default_der_control(index):
+                data.DefaultDERControlLink = m.DefaultDERControlLink(hrefs.der_program_href(index, hrefs.DERProgramSubType.DefaultDERControlLink))
+            
+            
         
-        if found_index:
+        if found_index != -1:
             self._der_programs[found_index] = data
-            data.href = hrefs.der_program_href(found_index)
-            response = CreateResponse(data, found_index, CreateStatus.Updated.value)
+            the_index = found_index            
+            response = CreateResponse(data, index=found_index, href=data.href, status=CreateStatus.Updated.value)
         else:
+            new_index = len(self._der_programs)
             self._der_programs.append(data)
-            data.href = hrefs.der_program_href(len(self._der_program) - 1)
-            response = CreateResponse(data, len(self._der_program) - 1)
+            the_index = new_index    
+            response = CreateResponse(data, index=new_index, href=data.href)
 
+        update_hrefs(the_index, data)
+        
         return response
 
     @staticmethod
