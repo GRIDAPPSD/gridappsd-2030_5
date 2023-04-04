@@ -52,7 +52,7 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
         # EndDeviceAdapter.initialize_from_storage()
         # programs = DERProgramAdapter.get_all()
         # stored_devices = EndDeviceAdapter.get_all()
-        programs = DERProgramAdapter.fetch_all()
+        programs = DERProgramAdapter.fetch_edev_all()
 
         for dev in BaseAdapter.device_configs():
             edev = m.EndDevice()
@@ -173,7 +173,7 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
 
             # edev_list.EndDevice.append(edev)
         
-    def fetch_all(self) -> List:
+    def fetch_edev_all(self) -> List:
         return self._end_devices
     
     def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.EndDeviceList:

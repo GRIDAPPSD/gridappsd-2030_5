@@ -117,8 +117,8 @@ class ServerEndpoints:
         app.add_url_rule(f"/<regex('{hrefs.CURVE}{hrefs.MATCH_REG}'):path>",
                          view_func=self._curves,
                          methods=["GET"])
-        app.add_url_rule(f"/<regex('{hrefs.PROGRAM}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._programs,
+        app.add_url_rule(f"/<regex('{hrefs.DERP}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._derp,
                          methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.FSA}{hrefs.MATCH_REG}'):path>",
                          view_func=self._fsa,
@@ -214,11 +214,6 @@ class ServerEndpoints:
         #     response = Response(dataclass_to_xml(curve_list))
         # else:
         #     response = Response(dataclass_to_xml(get_href(request.path)))
-        return RequestOp(server_endpoints=self).build_response_from_dataclass(obj)
-
-    def _programs(self, path) -> Response:
-        pth = request.environ['PATH_INFO']
-        obj = get_href(pth)
         return RequestOp(server_endpoints=self).build_response_from_dataclass(obj)
         # if index is None:
         #     items = get_href_filtered(href_prefix=hrefs.program)

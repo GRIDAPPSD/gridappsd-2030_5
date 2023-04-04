@@ -368,7 +368,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     return app
 
 
-def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
+def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):    
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=request_handler,
@@ -394,31 +394,33 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
     PeerCertWSGIRequestHandler.config = config
     PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
 
-    # kwargs['ssl_context'] = ssl_context
-    # kwargs['request_handler'] = PeerCertWSGIRequestHandler,
-    # kwargs['port'] = port
-    #kwargs.pop('debug', None)
-    https_thread = threading.Thread(
-        target=run_app,
-        args=[app, host, ssl_context, PeerCertWSGIRequestHandler, port],
-        kwargs=kwargs)
-    https_thread.daemon = True
-    https_thread.start()
+    run_app(app=app, host=host, ssl_context=ssl_context, port=port, request_handler=PeerCertWSGIRequestHandler, **kwargs)
+    
+    # # kwargs['ssl_context'] = ssl_context
+    # # kwargs['request_handler'] = PeerCertWSGIRequestHandler,
+    # # kwargs['port'] = port
+    # #kwargs.pop('debug', None)
+    # https_thread = threading.Thread(
+    #     target=run_app,
+    #     args=[app, host, ssl_context, PeerCertWSGIRequestHandler, port],
+    #     kwargs=kwargs)
+    # https_thread.daemon = True
+    # https_thread.start()
 
-    if config.http_port:
+    # if config.http_port:
 
-        http_thread = threading.Thread(target=run_app,
-                                       args=[app, host, None, None, config.http_port],
-                                       kwargs=kwargs)
+    #     http_thread = threading.Thread(target=run_app,
+    #                                    args=[app, host, None, None, config.http_port],
+    #                                    kwargs=kwargs)
 
-        http_thread.daemon = True
-        http_thread.start()
+    #     http_thread.daemon = True
+    #     http_thread.start()
 
-        while http_thread.isAlive() and https_thread.isAlive():
-            time.sleep(0.05)
-    else:
-        while https_thread.is_alive():
-            time.sleep(0.05)
+    #     while http_thread.isAlive() and https_thread.isAlive():
+    #         time.sleep(0.05)
+    # else:
+    #     while https_thread.is_alive():
+    #         time.sleep(0.05)
 
     # app.run(host=host,
     #         ssl_context=ssl_context,

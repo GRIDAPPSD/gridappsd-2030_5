@@ -202,7 +202,7 @@ def _main():
                     tls_repo,
                     end_devices,
                     debug=opts.debug,
-                    use_reloader=False,
+                    use_reloader=True,
                     use_debugger=True,
                     threaded=False)
     except KeyboardInterrupt:

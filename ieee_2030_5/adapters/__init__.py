@@ -8,9 +8,9 @@ from typing import Any, Dict, List, Optional, Protocol
 from blinker import Signal
 
 import ieee_2030_5.config as cfg
+import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.models.sep import List_type
-import ieee_2030_5.models as m
 
 _log = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class AdapterListProtocol(AdapterIndexProtocol):
     def fetch_list(self, start: int = 0, after: int =0, limit:int = 0) -> m.List_type:
         pass
     
-    def fetch_all(self) -> List:
+    def fetch_edev_all(self) -> List:
         pass
         
 

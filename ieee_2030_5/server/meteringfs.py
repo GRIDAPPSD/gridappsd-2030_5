@@ -91,4 +91,5 @@ class MirrorUsagePointRequest(RequestOp):
         if isinstance(result, Error):
             return Response(result.args[1], status=500)
         # Note response to the post is different due to added endpoint.
-        return Response(headers={'Location': result.location}, status=result.status)
+        
+        return Response(headers={'Location': result.location}, status=result.status if isinstance(result.status, int) else result.status.value)

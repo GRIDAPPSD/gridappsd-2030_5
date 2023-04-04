@@ -123,7 +123,12 @@ class _UsagePointContainer(Container, Sized):
         return next(filter(lambda x: x.mRID == mRID, [y.usage_point for y in self.__usage_points__]))
     
     def _fetch_wrapper_by_mRID(self, mRID: str) -> _UsagePointWrapper:
-        return next(filter(lambda x: x.usage_point.mRID == mRID, self.__usage_points__))
+        print(self.__usage_points__)
+        for x in self.__usage_points__:
+            if x.usage_point.mRID == mRID:
+                return x
+        
+        raise StopIteration()
     
     def _fetch_wrapper_by_href(self, href: str) -> _UsagePointWrapper:
         return next(filter(lambda x: x.usage_point.href == href, self.__usage_points__))

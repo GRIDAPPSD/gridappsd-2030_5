@@ -45,3 +45,4 @@ class DERProgramRequests(RequestOp):
             raise ValueError("Invalid path passed to ")
         obj = self.get_path("foo")
         return self.build_response_from_dataclass(obj)
+    

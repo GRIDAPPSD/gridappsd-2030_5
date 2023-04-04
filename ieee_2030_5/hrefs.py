@@ -14,7 +14,6 @@ SDEV = "sdev"
 MSG = "msg"
 DER = "der"
 CURVE = "dc"
-PROGRAM = "program"
 RSPS = "rsps"
 LOG = "log"
 DERC = "derc"
@@ -32,7 +31,6 @@ DEFAULT_SELF_ROOT = f"/{SDEV}"
 DEFAULT_MESSAGE_ROOT = f"/{MSG}"
 DEFAULT_DER_ROOT = f"/{DER}"
 DEFAULT_CURVE_ROOT = f"/{CURVE}"
-DEFAULT_PROGRAM_ROOT = f"/{PROGRAM}"
 DEFAULT_RSPS_ROOT = f"/{RSPS}"
 DEFAULT_LOG_EVENT_ROOT = f"/{LOG}"
 DEFAULT_FSA_ROOT = f"/{FSA}"
@@ -61,6 +59,21 @@ class DERProgramSubType(Enum):
     DERControlListLink = 3
     DERCurveListLink= 4
     DERControlReplyTo = 5
+    
+class DERProgramHref(NamedTuple):
+    root: str
+    index: int
+    
+    @staticmethod
+    def parse(href: str):
+        parsed = href.split(SEP)
+        if len(parsed) == 1:
+            return DERProgramHref(parsed[0], NO_INDEX)
+        elif len(parsed) == 2:
+            return DERProgramHref(parsed[0], int(parsed[1]))
+    
+def der_program_parse(href: str) -> DERProgramHref:
+    return DERProgramHref.parse(href)
     
 def der_program_href(index: int = NO_INDEX, sub: DERProgramSubType = DERProgramSubType.NoLink, subindex: int = NO_INDEX) -> str:
     if index == NO_INDEX:
@@ -389,12 +402,12 @@ def get_program_href(index: int, subref: str = None):
         subref: used to specify a subsection in the program.
     """
     if index == NO_INDEX:
-        ref = f"{DEFAULT_PROGRAM_ROOT}"
+        ref = f"{DEFAULT_DERP_ROOT}"
     else:
         if subref is not None:
-            ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}{SEP}{subref}"
+            ref = f"{DEFAULT_DERP_ROOT}{SEP}{index}{SEP}{subref}"
         else:
-            ref = f"{DEFAULT_PROGRAM_ROOT}{SEP}{index}"
+            ref = f"{DEFAULT_DERP_ROOT}{SEP}{index}"
     return ref
 
 

@@ -87,15 +87,17 @@ class RequestForwarder(BaseHTTPRequestHandler):
         # self.send_response(response.status, data.decode("utf-8"))
         self.wfile.write(data)
         self.close_connection = False
+        return response
 
     def do_GET(self):
-        _log.info(f"GET {self.path} Content-Length: {self.headers.get('Content-Length')}")
+        
 
         conn = self.__start_request__()
 
         conn.request(method="GET", url=self.path, headers=self.headers, encode_chunked=True)
 
-        self.__handle_response__(conn)
+        response = self.__handle_response__(conn)
+        _log.info(f"GET {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
 
     def do_POST(self):
         _log.info(f"POST {self.path} Content-Length: {self.headers.get('Content-Length')}")
@@ -109,7 +111,8 @@ class RequestForwarder(BaseHTTPRequestHandler):
                      body=read_data,
                      encode_chunked=True)
 
-        self.__handle_response__(conn)
+        response = self.__handle_response__(conn)
+        _log.info(f"POST {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
         
     def do_DELETE(self):
         _log.info(f"DELETE {self.path} Content-Length: {self.headers.get('Content-Length')}")
@@ -123,7 +126,8 @@ class RequestForwarder(BaseHTTPRequestHandler):
                      body=read_data,
                      encode_chunked=True)
 
-        self.__handle_response__(conn)
+        response = self.__handle_response__(conn)
+        _log.info(f"DELETE {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
         
     def do_PUT(self):
         _log.info(f"PUT {self.path} Content-Length: {self.headers.get('Content-Length')}")
@@ -137,7 +141,8 @@ class RequestForwarder(BaseHTTPRequestHandler):
                      body=read_data,
                      encode_chunked=True)
 
-        self.__handle_response__(conn)
+        response = self.__handle_response__(conn)
+        _log.info(f"PUT {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
 
 
 class ProxyServer(HTTPServer):
@@ -209,7 +214,7 @@ def _main():
 
     opts = parser.parse_args()
 
-    debug_level = logging.DEBUG if opts.debug else logging.INFO
+    debug_level = logging.DEBUG if opts.debug else logging.DEBUG
     logging.basicConfig(level=debug_level)
 
     cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())

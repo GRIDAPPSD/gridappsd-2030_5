@@ -4,7 +4,7 @@ import logging
 import uuid
 from dataclasses import fields
 from enum import Enum
-from typing import Any, Dict, List, NamedTuple, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from blinker import Signal
 
@@ -72,7 +72,7 @@ class _DERCurveAdapter(BaseAdapter, AdapterListProtocol):
             
         ready_signal.send(self)
 
-    def fetch_all(self) -> List[m.DERCurve]:
+    def fetch_edev_all(self) -> List[m.DERCurve]:
         """Fetch all of the 2030.5 DERCurve objects as a list."""
         return self._curves
 
@@ -142,7 +142,7 @@ class _DERControlAdapter(BaseAdapter, AdapterListProtocol):
         
         ready_signal.send(self)
         
-    def fetch_all(self) -> List[m.DERControl]:
+    def fetch_edev_all(self) -> List[m.DERControl]:
         return self._controls
     
     def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.DERControlList:
@@ -349,8 +349,8 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
         cfg_der_controls = BaseAdapter.__server_configuration__.controls
         _log.debug("Update m.DERPrograms' adding links to the different program pieces.")
 
-        der_controls = DERControlAdapter.fetch_all()
-        der_curves = DERCurveAdapter.fetch_all()
+        der_controls = DERControlAdapter.fetch_edev_all()
+        der_curves = DERCurveAdapter.fetch_edev_all()
         # Initialize "global" m.DERPrograms href lists, including all the different links to
         # locations for active, default, curve and control lists.
         for index, program_cfg in enumerate(cfg_programs):
@@ -375,7 +375,7 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
             # program_cfg['mrid'] = program.mRID
 
             program.href = hrefs.get_program_href(index)
-            program.ActiveDERControlListLink = m.ActiveDERControlListLink(hrefs.der_href)
+            # program.ActiveDERControlListLink = m.ActiveDERControlListLink(hrefs..der_href())
 
             try:
                 der_ctl = next(
@@ -428,7 +428,7 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
             # der_curve_list.all = len(der_curve_list.DER)
             ready_signal.send(self)
 
-    def fetch_all(self) -> List:
+    def fetch_edev_all(self) -> List:
         return self._der_programs
     
     def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.DERProgramList:
@@ -456,7 +456,7 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
     
     def get_der_active_controls(self, program_index: int) -> List[m.DERControl]:
         lst: List[m.DERControl] = []
-        for ctrl in self._der_control[program_index]:
+        for ctrl in self._der_control.get(program_index, []):
             if ctrl.EventStatus.currentStatus == 1: # Active
                 lst.append(ctrl)
         return lst
@@ -500,6 +500,17 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
         
         return CreateResponse(data, href=data.href, status=status)
     
+    def fetch_by_mrid(self, mRID: str) -> Optional[m.DERProgram]:
+        try:
+            der_program = next(filter(lambda x: x.mRID == mRID, self._der_programs))
+        except StopIteration:
+            der_program = None
+            
+        return der_program
+    
+    def fetch_at(self, index: int) -> m.DERProgram:
+        return self._der_programs[index]
+        
     def create(self, data: m.DERProgram) -> CreateResponse:
         
         found_index = -1
@@ -573,6 +584,7 @@ class _DERAdapter(BaseAdapter, AdapterListProtocol):
         self._der_status: Dict[int, List[m.DERStatus]] = {}
         self._der_availabilites: Dict[int, List[m.DERAvailability]] = {}
         self._der_current_program: Dict[int, List[m.DERProgram]] = {}
+        self._edev_der_settings: Dict[int, List[m.DERSettings]] = {}
         
     def __initialize__(self, sender):
         # TODO: Load ders
@@ -618,30 +630,52 @@ class _DERAdapter(BaseAdapter, AdapterListProtocol):
         self._der_current_program[edev_index].append(m.DERProgram(href=hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.CurrentProgram)))
         
         return der
-        
-    def fetch_all(self) -> List:
-        return self._ders
+    
+    def fetch_edev_all(self, edev_index: int) -> List:
+        return self._edev_ders.get(edev_index, [])
     
     def fetch_list(self, edev_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERList:
         
-        der_list = m.DERList(href=hrefs.der_sub_href(edev_index), 
-                             all=len(self._edev_ders[edev_index]), results=len(self._edev_ders[edev_index]), DER=self._edev_ders[edev_index])
+        try:
+            der_list = m.DERList(href=hrefs.der_sub_href(edev_index), 
+                                all=len(self._edev_ders[edev_index]), results=len(self._edev_ders[edev_index]), DER=self._edev_ders[edev_index])
+        except KeyError:
+            der_list = m.DERList(href=hrefs.der_sub_href(edev_index), 
+                                 all=0, results=0, DER=[])
         return der_list
     
     def fetch_at(self, edev_index: int, der_index: int) -> m.DER:
         return self._edev_ders[edev_index][der_index]
     
+    def fetch_settings_at(self, edev_index: int, der_index: int) -> m.DERSettings:
+        return self._edev_der_settings[edev_index][der_index]
+    
+    def store_settings_at(self, edev_index: int, der_index: int, settings: m.DERSettings):
+        self._edev_der_settings[edev_index][der_index] = settings
+    
     def fetch_status_at(self, edev_index: int, der_index: int) -> m.DERStatus:
         return self._der_status[edev_index][der_index]
+    
+    def store_status_at(self, edev_index: int, der_index: int, status: m.DERStatus):
+        self._edev_der_status[edev_index][der_index] = status
     
     def fetch_capability_at(self, edev_index: int, der_index: int) -> m.DERCapability:
         return self._der_capabilities[edev_index][der_index]
     
+    def store_capability_at(self, edev_index: int, der_index: int, capability: m.DERCapability):
+        self._der_capabilities[edev_index][der_index] = capability
+    
     def fetch_availibility_at(self, edev_index: int, der_index: int) -> m.DERAvailability:
         return self._der_availabilites[edev_index][der_index]
     
+    def store_availibility_at(self, edev_index: int, der_index: int, availability: m.DERAvailability):
+        self._der_availabilites[edev_index][der_index] = availability
+    
     def fetch_current_program_at(self, edev_index: int, der_index: int) -> m.DERProgram:
         return self._der_current_program[edev_index][der_index]
+    
+    def store_current_program_at(self, edev_index: int, der_index: int, current_program: m.DERProgram):
+        self._der_current_program[edev_index][der_index] = current_program
     
     def store(self, parsed_edev: hrefs.EdevHref, data) -> int:
         if parsed_edev.der_sub == hrefs.DERSubType.Availability.value:
@@ -683,5 +717,5 @@ if __name__ == '__main__':
 
     BaseAdapter.initialize(config, tls_repo)    
 
-    print(DERCurveAdapter.fetch_all())
+    print(DERCurveAdapter.fetch_edev_all())
     print(DERCurveAdapter.fetch_list())

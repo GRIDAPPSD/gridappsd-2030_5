@@ -21,7 +21,7 @@ class _FSAAdapter(BaseAdapter, AdapterListProtocol):
         # List of programs assigned to the index of a fsa
         self._programs: Dict[int, List[m.DERProgram]] = {}
             
-    def fetch_all(self) -> List[m.FunctionSetAssignments]:
+    def fetch_edev_all(self) -> List[m.FunctionSetAssignments]:
         return self._fsa
     
     def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:

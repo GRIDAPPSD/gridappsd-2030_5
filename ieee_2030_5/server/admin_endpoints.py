@@ -20,23 +20,68 @@ class AdminEndpoints:
         self.server_config = config
         
         app.add_url_rule("/admin", view_func=self._admin)
-        app.add_url_rule("/admin/enddevices", view_func=self._enddevices)
-        app.add_url_rule("/admin/enddevices/<int:index>", view_func=self._enddevices)    
-        app.add_url_rule("/admin/end-device-list", view_func=self._end_device_list)
-        app.add_url_rule("/admin/program-lists", view_func=self._program_lists)
+        app.add_url_rule("/admin/enddevices/<int:index>", view_func=self._admin_enddevices)    
+        app.add_url_rule("/admin/enddevices", view_func=self._admin_enddevices)
+        app.add_url_rule("/admin/end-device-list", view_func=self._admin_enddevice_list)
+        app.add_url_rule("/admin/program-lists", view_func=self._admin_der_program_lists)
         app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
-        app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._edev_fsa)
-        app.add_url_rule("/admin/derp/<int:index>/derc",  methods=['GET', 'POST'], view_func=self._derp_derc)
-        app.add_url_rule("/admin/derp/<int:index>/dderc",  methods=['GET', 'POST'], view_func=self._derp_derc)
-        app.add_url_rule("/admin/derp",  methods=['GET', 'POST'], view_func=self._derp)
+        app.add_url_rule("/admin/edev/<int:edev_index>/ders/<int:der_index>/current_derp", view_func=self._admin_der_update_current_derp, methods=['PUT', 'GET'])
+        app.add_url_rule("/admin/ders/<int:edev_index>", view_func=self._admin_ders)
+        
+        app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._admin_edev_fsa)
+        app.add_url_rule("/admin/derp/<int:index>/derc/<int:control_index>",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
+        app.add_url_rule("/admin/derp/<int:index>/derc",  methods=['GET', 'POST'], view_func=self._admin_derp_derc)
+        app.add_url_rule("/admin/derp/<int:index>/dderc",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
+        app.add_url_rule("/admin/derp",  methods=['GET', 'POST'], view_func=self._admin_derp)
         #app.add_url_rule("/admin/derp/<int:index>",  methods=['GET', 'POST'], view_func=self._derp)
         #app.add_url_rule("/admin/derp/<int:index>/derc", methods=['GET', 'POST'], view_func=self._derp_derc)
         
-    def _derp(self, index: int = -1) -> Response:
+    def _admin_der_program_lists(self) -> Response:
+        return Response(dataclass_to_xml(DERProgramAdapter.fetch_list()))
+    
+    def _admin_ders(self, edev_index: int) -> Response:
+        return Response(dataclass_to_xml(DERAdapter.fetch_list(edev_index=edev_index)))
+    
+    def _der_settings(self, edev_index: int, der_index: int):
+        return Response(dataclass_to_xml(DERAdapter.fetch_settings_at(edev_index=edev_index, der_index=der_index)))
+        
+    def _admin_der_update_current_derp(self, edev_index: int, der_index: int):
+        if request.method == 'PUT':
+            data: m.DERProgram = xml_to_dataclass(request.data.decode('utf-8'))
+            if not isinstance(data, m.DERProgram):
+                return Response(status=400)
+            
+            if data.mRID:
+                program = DERProgramAdapter.fetch_by_mrid(data.mRID)
+                response_status = 200
+                if not program:
+                    program = DERProgramAdapter.create(data).data
+                    response_status = 201
+            else:
+                program = DERProgramAdapter.create(data).data
+                response_status = 201
+            
+            der = DERAdapter.fetch_at(edev_index, der_index)
+            der.CurrentDERProgramLink = m.CurrentDERProgramLink(program.href)
+            return Response(dataclass_to_xml(program), status=response_status)
+        else:
+            der = DERAdapter.fetch_at(edev_index, der_index)
+            if der.CurrentDERProgramLink:
+                parsed = hrefs.der_program_parse(der.CurrentDERProgramLink.href)
+                program = DERProgramAdapter.fetch_at(parsed.index)
+            else:
+                program = m.DERProgram()
+            
+            return Response(dataclass_to_xml(program))
+            
+            
+        
+        
+    def _admin_derp(self, index: int = -1) -> Response:
         if request.method == 'GET' and index < 0:
             return Response(dataclass_to_xml(DERProgramAdapter.fetch_list()))
         elif request.method == 'GET':
-            return Response(dataclass_to_xml(DERProgramAdapter.fetch_all()[index]))
+            return Response(dataclass_to_xml(DERProgramAdapter.fetch_edev_all()[index]))
         
         if request.method == 'POST':
             xml = request.data.decode('utf-8')
@@ -49,7 +94,7 @@ class AdminEndpoints:
             
         return Response(f"I am {index}, {request.method}")
 
-    def _derp_derc(self, index: int) -> Response:
+    def _admin_derp_derc(self, index: int) -> Response:
         if request.method == "POST":
             xml = request.data.decode('utf-8')
             data = xml_to_dataclass(request.data.decode('utf-8'))
@@ -60,8 +105,9 @@ class AdminEndpoints:
             elif isinstance(data, m.DERControl):
                 results = DERProgramAdapter.create_der_control(index, data)
                 return Response(headers={'Location': results.href}, status=results.statusint)
-                
-        return Response("bar")
+            
+        results = DERProgramAdapter.fetch_der_control_list(index)
+        return Response(dataclass_to_xml(results))
         
 
     def _admin(self) -> Response:
@@ -96,7 +142,7 @@ class AdminEndpoints:
         
         
 
-    def _enddevices(self, index:int = None) -> Response:
+    def _admin_enddevices(self, index:int = None) -> Response:
         
         return Response(dataclass_to_xml(EndDeviceAdapter.fetch_list()))
     
@@ -108,7 +154,7 @@ class AdminEndpoints:
 
         return Response(json.dumps(items))
 
-    def _edev_fsa(self, edevid: int) -> Response:
+    def _admin_edev_fsa(self, edevid: int) -> Response:
         #edev = self.end_devices.get(edevid)
         return Response(json.dumps(json.dumps(self.end_devices.get_fsa_list(edevid=edevid))))
 
@@ -116,6 +162,6 @@ class AdminEndpoints:
         return render_template("admin/program-lists.html",
                                program_lists=self.server_config.program_lists)
 
-    def _end_device_list(self) -> str:
+    def _admin_enddevice_list(self) -> str:
         return render_template("admin/end-device-list.html",
                                end_device_list=self.end_devices.get_end_devices())
