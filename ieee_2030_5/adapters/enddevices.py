@@ -1,3 +1,4 @@
+import logging
 import uuid
 from ast import Dict
 from datetime import datetime
@@ -8,10 +9,12 @@ import ieee_2030_5.models as m
 from ieee_2030_5.adapters import AdapterListProtocol, BaseAdapter, ready_signal
 from ieee_2030_5.adapters.der import DERAdapter, DERProgramAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
+from ieee_2030_5.adapters.timeadapter import TimeAdapter
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.models.enums import DeviceCategoryType
 from ieee_2030_5.types_ import Lfdi
 
+_log = logging.getLogger(__file__)
 
 class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
     
@@ -20,16 +23,28 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
         self._reg: Dict[int, m.Registration] = {}
         self._fsa: List[m.FunctionSetAssignments] = []
         self._edev_fsa: Dict[int, List[m.FunctionSetAssignments]] = {}
-            
+        self._edev_derp: Dict[int, Dict[int, List[m.DERProgram]]] = {}
+        
     def fetch_registration(self, edev_index: int) -> m.Registration:
         return self._reg[edev_index]
     
     def fetch_fsa_list(self, edev_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:
-        fsa_list = m.FunctionSetAssignmentsList(href=hrefs.fsa_href(edev_index=edev_index), FunctionSetAssignments=self._fsa)
+        fsa_list = m.FunctionSetAssignmentsList(
+            href=hrefs.fsa_href(edev_index=edev_index), 
+            FunctionSetAssignments=self._edev_fsa.get(edev_index, []))
         return fsa_list
     
     def fetch_fsa(self, edev_index: int, fsa_index: int) -> m.FunctionSetAssignments:
         return self._edev_fsa[edev_index][fsa_index]
+    
+    def fetch_derp_list(self, edev_index: int, fsa_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERProgramList:
+        derps = self._edev_derp[edev_index][fsa_index]
+        
+        derp = m.DERProgramList(href=hrefs.derp_href(edev_index=edev_index, fsa_index=fsa_index),
+                                DERProgram=derps,
+                                all=len(derps), results=len(derps))
+        
+        return derp
         
     def __initialize__(self, sender):
         """ Intializes the following based upon the device configuration and the tlsrepository.
@@ -81,7 +96,6 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
                     program.mRID = str(uuid.uuid4())
                     if cfg_program["description"] == program.description:
                         fsa_programs.append(program)
-                        break
                     
             if len(fsa_programs) > 0:
                 fsa = FSAAdapter.create(fsa_programs)
@@ -89,9 +103,16 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
                 self._fsa.append(fsa)
                 
                 if not self._edev_fsa.get(index):
-                    self._edev_fsa[index] = [fsa]
+                    fsa_index = 0
+                    self._edev_fsa[index] = [fsa] 
                 else:
+                    fsa_index = len(self._edev_fsa)
                     self._edev_fsa[index].append(fsa)
+                
+                if not self._edev_derp.get(index):
+                    self._edev_derp[index] = {}
+
+                self._edev_derp[index][fsa_index] = fsa_programs
             
             has_der = False
             for der_indx, der in enumerate(dev.ders):                

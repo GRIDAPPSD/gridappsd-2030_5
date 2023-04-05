@@ -136,7 +136,10 @@ def fsa_href(index: int = NO_INDEX, edev_index: int=NO_INDEX):
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA])
     else:
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(index)])
-    
+
+def derp_href(edev_index: int, fsa_index: int) -> str:
+    return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(fsa_index), DERP])
+
 def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int = NO_INDEX):
     if index == NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
         return DEFAULT_DER_ROOT

@@ -24,6 +24,7 @@ class _FSAAdapter(BaseAdapter, AdapterListProtocol):
     def fetch_edev_all(self) -> List[m.FunctionSetAssignments]:
         return self._fsa
     
+    
     def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:
         fsa_list = m.FunctionSetAssignmentsList(href=hrefs.fsa_href(), all=len(self._fsa), results=len(self._fsa),
                                                 FunctionSetAssignments=self._fsa)
