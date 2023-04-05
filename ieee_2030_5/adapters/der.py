@@ -312,34 +312,42 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
         self._der_programs: List[DERProgram] = []
         self._der_default_control: Dict[int, m.DefaultDERControl] = {}
         self._der_control: Dict[int, List[m.DERControl]] = {}
+        self._der_active: Dict[int, List[m.DERControl]] = {}
         TimeAdapter.tick.connect(self._time_updated)
         
     def _time_updated(self, timestamp):
-        
-        for indx, ctrl_list in self._der_control.items():
-            event_removed = []
-            for ctrl_index, ctrl in enumerate(ctrl_list):
+        for derp_index, derp in enumerate(self._der_programs):
+            if not self._der_active.get(derp_index):
+                self._der_active[derp_index] = []
+            for ctrl_index, ctrl in enumerate(self._der_control.get(derp_index, [])):
                 if not ctrl.EventStatus:
-                    if ctrl.interval.start > timestamp and timestamp < ctrl.interval.start + ctrl.interval.duration:
+                    _log.debug(f"Setting up event for ctrl {ctrl_index} current_time: {timestamp} start_time: {ctrl.interval.start}")
+                    if timestamp > ctrl.interval.start and timestamp < ctrl.interval.start + ctrl.interval.duration:
                         ctrl.EventStatus = m.EventStatus(currentStatus=1, dateTime=timestamp, potentiallySuperseded=False, reason="Active") 
+                        self._der_active[derp_index].append(ctrl)
                     else:
                         ctrl.EventStatus = m.EventStatus(currentStatus=0, dateTime=timestamp, potentiallySuperseded=False, reason="Scheduled") 
-
+                    _log.debug(f"ctrl.EventStatus is {ctrl.EventStatus}")
+                    
                 # Active control
                 if ctrl.interval.start < timestamp and timestamp < ctrl.interval.start + ctrl.interval.duration:
-                    # TODO send active control event
                     if ctrl.EventStatus.currentStatus == 0:
+                        _log.debug(f"Activating control {ctrl_index}")
                         ctrl.EventStatus.currentStatus = 1 # Active
                         ctrl.EventStatus.dateTime = timestamp
                         ctrl.EventStatus.reason = f"Control event active {ctrl.mRID}"
+                    if ctrl.mRID not in [x.mRID for x in self._der_active[derp_index]]:
+                        self._der_active[derp_index].append(ctrl)
                         
                 elif timestamp > ctrl.interval.start + ctrl.interval.duration:
-                    if ctrl.EventStatus.currentStatus == 1: # Only remove if we were active (otherwise we need to delete differently)
-                        event_removed.append(ctrl_index)
-                    
-            for i in sorted(event_removed, reverse=True):
-                ctrl_list.pop(i)
-                    
+                    if ctrl.EventStatus.currentStatus == 1:
+                        _log.debug(f"Deactivating control {ctrl_index}")
+                        ctrl.EventStatus.currentStatus = -1 # for me this means complete
+                        for index, c in enumerate(self._der_active[derp_index]):
+                            if c.mRID == ctrl.mRID:
+                                self._der_active[derp_index].pop(index)
+                                break
+                
                     
                     
     
@@ -446,7 +454,7 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
         return m.DERControlList(href=hrefs.der_program_href(program_index, hrefs.DERProgramSubType.DERControlListLink), all=all, results=all,
                                 DERControl=der_controls)
         
-    def fetch_der_active_control_list(self, program_index: int, int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERControlList:
+    def fetch_der_active_control_list(self, program_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.DERControlList:
         der_control_list = m.DERControlList(href=hrefs.der_program_href(program_index, hrefs.DERProgramSubType.ActiveDERControlListLink),
                                             DERControl=self.get_der_active_controls(program_index=program_index))
         
@@ -457,8 +465,9 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
     def get_der_active_controls(self, program_index: int) -> List[m.DERControl]:
         lst: List[m.DERControl] = []
         for ctrl in self._der_control.get(program_index, []):
-            if ctrl.EventStatus.currentStatus == 1: # Active
-                lst.append(ctrl)
+            if ctrl.EventStatus:
+                if ctrl.EventStatus.currentStatus == 1: # Active
+                    lst.append(ctrl)
         return lst
     
     def get_default_der_control(self, program_index) -> m.DefaultDERControl:
