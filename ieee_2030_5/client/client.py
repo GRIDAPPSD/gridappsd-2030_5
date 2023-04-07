@@ -89,6 +89,8 @@ class IEEE2030_5_Client:
         raise werkzeug.exceptions.Forbidden()
 
 
+    def get(self, href):
+        return self.__get_request__(href)
 
 
     def is_end_device_registered(self, end_device: m.EndDevice, pin: int) -> bool:
@@ -168,7 +170,8 @@ class IEEE2030_5_Client:
 
     def disconnect(self):
         self._disconnect = True
-        self._dcap_timer.cancel()
+        if self._dcap_timer:
+            self._dcap_timer.cancel()
         IEEE2030_5_Client.clients.remove(self)
 
     def request(self, endpoint: str, body: dict = None, method: str = "GET",
@@ -182,7 +185,7 @@ class IEEE2030_5_Client:
             return self.__post__(endpoint, body, headers=headers)
 
     def create_mirror_usage_point(self, mirror_usage_point: m.MirrorUsagePoint) -> Tuple[int, str]:
-        data = dataclass_to_xml(mirror_usage_point)
+        data = utils.dataclass_to_xml(mirror_usage_point)
         resp = self.__post__(self._device_cap.MirrorUsagePointListLink.href, data=data)
         return resp.status, resp.headers['Location']
 

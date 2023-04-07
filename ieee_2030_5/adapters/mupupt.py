@@ -20,10 +20,18 @@ class _UsagePointWrapper:
     mirror_meter_readings: List[m.MirrorMeterReading] = field(default_factory=list)
     
     def fetch_reading_by_mRID(self, mRID) -> m.MeterReading:
-        return next(filter(lambda x: x.mRID == mRID, self.meter_readings))
+        for x in self.meter_readings:
+            if x.mRID == mRID:
+                return x
+        raise StopIteration()
+        #return next(filter(lambda x: x.mRID == mRID, self.meter_readings))
     
     def fetch_mirror_meter_reading_index(self, mRID: str) -> int:
-        return next(i for i, v in enumerate(self.mirror_meter_readings) if v.mRID == mRID)
+        for i, v in enumerate(self.mirror_meter_readings):
+            if v.mRID == mRID:
+                return i
+        raise StopIteration()
+        # return next(i for i, v in enumerate(self.mirror_meter_readings) if v.mRID == mRID)
     
     
 @dataclass
@@ -32,7 +40,7 @@ class _UsagePointContainer(Container, Sized):
     
     def create_or_replace_reading(self, usage_point: m.UsagePoint, mirror_meter_reading: m.MirrorMeterReading) -> Tuple[ReturnCode, str]:
         
-        assert usage_point in self, "Passed usage_point not contained within container/"
+        assert usage_point in self, "Passed usage_point not contained within container"
         
         try:
             wrapper = self._fetch_wrapper_by_mRID(usage_point.mRID)
@@ -74,10 +82,11 @@ class _UsagePointContainer(Container, Sized):
         if mirror_usage_point in self:
             
             upt = self.fetch_by_mRID(mirror_usage_point.mRID)
+            if not isinstance(upt, m.UsagePoint):
+                raise ValueError("blah")
             upt.description=mirror_usage_point.description,
             upt.deviceLFDI=mirror_usage_point.deviceLFDI,
             upt.version=mirror_usage_point.version,
-            upt.mRID=mirror_usage_point.mRID,
             upt.serviceCategoryKind=mirror_usage_point.serviceCategoryKind,
             upt.status=mirror_usage_point.status
             
@@ -93,7 +102,7 @@ class _UsagePointContainer(Container, Sized):
                             status=mirror_usage_point.status)
                         
             wrapper = _UsagePointWrapper(usage_point=upt)            
-            UsagePointContainer.__usage_points__.append(wrapper)
+            self.__usage_points__.append(wrapper)
             
         if mirror_usage_point.MirrorMeterReading:
             wrapper = self._fetch_wrapper_by_mRID(mirror_usage_point.mRID)
@@ -117,24 +126,42 @@ class _UsagePointContainer(Container, Sized):
         return uptl
     
     def fetch_by_href(self, href: str) -> m.UsagePoint:
-        return next(filter(lambda x: x.href == href, [y.usage_point for y in self.__usage_points__]))
+        for x in self.__usage_points__:
+            if x.usage_point.href == href:
+                return x.usage_point
+        raise StopIteration()
+        # return next(filter(lambda x: x.href == href, [y.usage_point for y in self.__usage_points__]))
     
     def fetch_by_mRID(self, mRID: str) -> m.UsagePoint:
-        return next(filter(lambda x: x.mRID == mRID, [y.usage_point for y in self.__usage_points__]))
+        for x in self.__usage_points__:
+            if x.usage_point.mRID == mRID:
+                return x.usage_point
+        
+        raise StopIteration()
+        # return next(filter(lambda x: x.mRID == mRID, [y.usage_point for y in self.__usage_points__]))
     
     def _fetch_wrapper_by_mRID(self, mRID: str) -> _UsagePointWrapper:
-        print(self.__usage_points__)
         for x in self.__usage_points__:
+            print(f"Comparing {x.usage_point.mRID} to {mRID}")
             if x.usage_point.mRID == mRID:
                 return x
         
         raise StopIteration()
     
     def _fetch_wrapper_by_href(self, href: str) -> _UsagePointWrapper:
-        return next(filter(lambda x: x.usage_point.href == href, self.__usage_points__))
+        for x in self.__usage_points__:
+            if x.usage_point.href == href:
+                return x
+        
+        raise StopIteration()
+        #return next(filter(lambda x: x.usage_point.href == href, self.__usage_points__))
 
     def __contains__(self, other: object) -> bool:
-        return list(filter(lambda x: x.usage_point.mRID == other.mRID, self.__usage_points__))
+        for x in self.__usage_points__:
+            if x.usage_point.mRID == other.mRID:
+                return True
+        return False
+        # return list(filter(lambda x: x.usage_point.mRID == other.mRID, self.__usage_points__))
     
     def __len__(self) -> int:
         return len(self.__usage_points__)

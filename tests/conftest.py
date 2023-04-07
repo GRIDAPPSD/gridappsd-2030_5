@@ -9,7 +9,8 @@ import pytest
 # should now be at root
 import yaml
 
-from ieee_2030_5.__main__ import get_tls_repository, ServerThread
+from ieee_2030_5.__main__ import ServerThread, get_tls_repository
+from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
 from ieee_2030_5.config import ServerConfiguration
@@ -40,11 +41,10 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     config_server = ServerConfiguration(**cfg_out)
 
     tls_repository = get_tls_repository(config_server)
-    end_devices = initialize_2030_5(config_server, tls_repository)
+    initialize_2030_5(config_server, tls_repository)
 
     server = build_server(config=config_server,
-                          tlsrepo=tls_repository,
-                          enddevices=end_devices)
+                          tlsrepo=tls_repository)
 
     TLS_REPO = tls_repository
     SERVER_CFG = config_server
@@ -52,7 +52,7 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     thread = ServerThread(server)
     thread.start()
 
-    yield tls_repository, end_devices, config_server
+    yield tls_repository, EndDeviceAdapter.fetch_edev_all(), config_server
 
     thread.shutdown()
     thread.join(timeout=5)
@@ -76,8 +76,7 @@ def first_client(server_startup) -> IEEE2030_5_Client:
     repo, devices, servercfg = server_startup
 
     host, port = servercfg.server_hostname.split(":")
-    dev = devices.get_end_device_data(0)
-    certfile, keyfile = repo.get_file_pair(dev.mRID)
+    certfile, keyfile = repo.get_file_pair(servercfg.devices[0].id)
     client = IEEE2030_5_Client(server_hostname=host,
                                server_ssl_port=port,
                                cafile=repo.ca_cert_file,
