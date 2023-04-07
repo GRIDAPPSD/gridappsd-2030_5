@@ -104,9 +104,9 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
                 x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
             environ['ieee_2030_5_peercert'] = x509
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
-            if self.config.lfdi_mode == "lfdi_mode_from_file":
+            if PeerCertWSGIRequestHandler.config.lfdi_mode == "lfdi_mode_from_file":
                 _log.debug("Using hash from combined file.")
-                pth = self.tlsrepo.__get_combined_file__(x509.get_subject().CN)
+                pth = PeerCertWSGIRequestHandler.tlsrepo.__get_combined_file__(x509.get_subject().CN)
                 sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
                 environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(sha256hash)
             else:
@@ -396,40 +396,6 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: 
 
     run_app(app=app, host=host, ssl_context=ssl_context, port=port, request_handler=PeerCertWSGIRequestHandler, **kwargs)
     
-    # # kwargs['ssl_context'] = ssl_context
-    # # kwargs['request_handler'] = PeerCertWSGIRequestHandler,
-    # # kwargs['port'] = port
-    # #kwargs.pop('debug', None)
-    # https_thread = threading.Thread(
-    #     target=run_app,
-    #     args=[app, host, ssl_context, PeerCertWSGIRequestHandler, port],
-    #     kwargs=kwargs)
-    # https_thread.daemon = True
-    # https_thread.start()
-
-    # if config.http_port:
-
-    #     http_thread = threading.Thread(target=run_app,
-    #                                    args=[app, host, None, None, config.http_port],
-    #                                    kwargs=kwargs)
-
-    #     http_thread.daemon = True
-    #     http_thread.start()
-
-    #     while http_thread.isAlive() and https_thread.isAlive():
-    #         time.sleep(0.05)
-    # else:
-    #     while https_thread.is_alive():
-    #         time.sleep(0.05)
-
-    # app.run(host=host,
-    #         ssl_context=ssl_context,
-    #         request_handler=PeerCertWSGIRequestHandler,
-    #         port=port,
-    #         **kwargs)
-
-    print("Woot?")
-
 
 def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) -> BaseWSGIServer:
 
@@ -442,6 +408,9 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
         # host and port not available
         host = config.server_hostname
         port = 8443
+        
+    PeerCertWSGIRequestHandler.config = config
+    PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
 
     return make_server(app=app,
                        host=host,
