@@ -405,6 +405,10 @@ class _DERProgramAdapter(BaseAdapter, AdapterListProtocol):
 
                 program.DefaultDERControlLink = m.DefaultDERControlLink(href=default_ctl.href)
                 self._der_programs.append(program)
+                program.ActiveDERControlListLink = m.ActiveDERControlListLink(href=hrefs.der_program_href(index, hrefs.DERProgramSubType.ActiveDERControlListLink.value))
+                program.DERControlListLink = m.DERControlListLink(href=hrefs.der_program_href(index, hrefs.DERProgramSubType.DERControlListLink.value))
+                program.DERCurveListLink = m.DERCurveListLink(href=hrefs.der_program_href(index, hrefs.DERProgramSubType.DERCurveListLink.value))
+                
 
             # der_control_list = m.DERControlList(href=hrefs.get_program_href(index, hrefs.DERC))
 

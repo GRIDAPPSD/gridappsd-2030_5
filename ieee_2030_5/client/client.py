@@ -117,9 +117,15 @@ class IEEE2030_5_Client:
 
         return self.__get_request__(self._device_cap.SelfDeviceLink.href)
 
-    def function_set_assignment(self) -> m.FunctionSetAssignmentsListLink:
-        fsa_list = self.__get_request__(self.end_device().FunctionSetAssignmentsListLink.href)
+    def function_set_assignment_list(self, edev_index: Optional[int] = 0) -> m.FunctionSetAssignmentsList:
+        fsa_list = self.__get_request__(self.end_device(edev_index).FunctionSetAssignmentsListLink.href)
         return fsa_list
+        
+    def function_set_assignment(self, edev_index: Optional[int] = 0, fsa_index: Optional[int] = 0) -> m.FunctionSetAssignments:
+        fsa_list = self.function_set_assignment_list(edev_index)
+        return fsa_list.FunctionSetAssignments[fsa_index]
+    
+    
 
     def poll_timer(self, fn, args):
         if not self._disconnect:
@@ -145,11 +151,15 @@ class IEEE2030_5_Client:
         timexml = self.__get_request__(self._device_cap.TimeLink.href)
         return timexml
 
-    def der_program_list(self, device: m.EndDevice) -> m.DERProgramList:
-        fsa: m.FunctionSetAssignments = self.__get_request__(device.FunctionSetAssignmentsListLink.href)
-        der_programs_list: m.DERProgramList = self.__get_request__(fsa.DERProgramListLink.href)
-
-        return der_programs_list
+    def der_program_list(self, edev_index: Optional[int] = 0, fsa_index: Optional[int] = 0) -> m.DERProgramList:
+        fsa = self.function_set_assignment(edev_index, fsa_index)
+        derp_list = self.__get_request__(fsa.DERProgramListLink.href)
+        return derp_list
+    
+    def der_program(self, edev_index: Optional[int] = 0, fsa_index: Optional[int] = 0, derp_index: Optional[int] = 0) -> m.DERProgram:
+        derp_list = self.der_program_list(edev_index, fsa_index)
+        return derp_list.DERProgram[derp_index]
+    
 
     def mirror_usage_point_list(self) -> m.MirrorUsagePointList:
         self._mup = self.__get_request__(self._device_cap.MirrorUsagePointListLink.href)
@@ -256,16 +266,16 @@ atexit.register(__release_clients__)
 # con.close()
 
 if __name__ == '__main__':
-    SERVER_CA_CERT = Path("~/tls/certs/ca.crt").expanduser().resolve()
+    SERVER_CA_CERT = Path("~/tls/certs/ca.pem").expanduser().resolve()
     KEY_FILE = Path("~/tls/private/dev1.pem").expanduser().resolve()
-    CERT_FILE = Path("~/tls/certs/dev1.crt").expanduser().resolve()
+    CERT_FILE = Path("~/tls/certs/dev1.pem").expanduser().resolve()
 
     headers = {'Connection': 'Keep-Alive',
                'Keep-Alive': "max=1000,timeout=30"}
 
     h = IEEE2030_5_Client(cafile=SERVER_CA_CERT,
                           server_hostname="127.0.0.1",
-                          server_ssl_port=8070,
+                          server_ssl_port=8443,
                           keyfile=KEY_FILE,
                           certfile=CERT_FILE,
                           debug=True)
@@ -278,6 +288,8 @@ if __name__ == '__main__':
         print("registering end device.")
         ed_href = h.register_end_device()
     my_ed = h.end_devices()
+    my_fsa = h.function_set_assignment()
+    my_program = h.der_program()
 
 
     # ed = h.end_devices()[0]

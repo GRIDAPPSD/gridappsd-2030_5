@@ -327,7 +327,7 @@ def get_der_list_href(index: int) -> str:
 
 
 @lru_cache()
-def get_enddevice_href(edev_indx: int, subref: str = None) -> str:
+def get_enddevice_href(edev_indx: int = NO_INDEX, subref: str = None) -> str:
     if edev_indx == NO_INDEX:
         ret = DEFAULT_EDEV_ROOT
     elif subref:

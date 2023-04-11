@@ -29,9 +29,13 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
         return self._reg[edev_index]
     
     def fetch_fsa_list(self, edev_index: int, start: int = 0, after: int = 0, limit: int = 0) -> m.FunctionSetAssignmentsList:
-        fsa_list = m.FunctionSetAssignmentsList(
-            href=hrefs.fsa_href(edev_index=edev_index), 
-            FunctionSetAssignments=self._edev_fsa.get(edev_index, []))
+        
+        fsa_list = FSAAdapter.fetch_all(m.FunctionSetAssignmentsList(href=hrefs.fsa_href(edev_index=edev_index)))
+        
+        # fsa = FSAAdapter.fetch_edev_all()
+        # fsa_list = m.FunctionSetAssignmentsList(
+        #     href=hrefs.fsa_href(edev_index=edev_index), 
+        #     FunctionSetAssignments=self._edev_fsa.get(edev_index, []))
         return fsa_list
     
     def fetch_fsa(self, edev_index: int, fsa_index: int) -> m.FunctionSetAssignments:
@@ -98,9 +102,23 @@ class _EndDeviceAdapter(BaseAdapter, AdapterListProtocol):
                         fsa_programs.append(program)
                     
             if len(fsa_programs) > 0:
-                fsa = FSAAdapter.create(fsa_programs)
+                
+                fsa = m.FunctionSetAssignments()
+                
+                FSAAdapter.add(fsa)
+                
+                FSAAdapter.add_container(m.DERProgram, href_prefix=hrefs.fsa_href(edev_index=index))
+                                
+                for derp in fsa_programs:                  
+                    FSAAdapter.add_child(fsa, m.DERProgram, derp)
+                    
                 edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
-                self._fsa.append(fsa)
+                
+                # TODO we are hardcoding assuming only one fsa here.
+                fsa.DERProgramListLink = m.DERProgramListLink(href=f"{hrefs.fsa_href(index=0)}_derp")
+                # fsa = FSAAdapter.create(fsa_programs)
+                # edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
+                # self._fsa.append(fsa)
                 
                 if not self._edev_fsa.get(index):
                     fsa_index = 0

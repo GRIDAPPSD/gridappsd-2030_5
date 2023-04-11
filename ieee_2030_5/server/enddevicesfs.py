@@ -135,17 +135,30 @@ class FSARequests(RequestOp):
         super().__init__(**kwargs)
         
     def get(self):
-        pth_split = request.path.split(hrefs.SEP)
+        """ Retrieve a FSA or Program List
+        """
         
-        if len(pth_split) == 1:
-            retval = FSAAdapter.fetch_list()
-        elif len(pth_split) == 2:
-            retval = FSAAdapter.fetch_at(int(pth_split[1]))
-        elif len(pth_split) == 3:
-            retval = EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
-        elif len(pth_split) == 4:
-            retval = EndDeviceAdapter.fetch_fsa(edev_index=int(pth_split[1]), fsa_index=int(pth_split[3]))
+        fsa_href = hrefs.fsa_parse(request.path)
+        
+        if fsa_href.fsa_index == hrefs.NO_INDEX:
+            retval = FSAAdapter.fetch_all(m.FunctionSetAssignmentsList(), "FunctionSetAssignments")
+        elif fsa_href.fsa_sub == hrefs.FSASubType.DERProgram.value:
+            retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
         else:
-            raise ValueError(f"Path split is {pth_split}")
+            retval = FSAAdapter.fetch(fsa_href.fsa_index)
+            
+        # pth_split = request.path.split(hrefs.SEP)
+        
+        
+        # if len(pth_split) == 1:
+        #     retval = FSAAdapter.fetch_list()
+        # elif len(pth_split) == 2:
+        #     retval = FSAAdapter.fetch_at(int(pth_split[1]))
+        # elif len(pth_split) == 3:
+        #     retval = EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
+        # elif len(pth_split) == 4:
+        #     retval = EndDeviceAdapter.fetch_fsa(edev_index=int(pth_split[1]), fsa_index=int(pth_split[3]))
+        # else:
+        #     raise ValueError(f"Path split is {pth_split}")
             
         return self.build_response_from_dataclass(retval)
