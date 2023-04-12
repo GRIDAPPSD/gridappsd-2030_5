@@ -102,6 +102,9 @@ class IEEE2030_5_Client:
         return res
 
     def end_devices(self) -> m.EndDeviceListLink:
+        if not self._device_cap:
+            self.device_capability()
+            
         self._end_devices = self.__get_request__(self._device_cap.EndDeviceListLink.href)
         return self._end_devices
 
@@ -125,7 +128,9 @@ class IEEE2030_5_Client:
         fsa_list = self.function_set_assignment_list(edev_index)
         return fsa_list.FunctionSetAssignments[fsa_index]
     
-    
+    def der_list(self, edev_index: Optional[int] = 0) -> m.DERList:
+        der_list = self.__get_request__(self.end_device(edev_index).DERListLink.href)
+        return der_list
 
     def poll_timer(self, fn, args):
         if not self._disconnect:

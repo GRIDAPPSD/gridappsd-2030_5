@@ -64,6 +64,7 @@ T = TypeVar('T')
 C = TypeVar('C')
 D = TypeVar('D')
 
+
 class Adapter(Generic[T]):
     
     def __init__(self, url_prefix: str, **kwargs):
@@ -74,7 +75,7 @@ class Adapter(Generic[T]):
         self._current_index: int  = -1
         self._item_list: Dict[int, T] = {}
         self._child_prefix: Dict[Type, str] = {}
-        self._child_map: Dict[int, Dict[C, List[C]]] = {}
+        self._child_map: Dict[int, Dict[str, List[C]]] = {}
         
     @property
     def href_prefix(self) -> str:
@@ -83,20 +84,23 @@ class Adapter(Generic[T]):
     def add_container(self, child_type: Type, href_prefix: str):
         self._child_prefix[child_type] = href_prefix
         
-    def add_child(self, parent: T, child_type: Type, child: Any):
+    def add_child(self, parent: T, name: str, child: Any):
         
-        if not isinstance(child, child_type):
-            raise ValueError(f"Invalid type of object passed expecting {child_type}")
-        
+        # Make sure parent is in the Adapter by looking for it's index.
         found_index = self.fetch_index(parent)
         
+        # Deal with missing indexes
         if found_index not in self._child_map:
             self._child_map[found_index] = {}
             
-        if child_type not in self._child_map[found_index]:
-            self._child_map[found_index][child_type] = []
+        if name not in self._child_map[found_index]:
+            self._child_map[found_index][name] = []
+            
+        if len(self._child_map[found_index][name]) > 0:
+            if not isinstance(child, type(self._child_map[found_index][name][0])):
+                raise ValueError(f"Children can only have single types {type(child)} != {type(self._child_map[found_index][name][0])}")
         
-        self._child_map[found_index][child_type].append(child)
+        self._child_map[found_index][name].append(child)
         
     def fetch_children_by_parent_index(self, parent_index: int, child_type: Type) -> List[Type]:
         if child_type not in self._child_map[parent_index]:
@@ -104,24 +108,29 @@ class Adapter(Generic[T]):
         
         return self._child_map[parent_index][child_type]
     
-    def fetch_children(self, parent: T, child_type: Type) -> List[Type]:
+    def fetch_children(self, parent: T, name: str, container: Optional[Type] = None) -> List[Type]:
         found_index = self.fetch_index(parent)
-        return self.fetch_children_by_parent_index(found_index, child_type)
-    
-    def fetch_children_list_container(self, parent_index: int, child_type: Type, container: Type, prop: str) -> Type:
-        children = self.fetch_children_by_parent_index(parent_index, child_type)
-        setattr(container, prop, children)
-        setattr(container, "results", len(children))
-        setattr(container, "all", len(children))
-        return container
+        # Should end with List if container is not None
+        if container is not None:
+            if not container.__class__.__name__.endswith("List"):
+                raise ValueError(f"Invalid container, type must end in List")
         
-    
-    def fetch_child(self, parent: T, child_type: Type, index: int) -> Type:
-        return self.fetch_children(parent, child_type)[index]
+        children = self._child_map[found_index][name]
+        retval = children
         
-    
+        if container is not None:
+            prop = container.__class__.__name__[:container.__class__.__name__.find("List")]
+            setattr(container, prop, children)
+            setattr(container, "results", len(children))
+            setattr(container, "all", len(children))
+            retval = container
+            
+        return retval
+                
+    def fetch_child(self, parent: T, name: str, index: int = 0) -> Type:
+        return self.fetch_children(parent, name)[index]
+            
     def add(self, item: T):
-        
         if not isinstance(item, self._generic_type):
             raise ValueError(f"Item {item} is not of type {self._generic_type}")
         
@@ -131,31 +140,35 @@ class Adapter(Generic[T]):
         self._current_index += 1
         self._item_list[self._current_index] = item
     
-    def fetch_all(self, instance: D, start: int = 0, after: int = 0, limit: int = 1) -> D:
+    def fetch_all(self, instance: Optional[D] = None, start: int = 0, after: int = 0, limit: int = 1) -> D:
         
-        if not instance.__class__.__name__.endswith("List"):
-            raise ValueError("Must have List as the last portion of the name for instance")
+        if instance is not None:
+            if not instance.__class__.__name__.endswith("List"):
+                raise ValueError("Must have List as the last portion of the name for instance")
         
-        prop_found = instance.__class__.__name__[:instance.__class__.__name__.find("List")]
+            prop_found = instance.__class__.__name__[:instance.__class__.__name__.find("List")]
         
-        items = list(self._item_list.values())
-        all_len = len(items)
-        all_results = len(items)
-        all_items = items
+            items = list(self._item_list.values())
+            all_len = len(items)
+            all_results = len(items)
+            all_items = items
                 
-        if start > len(items):
-            all_items = []
-            all_results = 0
-        else:
-            if limit == 0:
-                all_items = items[start:]
+            if start > len(items):
+                all_items = []
+                all_results = 0
             else:
-                all_items = items[start: start + limit]
-            all_results = len(all_items)
+                if limit == 0:
+                    all_items = items[start:]
+                else:
+                    all_items = items[start: start + limit]
+                all_results = len(all_items)
+                
+            setattr(instance, prop_found, all_items)
+            setattr(instance, "all", all_len)
+            setattr(instance, "results", all_results)
+        else:
+            instance = list(self._item_list.values())
             
-        setattr(instance, prop_found, all_items)
-        setattr(instance, "all", all_len)
-        setattr(instance, "results", all_results)
         return instance
     
     def fetch_index(self, obj: T) -> int:

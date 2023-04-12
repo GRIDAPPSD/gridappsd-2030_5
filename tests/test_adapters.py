@@ -18,6 +18,16 @@ def test_add_invalid_type():
     
     with pytest.raises(ValueError):
         me.add(der)
+        
+def test_fetch_missing_key_throws_error():
+    ed = m.EndDevice()
+    me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
+    me.add(ed)
+    me.add_child(ed, "foo", m.File())
+    with pytest.raises(KeyError):
+        # Getting non-existent children
+        me.fetch_children(ed, "bar")
+        
 
 def test_verify_href_populated_correctly():
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
@@ -89,19 +99,26 @@ def test_fetch_all_part():
     
 
 def test_add_child():
-    me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
+    me = Adapter[m.DERProgram](hrefs.der_program_href(), generic_type=m.DERProgram)
     
-    eds = [m.EndDevice() for x in range(5)]
-    for ed in eds:
-        me.add(ed)
+    der_programs = [m.DERProgram() for x in range(5)]
+    for index, program in enumerate(der_programs):
+        me.add(program)
+        assert program.href == hrefs.der_program_href(index)
+    
+    me.add_child(der_programs[0], name="derc", child=m.DERControl())
+    with pytest.raises(ValueError):
+        me.add_child(der_programs[0], name="derc", child=m.DefaultDERControl())
         
-    fsa = m.FunctionSetAssignmentsList()
+    me.add_child(der_programs[0], name="derc", child=m.DERControl())
     
-    me.add_child(ed, m.FunctionSetAssignmentsList, fsa)
     
-    fsa_return = me.fetch_child(ed, m.FunctionSetAssignmentsList, 0)
+    derc = me.fetch_children(der_programs[0], "derc", m.DERControlList())
     
-    assert fsa_return == fsa
+    derc_list = me.fetch_children(der_programs[0], "derc")
     
+    assert len(derc.DERControl) == len(derc_list)
+    
+    for index, obj in enumerate(derc_list):
+        assert obj == derc.DERControl[index]
 
-    

@@ -47,7 +47,7 @@ mirror_usage_points: List[m.MirrorUsagePoint] = [
 
 
 def test_create_update_mup(first_client: IEEE2030_5_Client):
-    assert first_client is not None
+    
     dcap: m.DeviceCapability = first_client.device_capability()
     
     assert dcap.MirrorUsagePointListLink is not None

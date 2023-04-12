@@ -107,9 +107,9 @@ class AdminEndpoints:
         
     def _admin_derp(self, index: int = -1) -> Response:
         if request.method == 'GET' and index < 0:
-            return Response(dataclass_to_xml(DERProgramAdapter.fetch_list()))
+            return Response(dataclass_to_xml(DERProgramAdapter.fetch_all(m.DERProgramList())))
         elif request.method == 'GET':
-            return Response(dataclass_to_xml(DERProgramAdapter.fetch_edev_all()[index]))
+            return Response(dataclass_to_xml(DERProgramAdapter.fetch_at(index)))
         
         if request.method == 'POST':
             xml = request.data.decode('utf-8')
@@ -137,8 +137,14 @@ class AdminEndpoints:
             elif isinstance(data, m.DERControl):
                 results = DERProgramAdapter.create_der_control(derp_index, data)
                 return Response(headers={'Location': results.href}, status=results.statusint)
+        derp = DERProgramAdapter.fetch(derp_index)
+        if request.path.endswith("dderc"):
+            results = DERProgramAdapter.fetch_child(derp_index, "dderc")
+        elif request.path.endswith("derc"):
+            results = DERProgramAdapter.fetch_children(derp, "derc", m.DERControlList(href=request.path))
+        elif request.path.endswith("derca"):
+            results = DERProgramAdapter.fetch_children(derp, "derca", m.DERControlList(href=request.path))
             
-        results = DERProgramAdapter.fetch_der_control_list(derp_index)
         return Response(dataclass_to_xml(results))
         
 

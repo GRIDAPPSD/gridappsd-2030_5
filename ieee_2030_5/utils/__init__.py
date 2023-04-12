@@ -1,6 +1,7 @@
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Type, Optional
+from typing import Optional, Type
 
 from xsdata.formats.dataclass.context import XmlContext
 from xsdata.formats.dataclass.parsers.config import ParserConfig
@@ -68,3 +69,6 @@ def get_sfdi_from_lfdi(lfdi: t.Lfdi) -> int:
     """
     from ieee_2030_5.certs import sfdi_from_lfdi
     return sfdi_from_lfdi(lfdi)
+
+def uuid_2030_5() -> str:
+    return str(uuid.uuid4()).replace('-', '')

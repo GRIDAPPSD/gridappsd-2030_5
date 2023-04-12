@@ -15,8 +15,7 @@ class _LogAdapter:
     def __init__(self):
         pass        
     
-    def __after_base_init__(self, sender):
-        
+    def __after_base_init__(self, sender):        
         print("after base init")
         print(sender)
 

@@ -52,7 +52,7 @@ def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     thread = ServerThread(server)
     thread.start()
 
-    yield tls_repository, EndDeviceAdapter.fetch_edev_all(), config_server
+    yield tls_repository, EndDeviceAdapter.fetch_all(), config_server
 
     thread.shutdown()
     thread.join(timeout=5)
@@ -86,6 +86,24 @@ def first_client(server_startup) -> IEEE2030_5_Client:
     yield client
 
     client.disconnect()
+    
+@pytest.fixture()
+def admin_client(server_startup) -> IEEE2030_5_Client:
+    repo, devices, servercfg = server_startup
+
+    host, port = servercfg.server_hostname.split(":")
+    certfile, keyfile = repo.get_file_pair("admin")
+    client = IEEE2030_5_Client(server_hostname=host,
+                               server_ssl_port=port,
+                               cafile=repo.ca_cert_file,
+                               keyfile=Path(keyfile),
+                               certfile=Path(certfile))
+
+    yield client
+
+    client.disconnect()
+    
+
 
 
 @pytest.fixture

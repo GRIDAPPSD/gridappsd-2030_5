@@ -25,5 +25,4 @@ def test_fsa_to_der_control(first_client: IEEE2030_5_Client):
     assert derp.DERCurveListLink
     
 
-
     

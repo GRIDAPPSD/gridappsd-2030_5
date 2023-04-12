@@ -97,16 +97,31 @@ class EDevRequests(RequestOp):
         pth_split = pth.split(hrefs.SEP)
         
         if len(pth_split) == 1:
-            retval = adpt.EndDeviceAdapter.fetch_list_by_lfdi(self.lfdi)
+            for ed in adpt.EndDeviceAdapter.fetch_all():
+                if ed.lFDI == self.lfdi:
+                    retval = m.EndDeviceList(EndDevice=[ed], all=1, results=1, href=pth)
+                    break
+                                
         elif len(pth_split) == 3:
-            if pth_split[2] == "rg":
-                retval = adpt.EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
-            elif pth_split[2] == "di":
-                retval = "foo"
-            elif pth_split[2] == "fsa":
-                retval = adpt.EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
-            elif pth_split[2] == "der":
-                retval = adpt.DERAdapter.fetch_list(edev_index=int(pth_split[1]))
+            try:
+                ed = adpt.EndDeviceAdapter.fetch(int(pth_split[1]))
+                # FSA is a list off the end device, the rest are singleton items.
+                if pth_split[2] == hrefs.FSA:                   
+                    retval = adpt.EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
+                elif pth_split[2] == hrefs.DER:
+                    retval = adpt.EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
+                else:
+                    retval = adpt.EndDeviceAdapter.fetch_child(ed, pth_split[2], 0)
+            except KeyError:
+                raise werkzeug.exceptions.NotFound("Missing Resource")
+            # if pth_split[2] == "rg":
+            #     retval = adpt.EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
+            # elif pth_split[2] == "di":
+            #     retval = "foo"
+            # elif pth_split[2] == "fsa":
+            #     retval = adpt.EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
+            # elif pth_split[2] == "der":
+            #     retval = adpt.DERAdapter.fetch_list(edev_index=int(pth_split[1]))
             
         return self.build_response_from_dataclass(retval)
 
@@ -143,7 +158,9 @@ class FSARequests(RequestOp):
         if fsa_href.fsa_index == hrefs.NO_INDEX:
             retval = FSAAdapter.fetch_all(m.FunctionSetAssignmentsList(), "FunctionSetAssignments")
         elif fsa_href.fsa_sub == hrefs.FSASubType.DERProgram.value:
-            retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
+            fsa = FSAAdapter.fetch(fsa_href.fsa_index)
+            retval = FSAAdapter.fetch_children(fsa, "fsa", m.DERProgramList())
+            # retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
         else:
             retval = FSAAdapter.fetch(fsa_href.fsa_index)
             

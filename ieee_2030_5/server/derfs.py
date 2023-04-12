@@ -39,10 +39,23 @@ class DERProgramRequests(RequestOp):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        pth = request.path
         
-        if not pth.startswith(hrefs.DEFAULT_DER_ROOT):
-            raise ValueError("Invalid path passed to ")
-        obj = self.get_path("foo")
-        return self.build_response_from_dataclass(obj)
+        if not request.path.startswith(hrefs.DEFAULT_DERP_ROOT):
+            raise ValueError("Invalid path passed to")
+        
+        derp_href = hrefs.DERProgramHref.parse(request.path)
+        
+        if derp_href.der_subtype == hrefs.DERProgramSubType.DERControlListLink:
+            retval = adpt.DERProgramAdapter.fetch_der_control_list(derp_href.index)
+        elif derp_href.der_subtype == hrefs.DERProgramSubType.ActiveDERControlListLink:
+            retval = adpt.DERProgramAdapter.fetch_der_active_control_list(derp_href.index)
+        # elif derp_href.der_subtype == hrefs.DERProgramSubType.DERCurveListLink:
+        #     retval = adpt.DERProgramAdapter.fetch_der_ _active_control_list(derp_href.index)
+        elif derp_href.der_subtype == hrefs.DERProgramSubType.DefaultDERControlLink:
+            retval = adpt.DERProgramAdapter.fetch_der_default_control(derp_href.index)
+        elif derp_href.index == hrefs.NO_INDEX:
+            retval = adpt.DERProgramAdapter.fetch_list()        
+        
+        
+        return self.build_response_from_dataclass(retval)
     

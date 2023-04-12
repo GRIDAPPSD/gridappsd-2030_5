@@ -105,6 +105,10 @@ class ServerEndpoints:
         app.add_url_rule(f"/<regex('{hrefs.EDEV}{hrefs.MATCH_REG}'):path>",
                          view_func=self._edev,
                          methods=["GET", "PUT", "POST"])
+        # This rule must be before der
+        app.add_url_rule(f"/<regex('{hrefs.DER_Program}{hrefs.MATCH_REG}'):path>",
+                         view_func=self._derp,
+                         methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.DER}{hrefs.MATCH_REG}'):path>",
                          view_func=self._der,
                          methods=["GET", "PUT"])
@@ -117,9 +121,7 @@ class ServerEndpoints:
         app.add_url_rule(f"/<regex('{hrefs.CURVE}{hrefs.MATCH_REG}'):path>",
                          view_func=self._curves,
                          methods=["GET"])
-        app.add_url_rule(f"/<regex('{hrefs.DERP}{hrefs.MATCH_REG}'):path>",
-                         view_func=self._derp,
-                         methods=["GET"])
+        
         app.add_url_rule(f"/<regex('{hrefs.FSA}{hrefs.MATCH_REG}'):path>",
                          view_func=self._fsa,
                          methods=["GET"])
@@ -182,6 +184,10 @@ class ServerEndpoints:
 
     def _mup(self, path) -> Response:
         return MirrorUsagePointRequest(server_endpoints=self).execute()
+    
+    # Needs to be before der
+    def _derp(self, path) -> Response:
+        return DERProgramRequests(server_endpoints=self).execute()
 
     def _der(self, path) -> Response:
         _log.debug(request.method)
@@ -202,8 +208,6 @@ class ServerEndpoints:
     def _tm(self) -> Response:
         return TimeRequest(server_endpoints=self).execute()
 
-    def _derp(self, path) -> Response:
-        return DERProgramRequests(server_endpoints=self).execute()
 
     def _curves(self, path) -> Response:
         pth = request.environ['PATH_INFO']
