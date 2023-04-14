@@ -7,14 +7,16 @@ from blinker import Signal
 
 class _TimeAdapter(Thread):
     tick = Signal("tick")
-    def __init__(self):
-        super().__init__()
-        self._tick = 0
-        
+            
     @staticmethod
-    def user_readable(timestamp: int):
+    def user_readable(timestamp: int) -> str:
         dt = datetime.fromtimestamp(timestamp)
-        return dt.strftime("%m/%d/%Y, %H:%M:%S")
+        return dt.isoformat() # .strftime("%m/%d/%Y, %H:%M:%S")
+    
+    @staticmethod
+    def from_iso(iso_fmt_date: str) -> int:
+        dt = datetime.strptime(iso_fmt_date, "%Y-%m-%dT%H:%M:%S")
+        return int(time.mktime(dt.timetuple()))
     
     def run(self) -> None:
         
