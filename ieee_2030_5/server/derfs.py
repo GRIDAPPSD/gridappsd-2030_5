@@ -4,6 +4,7 @@ from flask import Response, request
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
+import ieee_2030_5.models as m
 from ieee_2030_5.server.base_request import RequestOp
 
 
@@ -44,18 +45,22 @@ class DERProgramRequests(RequestOp):
             raise ValueError("Invalid path passed to")
         
         derp_href = hrefs.DERProgramHref.parse(request.path)
+        if derp_href.index == hrefs.NO_INDEX:
+            retval = adpt.DERProgramAdapter.fetch_all(m.DERProgramList(href=request.path))
         
-        if derp_href.der_subtype == hrefs.DERProgramSubType.DERControlListLink:
-            retval = adpt.DERProgramAdapter.fetch_der_control_list(derp_href.index)
-        elif derp_href.der_subtype == hrefs.DERProgramSubType.ActiveDERControlListLink:
-            retval = adpt.DERProgramAdapter.fetch_der_active_control_list(derp_href.index)
-        # elif derp_href.der_subtype == hrefs.DERProgramSubType.DERCurveListLink:
-        #     retval = adpt.DERProgramAdapter.fetch_der_ _active_control_list(derp_href.index)
-        elif derp_href.der_subtype == hrefs.DERProgramSubType.DefaultDERControlLink:
-            retval = adpt.DERProgramAdapter.fetch_der_default_control(derp_href.index)
-        elif derp_href.index == hrefs.NO_INDEX:
-            retval = adpt.DERProgramAdapter.fetch_list()        
-        
+        else:
+            derp = adpt.DERProgramAdapter.fetch(derp_href.index)
+            
+            if derp_href.der_subtype == hrefs.DERProgramSubType.DERControlListLink:
+                retval = adpt.DERProgramAdapter.fetch_children(derp, hrefs.DERC, m.DERControlList(href=request.path))    
+            elif derp_href.der_subtype == hrefs.DERProgramSubType.ActiveDERControlListLink:
+                retval = adpt.DERProgramAdapter.fetch_children(derp, hrefs.DERCA, m.DERControlList(href=request.path))    
+            # elif derp_href.der_subtype == hrefs.DERProgramSubType.DERCurveListLink:
+            #     retval = adpt.DERProgramAdapter.fetch_der_ _active_control_list(derp_href.index)
+            elif derp_href.der_subtype == hrefs.DERProgramSubType.DefaultDERControlLink:
+                retval = adpt.DERProgramAdapter.fetch_child(derp, hrefs.DDERC)
+            else:
+                raise ValueError(f"Found derph {derp_href}")
         
         return self.build_response_from_dataclass(retval)
     

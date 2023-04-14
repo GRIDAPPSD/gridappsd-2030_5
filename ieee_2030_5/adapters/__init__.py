@@ -84,7 +84,19 @@ class Adapter(Generic[T]):
     def add_container(self, child_type: Type, href_prefix: str):
         self._child_prefix[child_type] = href_prefix
         
-    def add_child(self, parent: T, name: str, child: Any):
+    def remove_child(self, parent: T, name: str, child: Any):
+        found_index = self.fetch_index(parent)
+        self._child_map[found_index][name].remove(child)
+        
+    def remove_child_by_mrid(self, parent: T, name: str, mRID: str):
+        
+        found_index = self.fetch_index(parent)
+        
+        indexes = [index for index, x in enumerate(self._child_map[found_index][name]) if x.mRID == mRID]
+        for index in sorted(indexes, reverse=True):
+            self._child_map[found_index][name].pop(index)
+        
+    def add_child(self, parent: T, name: str, child: Any, href: str = None):
         
         # Make sure parent is in the Adapter by looking for it's index.
         found_index = self.fetch_index(parent)
@@ -99,7 +111,10 @@ class Adapter(Generic[T]):
         if len(self._child_map[found_index][name]) > 0:
             if not isinstance(child, type(self._child_map[found_index][name][0])):
                 raise ValueError(f"Children can only have single types {type(child)} != {type(self._child_map[found_index][name][0])}")
-        
+        if href:
+            child = href
+        else:
+            child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]) +1)])
         self._child_map[found_index][name].append(child)
         
     def fetch_children_by_parent_index(self, parent_index: int, child_type: Type) -> List[Type]:
@@ -115,7 +130,11 @@ class Adapter(Generic[T]):
             if not container.__class__.__name__.endswith("List"):
                 raise ValueError(f"Invalid container, type must end in List")
         
-        children = self._child_map[found_index][name]
+        try:
+            children = self._child_map[found_index][name]
+        except KeyError:
+            children = []
+        
         retval = children
         
         if container is not None:
@@ -192,6 +211,26 @@ class Adapter(Generic[T]):
                 return item
             
         raise KeyError()
+    
+    def size(self) -> int:
+        return len(self._item_list)
+    
+    def size_children(self, parent: T, name: str) -> int:
+        return len(self.fetch_children(parent, name))
+    
+    def fetch_child_index_by_mrid(self, parent: T, name: str, mRID: str) -> int:
+        for index, child in enumerate(self.fetch_children(parent, name)):
+            if child.mRID == mRID:
+                return index
+        
+        raise KeyError("mRID not found")
+    
+    def replace_child(self, parent: T, name: str, index: int, child: Any):
+        children = self.fetch_children(parent, name)
+        if not type(child) == type(children[index]):
+            return ValueError(f"Children should be  of the same type {type(child)} is not {type(children[index])}")
+        parent_index = self.fetch_index(parent)
+        self._child_map[parent_index][name][index] = child
     
     
     

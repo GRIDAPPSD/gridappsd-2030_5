@@ -127,17 +127,33 @@ class AdminEndpoints:
         return Response(dataclass_to_xml(ctrl_list))
         
     def _admin_derp_derc(self, derp_index: int) -> Response:
+        derp = DERProgramAdapter.fetch(derp_index)
+        
         if request.method == "POST":
             xml = request.data.decode('utf-8')
             data = xml_to_dataclass(request.data.decode('utf-8'))
             
             if isinstance(data, m.DefaultDERControl):
-                results = DERProgramAdapter.create_default_der_control(derp_index, data)
-                return Response(headers={'Location': results.href}, status=results.statusint)
+                status_code = 201
+                data.href = hrefs.der_program_href(derp_index, hrefs.DERProgramSubType.DefaultDERControlLink)
+                if DERProgramAdapter.size_children(derp, hrefs.DDERC) > 0:
+                    status_code = 204
+                    DERProgramAdapter.remove_child(derp, hrefs.DDERC)
+                
+                DERProgramAdapter.add_child(derp, hrefs.DDERC, data)
+                
+                return Response(headers={'Location': data.href}, status=status_code)
             elif isinstance(data, m.DERControl):
-                results = DERProgramAdapter.create_der_control(derp_index, data)
-                return Response(headers={'Location': results.href}, status=results.statusint)
-        derp = DERProgramAdapter.fetch(derp_index)
+                status_code = 201
+                try:
+                    index = DERProgramAdapter.fetch_child_index_by_mrid(derp, hrefs.DERC, data.mRID)
+                    DERProgramAdapter.replace_child(derp, hrefs.DERC, index, data)
+                    status_code = 204
+                except KeyError:
+                    DERProgramAdapter.add_child(derp, hrefs.DERC, data)
+                                        
+                return Response(headers={'Location': data.href}, status=status_code)
+        
         if request.path.endswith("dderc"):
             results = DERProgramAdapter.fetch_child(derp_index, "dderc")
         elif request.path.endswith("derc"):
