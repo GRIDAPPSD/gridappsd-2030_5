@@ -112,7 +112,7 @@ class Adapter(Generic[T]):
             if not isinstance(child, type(self._child_map[found_index][name][0])):
                 raise ValueError(f"Children can only have single types {type(child)} != {type(self._child_map[found_index][name][0])}")
         if href:
-            child = href
+            child.href = href
         else:
             child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]))])
         self._child_map[found_index][name].append(child)
