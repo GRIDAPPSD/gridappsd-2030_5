@@ -5,6 +5,14 @@ import ieee_2030_5.models as m
 from ieee_2030_5.adapters import Adapter
 
 
+def test_add_child_with_href():
+    me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
+    ed = m.EndDevice(href="first")
+    me.add(ed)
+    derc = m.DERControl()
+    me.add_child(ed, "test", derc, href="junk")
+    assert "junk" == derc.href
+
 def test_add_child_no_parent_throws_error():
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
     ed = m.EndDevice(href="first")
