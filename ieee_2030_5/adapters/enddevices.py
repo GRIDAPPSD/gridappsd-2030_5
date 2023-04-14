@@ -392,16 +392,16 @@ def initialize_end_device_adapter(sender):
         index = EndDeviceAdapter.fetch_index(edev)
         
         
-        EndDeviceAdapter.add_child(edev, hrefs.End_Device_Registration, 
+        EndDeviceAdapter.add_child(edev, hrefs.END_DEVICE_REGISTRATION, 
                                    m.Registration(href=hrefs.registration_href(index), pIN=dev.pin, dateTimeRegistered=ts))
         edev.RegistrationLink = m.RegistrationLink(href=hrefs.registration_href(index))
         
         di = hrefs.EdevHref(edev_index=index, edev_subtype=hrefs.EDevSubType.DeviceInformation)
-        EndDeviceAdapter.add_child(edev, hrefs.End_Device_Information, m.DeviceInformation(href=str(di)))
+        EndDeviceAdapter.add_child(edev, hrefs.END_DEVICE_INFORMATION, m.DeviceInformation(href=str(di)))
         edev.DeviceInformationLink = m.DeviceInformationLink(str(di))
         
         ds = hrefs.EdevHref(edev_index=index, edev_subtype=hrefs.EDevSubType.DeviceStatus)
-        EndDeviceAdapter.add_child(edev, hrefs.End_Device_Status, m.DeviceStatus(str(ds)))
+        EndDeviceAdapter.add_child(edev, hrefs.END_DEVICE_STATUS, m.DeviceStatus(str(ds)))
         edev.DeviceStatusLink = m.DeviceStatusLink(str(ds))
         
         #edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
@@ -425,7 +425,7 @@ def initialize_end_device_adapter(sender):
             edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
             
             # TODO we are hardcoding assuming only one fsa here.
-            fsa.DERProgramListLink = m.DERProgramListLink(href=f"{hrefs.fsa_href(index=0)}_{hrefs.DER_Program}")
+            fsa.DERProgramListLink = m.DERProgramListLink(href=f"{hrefs.fsa_href(index=0)}_{hrefs.DER_PROGRAM}")
             # fsa = FSAAdapter.create(fsa_programs)
             # edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
             # self._fsa.append(fsa)

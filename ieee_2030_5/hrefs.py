@@ -18,22 +18,23 @@ RSPS = "rsps"
 LOG = "log"
 DERC = "derc"
 DDERC = "dderc"
+DERCA = "derca"
 FSA = "fsa"
 
-DER_Program = "derp"
+DER_PROGRAM = "derp"
 # DER Available
-DER_Availability = "dera"
+DER_AVAILABILITY = "dera"
 # DER Status
-DER_Status = "ders"
-DER_Control_Active = "derca"
+DER_STATUS = "ders"
+DER_CONTROL_ACTIVE = DERCA
 # Settings
-DER_Settings = "derg"
-End_Device_Registration = "rg"
-End_Device_Status = "dstat"
-End_Device_FunctionSetAssignments = FSA
-End_Device_Power_Status = "ps"
-End_Device_Log_Event_List = "lel"
-End_Device_Information = "di"
+DER_SETTINGS = "derg"
+END_DEVICE_REGISTRATION = "rg"
+END_DEVICE_STATUS = "dstat"
+END_DEVICE_FSA = FSA
+END_DEVICE_POWER_STATUS = "ps"
+END_DEVICE_LOG_EVENT_LIST = "lel"
+END_DEVICE_INFORMATION = "di"
 
 DEFAULT_DCAP_ROOT = f"/{DCAP}"
 DEFAULT_EDEV_ROOT = f"/{EDEV}"
@@ -47,7 +48,7 @@ DEFAULT_CURVE_ROOT = f"/{CURVE}"
 DEFAULT_RSPS_ROOT = f"/{RSPS}"
 DEFAULT_LOG_EVENT_ROOT = f"/{LOG}"
 DEFAULT_FSA_ROOT = f"/{FSA}"
-DEFAULT_DERP_ROOT = f"/{DER_Program}"
+DEFAULT_DERP_ROOT = f"/{DER_PROGRAM}"
 
 SEP = "_"
 MATCH_REG = "[a-zA-Z0-9_]*"
@@ -57,10 +58,10 @@ NO_INDEX = -1
 
 class DERSubType(Enum):
     Capability = "dercap"
-    Settings = DER_Settings
-    Status = DER_Status
-    Availability = DER_Availability
-    CurrentProgram = DER_Program
+    Settings = DER_SETTINGS
+    Status = DER_STATUS
+    Availability = DER_AVAILABILITY
+    CurrentProgram = DER_PROGRAM
     None_Available = NO_INDEX
 
 class FSASubType(Enum):
@@ -106,9 +107,9 @@ def der_program_href(index: int = NO_INDEX, sub: DERProgramSubType = DERProgramS
     
     if sub == DERProgramSubType.ActiveDERControlListLink:
         if subindex == NO_INDEX:
-            return SEP.join([DEFAULT_DERP_ROOT, str(index), DER_Control_Active])
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DER_CONTROL_ACTIVE])
         else:
-            return SEP.join([DEFAULT_DERP_ROOT, str(index), DER_Control_Active, str(subindex)])
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DER_CONTROL_ACTIVE, str(subindex)])
     
     if sub == DERProgramSubType.DefaultDERControlLink:
         if subindex == NO_INDEX:
@@ -160,7 +161,7 @@ def fsa_href(index: int = NO_INDEX, edev_index: int=NO_INDEX):
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(index)])
 
 def derp_href(edev_index: int, fsa_index: int) -> str:
-    return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(fsa_index), DER_Program])
+    return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(fsa_index), DER_PROGRAM])
 
 def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int = NO_INDEX):
     if index == NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
@@ -168,7 +169,7 @@ def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int =
     elif index != NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
         return SEP.join([DEFAULT_DER_ROOT, str(index)])
     elif index == NO_INDEX and fsa_index != NO_INDEX and edev_index == NO_INDEX:
-        return SEP.join([DEFAULT_FSA_ROOT, str(fsa_index), DER_Program])
+        return SEP.join([DEFAULT_FSA_ROOT, str(fsa_index), DER_PROGRAM])
     elif edev_index != NO_INDEX and fsa_index == NO_INDEX and index == NO_INDEX:
         return SEP.join([DEFAULT_EDEV_ROOT, int(edev_index), FSA])
     elif edev_index != NO_INDEX and fsa_index != NO_INDEX and index == NO_INDEX:
@@ -184,12 +185,12 @@ def edev_der_href(edev_index: int, der_index: int = NO_INDEX) -> str:
 
 class EDevSubType(Enum):
     None_Available = NO_INDEX
-    Registration = End_Device_Registration
-    DeviceStatus = End_Device_Status
-    PowerStatus = End_Device_Power_Status
-    FunctionSetAssignments = End_Device_FunctionSetAssignments
-    LogEventList = End_Device_Log_Event_List
-    DeviceInformation = End_Device_Information
+    Registration = END_DEVICE_REGISTRATION
+    DeviceStatus = END_DEVICE_STATUS
+    PowerStatus = END_DEVICE_POWER_STATUS
+    FunctionSetAssignments = END_DEVICE_FSA
+    LogEventList = END_DEVICE_LOG_EVENT_LIST
+    DeviceInformation = END_DEVICE_INFORMATION
     DER = DER
     
 

@@ -106,7 +106,7 @@ class ServerEndpoints:
                          view_func=self._edev,
                          methods=["GET", "PUT", "POST"])
         # This rule must be before der
-        app.add_url_rule(f"/<regex('{hrefs.DER_Program}{hrefs.MATCH_REG}'):path>",
+        app.add_url_rule(f"/<regex('{hrefs.DER_PROGRAM}{hrefs.MATCH_REG}'):path>",
                          view_func=self._derp,
                          methods=["GET"])
         app.add_url_rule(f"/<regex('{hrefs.DER}{hrefs.MATCH_REG}'):path>",
