@@ -114,7 +114,7 @@ class Adapter(Generic[T]):
         if href:
             child = href
         else:
-            child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]) +1)])
+            child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]))])
         self._child_map[found_index][name].append(child)
         
     def fetch_children_by_parent_index(self, parent_index: int, child_type: Type) -> List[Type]:

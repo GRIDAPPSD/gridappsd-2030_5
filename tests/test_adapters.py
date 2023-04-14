@@ -5,6 +5,23 @@ import ieee_2030_5.models as m
 from ieee_2030_5.adapters import Adapter
 
 
+def test_add_child_no_parent_throws_error():
+    me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
+    ed = m.EndDevice(href="first")
+    derc = m.DERControl()
+    
+    # Note parent ed hasn't been added to the me adapter yet.
+    with pytest.raises(KeyError):
+        me.add_child(ed, "test", derc)
+
+def test_add_child_correct_href():
+    me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
+    ed = m.EndDevice(href="first")
+    me.add(ed)
+    derc = m.DERControl()
+    me.add_child(ed, "test", derc)
+    assert hrefs.SEP.join(["first", "test", "0"]) == derc.href
+
 def test_missing_type():
     
     with pytest.raises(ValueError):
@@ -19,15 +36,13 @@ def test_add_invalid_type():
     with pytest.raises(ValueError):
         me.add(der)
         
-def test_fetch_missing_key_throws_error():
+def test_fetch_missing_key_returns_empty():
     ed = m.EndDevice()
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
     me.add(ed)
     me.add_child(ed, "foo", m.File())
-    with pytest.raises(KeyError):
-        # Getting non-existent children
-        me.fetch_children(ed, "bar")
-        
+    assert [] == me.fetch_children(ed, "bar")
+    
 
 def test_verify_href_populated_correctly():
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
