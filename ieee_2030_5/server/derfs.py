@@ -51,13 +51,16 @@ class DERProgramRequests(RequestOp):
         else:
             derp = adpt.DERProgramAdapter.fetch(derp_href.index)
             
-            if derp_href.der_subtype == hrefs.DERProgramSubType.DERControlListLink:
-                retval = adpt.DERProgramAdapter.fetch_children(derp, hrefs.DERC, m.DERControlList(href=request.path))    
-            elif derp_href.der_subtype == hrefs.DERProgramSubType.ActiveDERControlListLink:
+            if derp_href.derp_subtype == hrefs.DERProgramSubType.DERControlListLink:
+                if derp_href.derp_subtype_index == hrefs.NO_INDEX:
+                    retval = adpt.DERProgramAdapter.fetch_children(derp, hrefs.DERC, m.DERControlList(href=request.path))    
+                else:
+                    retval = adpt.DERProgramAdapter.fetch_child(derp, hrefs.DERC, derp_href.derp_subtype_index )    
+            elif derp_href.derp_subtype == hrefs.DERProgramSubType.ActiveDERControlListLink:
                 retval = adpt.DERProgramAdapter.fetch_children(derp, hrefs.DERCA, m.DERControlList(href=request.path))    
             # elif derp_href.der_subtype == hrefs.DERProgramSubType.DERCurveListLink:
             #     retval = adpt.DERProgramAdapter.fetch_der_ _active_control_list(derp_href.index)
-            elif derp_href.der_subtype == hrefs.DERProgramSubType.DefaultDERControlLink:
+            elif derp_href.derp_subtype == hrefs.DERProgramSubType.DefaultDERControlLink:
                 retval = adpt.DERProgramAdapter.fetch_child(derp, hrefs.DDERC)
             else:
                 raise ValueError(f"Found derph {derp_href}")

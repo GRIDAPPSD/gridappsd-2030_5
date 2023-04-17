@@ -135,7 +135,7 @@ class AdminEndpoints:
             
             if isinstance(data, m.DefaultDERControl):
                 status_code = 201
-                data.href = hrefs.der_program_href(derp_index, hrefs.DERProgramSubType.DefaultDERControlLink)
+                # data.href = hrefs.der_program_href(derp_index, hrefs.DERProgramSubType.DefaultDERControlLink)
                 if DERProgramAdapter.size_children(derp, hrefs.DDERC) > 0:
                     status_code = 204
                     DERProgramAdapter.remove_child(derp, hrefs.DDERC)
@@ -145,6 +145,7 @@ class AdminEndpoints:
                 return Response(headers={'Location': data.href}, status=status_code)
             elif isinstance(data, m.DERControl):
                 status_code = 201
+                # data.href = hrefs.der_program_href(derp_index, hrefs.DERProgramSubType.DERControlListLink)
                 try:
                     index = DERProgramAdapter.fetch_child_index_by_mrid(derp, hrefs.DERC, data.mRID)
                     DERProgramAdapter.replace_child(derp, hrefs.DERC, index, data)

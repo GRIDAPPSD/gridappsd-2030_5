@@ -74,11 +74,14 @@ class DERProgramSubType(Enum):
     DERControlListLink = 3
     DERCurveListLink= 4
     DERControlReplyTo = 5
+    DERControl = 6
     
 class DERProgramHref(NamedTuple):
     root: str
     index: int
-    der_subtype: DERProgramSubType = DERProgramSubType.NoLink
+    derp_subtype: DERProgramSubType = DERProgramSubType.NoLink
+    derp_subtype_index: int = NO_INDEX
+    
     
     @staticmethod
     def parse(href: str) -> DERProgramHref:
@@ -93,6 +96,8 @@ class DERProgramHref(NamedTuple):
                 derca=DERProgramSubType.ActiveDERControlListLink,
                 dderc=DERProgramSubType.DefaultDERControlLink,
             )
+            if len(parsed) == 4:
+                return DERProgramHref(parsed[0], int(parsed[1]), mapped[parsed[2]], int(parsed[3]))
             return DERProgramHref(parsed[0], int(parsed[1]), mapped[parsed[2]])
     
 def der_program_parse(href: str) -> DERProgramHref:

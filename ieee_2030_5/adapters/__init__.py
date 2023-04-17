@@ -111,10 +111,11 @@ class Adapter(Generic[T]):
         if len(self._child_map[found_index][name]) > 0:
             if not isinstance(child, type(self._child_map[found_index][name][0])):
                 raise ValueError(f"Children can only have single types {type(child)} != {type(self._child_map[found_index][name][0])}")
-        if href:
-            child.href = href
-        else:
-            child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]))])
+        if not child.href:
+            if href:
+                child.href = href
+            else:
+                child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]))])
         self._child_map[found_index][name].append(child)
         
     def fetch_children_by_parent_index(self, parent_index: int, child_type: Type) -> List[Type]:
@@ -230,6 +231,8 @@ class Adapter(Generic[T]):
         if not type(child) == type(children[index]):
             return ValueError(f"Children should be  of the same type {type(child)} is not {type(children[index])}")
         parent_index = self.fetch_index(parent)
+        if not child.href:
+            child.href = children[index].href
         self._child_map[parent_index][name][index] = child
     
     

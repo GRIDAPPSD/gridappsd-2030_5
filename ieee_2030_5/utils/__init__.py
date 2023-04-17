@@ -71,4 +71,4 @@ def get_sfdi_from_lfdi(lfdi: t.Lfdi) -> int:
     return sfdi_from_lfdi(lfdi)
 
 def uuid_2030_5() -> str:
-    return str(uuid.uuid4()).replace('-', '')
+    return str(uuid.uuid4()).replace('-', '').upper()

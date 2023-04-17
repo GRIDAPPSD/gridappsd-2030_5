@@ -432,7 +432,7 @@ def initialize_end_device_adapter(sender):
             EndDeviceAdapter.add_child(edev, hrefs.FSA, fsa)
             
         has_der = False
-        for der_indx, der in enumerate(dev.ders):
+        for der_indx, der_cfg in enumerate(dev.ders):
             der_href = hrefs.EdevHref(edev_index=index, edev_subtype=hrefs.EDevSubType.DER, edev_subtype_index=der_indx)
             der = m.DER(href=str(der_href))
             der_href.edev_der_subtype = hrefs.DERSubType.Availability
@@ -446,6 +446,15 @@ def initialize_end_device_adapter(sender):
             
             der_href.edev_der_subtype = hrefs.DERSubType.Status
             der.DERStatusLink = m.DERStatusLink(str(der_href))
+            
+            # Configure a link to the current program for the der.
+            cfg_der_program = der_cfg.get("program")
+            if cfg_der_program:
+                for derp_index, derp in enumerate(programs):
+                    if cfg_der_program == derp.description:
+                        der.CurrentDERProgramLink = derp.href
+                        break
+            
             
             EndDeviceAdapter.add_child(edev, hrefs.DER, der)
             has_der = True
