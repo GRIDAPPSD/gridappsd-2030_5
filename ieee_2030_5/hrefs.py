@@ -208,7 +208,7 @@ class EdevHref:
     edev_der_subtype: DERSubType = DERSubType.None_Available
     
     def __str__(self) -> str:
-        value = "edev"
+        value = "/edev"
         if self.edev_index != NO_INDEX:
             value = f"{value}{SEP}{self.edev_index}"
         

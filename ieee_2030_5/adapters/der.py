@@ -272,7 +272,7 @@ class _DERAdapter(BaseAdapter, AdapterListProtocol):
         der.DERSettingsLink = m.DERSettingsLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Settings))
         der.DERStatusLink = m.DERStatusLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Status))
         der.DERAvailabilityLink = m.DERAvailabilityLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.Availability))
-        der.CurrentDERProgramLink = m.CurrentDERProgramLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.CurrentProgram))
+        # der.CurrentDERProgramLink = m.CurrentDERProgramLink(hrefs.der_sub_href(edev_index=edev_index, index=der_index, subtype=hrefs.DERSubType.CurrentProgram))
         if not self._edev_ders.get(edev_index):
             self._edev_ders[edev_index] = []
             

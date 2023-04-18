@@ -452,7 +452,7 @@ def initialize_end_device_adapter(sender):
             if cfg_der_program:
                 for derp_index, derp in enumerate(programs):
                     if cfg_der_program == derp.description:
-                        der.CurrentDERProgramLink = derp.href
+                        #der.CurrentDERProgramLink = derp.href
                         break
             
             
