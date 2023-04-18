@@ -110,24 +110,25 @@ def time_updated(timestamp):
                     ctrl.EventStatus = m.EventStatus(currentStatus=0, dateTime=timestamp, potentiallySuperseded=False, reason="Scheduled") 
                 
             if ctrl.EventStatus:
-                # Active control
-                if ctrl.interval.start < timestamp and timestamp < ctrl.interval.start + ctrl.interval.duration:
-                    if ctrl.EventStatus.currentStatus == 0:
-                        _log.debug(f"Activating control {ctrl_index}")
-                        ctrl.EventStatus.currentStatus = 1 # Active
-                        ctrl.EventStatus.dateTime = timestamp
-                        ctrl.EventStatus.reason = f"Control event active {ctrl.mRID}"
+                if ctrl.interval:
+                    # Active control
+                    if ctrl.interval.start < timestamp and timestamp < ctrl.interval.start + ctrl.interval.duration:
+                        if ctrl.EventStatus.currentStatus == 0:
+                            _log.debug(f"Activating control {ctrl_index}")
+                            ctrl.EventStatus.currentStatus = 1 # Active
+                            ctrl.EventStatus.dateTime = timestamp
+                            ctrl.EventStatus.reason = f"Control event active {ctrl.mRID}"
 
-                    if ctrl.mRID not in [x.mRID for x in current_active]:
-                        DERProgramAdapter.add_child(derp, hrefs.DER_CONTROL_ACTIVE, ctrl)
-                        
-                elif timestamp > ctrl.interval.start + ctrl.interval.duration:
-                    if ctrl.EventStatus.currentStatus == 1:
-                        _log.debug(f"Deactivating control {ctrl_index}")
-                        
-                        ctrl.EventStatus.currentStatus = -1 # for me this means complete
-                        DERProgramAdapter.remove_child(derp, hrefs.DER_CONTROL_ACTIVE, ctrl)
-            
+                        if ctrl.mRID not in [x.mRID for x in current_active]:
+                            DERProgramAdapter.add_child(derp, hrefs.DER_CONTROL_ACTIVE, ctrl)
+                            
+                    elif timestamp > ctrl.interval.start + ctrl.interval.duration:
+                        if ctrl.EventStatus.currentStatus == 1:
+                            _log.debug(f"Deactivating control {ctrl_index}")
+                            
+                            ctrl.EventStatus.currentStatus = -1 # for me this means complete
+                            DERProgramAdapter.remove_child(derp, hrefs.DER_CONTROL_ACTIVE, ctrl)
+                
 
 def initialize_der_program_adapter(sender):
     
