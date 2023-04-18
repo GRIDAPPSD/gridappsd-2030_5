@@ -41,8 +41,8 @@ devices:
     deviceCategory: FUEL_CELL
     pin: 111115
 
-    programs:
-      - description: Program 1
+    # programs:
+    #   - description: Program 1
 
     # nameplate:
     #   rtgMaxW: 6000
@@ -50,6 +50,7 @@ devices:
       - capabilities:
         modesSupported: "1110000000000000"
         type: 83
+        program: Program 1
 
       - capabilities:
         # Bitmask with the following structure.
@@ -182,7 +183,9 @@ programs:
       - Curve 1
     primacy: 89
 
-  # - description: Program 2
+  - description: Program 2
+    default_control: Control 3
+    primacy: 20
   #   default_control: Control 2
   # - description: Program 3
   #   default_control: Control 2
@@ -204,9 +207,6 @@ controls:
       # setSoftGradW: UInt16 [0..1]
   - description: Control 2
   - description: Control 3
-
-events:
-  - control: 0
 
 curves:
   # Each element will can have the following structure.
@@ -286,23 +286,3 @@ curves:
       - exitation: 10
         xvalue: 5
         yvalue: 5
-#{
-#    "devices": [
-#                    {
-#                        "sfdi": "097935300833",
-#                        "lfdi": "247bd68e3378fe57ba604e3c8bdf9e3f78a3d743",
-#                        "load_shed_device_category": "0200",
-#                        "pin_code": "130178"
-#                    },
-#                    {
-#                        "sfdi": "111576577659",
-#                        "lfdi": "2990c58a59935a7d5838c952b1a453c967341a07",
-#                        "load_shed_device_category": "0200",
-#                        "pin_code": "130178"
-#                    }
-#               ],
-#    "IEEE2030_5_server_sfdi": "413707194130",
-#    "IEEE2030_5_server_lfdi": "29834592834729384728374562039847629",
-#    "load_shed_device_category": "0020",
-#    "timezone": "America/Los_Angeles"
-#}

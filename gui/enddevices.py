@@ -24,9 +24,21 @@ def show_list(enddevices: m.EndDeviceList):
                     value = getattr(ed, fld.name)
                     if value and fld.type in ('Optional[str]', 'str'):
                         if isinstance(value, str):
-                            ui.label(f"{fld.name}, {value}, {fld.type}")    
+                            ui.label(f"{fld.name} -> {value}")    
                         else:
-                            ui.label(f"{fld.name}, {value.decode('utf-8')}, {fld.type}")
+                            ui.label(f"{fld.name} -> {value.decode('utf-8')}")
+                    elif value and fld.type in ('int'):
+                        ui.label(f"{fld.name} -> {value}")
+                    elif value:
+                        
+                        if isinstance(value, bytes):
+                            ui.label(f"{fld.name} -> {value}")
+                        elif isinstance(value, int):
+                            ui.label(f"{fld.name} -> {value}")
+                        elif getattr(value, 'href'):
+                            ui.label(f"{fld.name} -> {getattr(value, 'href')}")
+                        else:
+                            ui.label(f"Type is: {fld.type}")
                     # value = getattr(ed, fld.name)
                     # if value and value.decode('utf-8'):
                     #     ui.label(f"{fld.name} => {value.decode('utf-8')}")

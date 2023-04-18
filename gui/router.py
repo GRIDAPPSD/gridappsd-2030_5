@@ -17,6 +17,9 @@ class Router():
             self.routes[path] = func
             return func
         return decorator
+    
+    def add_route(self, path: str, func: Callable):
+        self.routes[path] = func
 
     def open(self, target: Union[Callable, str]):
         if isinstance(target, str):
@@ -38,3 +41,5 @@ class Router():
     def frame(self) -> ui.element:
         self.content = ui.element('router_frame').on('open', lambda msg: self.open(msg['args']))
         return self.content
+    
+global_router = Router()

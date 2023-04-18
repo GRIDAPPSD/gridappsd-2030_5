@@ -29,7 +29,7 @@ TLS_REPO: TLSRepository
 SERVER_CFG: ServerConfiguration
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def server_startup() -> Tuple[TLSRepository, EndDevices, ServerConfiguration]:
     global TLS_REPO, SERVER_CFG
 

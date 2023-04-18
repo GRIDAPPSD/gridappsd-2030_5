@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Execute A Client Request</title>
+    <script>
+        function onchange_template(val) {
+            console.write("new value is: " + val);
+        }
+    </script>
+</head>
+
+<body>
+    <h1>Execute a Request to the Server</h1>
+    <form method="POST" action="{{ url_for('execute_method') }}">
+
+        <div>
+            <label for="method">Method: <select name="method">
+                    <option value="post" default="default">POST</option>
+                    <option>GET</option>
+                </select></label>
+        </div>
+        <div>
+            <label for="path">Endpoint: <input type="text" name="endpoint" /></label>
+        </div>
+        <!-- <div>
+                <label for="templates">Template: <select name="templates" onchange="onchange_template(this.value)">
+                        <option name="none" default="default">No Template</option>
+                        <option name="MirrorUsagePoint">MirrorUsagePoint</option>
+                    </select></label>
+            </div> -->
+        <div>
+            <label for="body">Body: <br />
+                <textarea name="body" cols="80" rows="50"></textarea></label>
+        </div>
+        <div>
+            <button>Send to Server</button>
+        </div>
+    </form>
+
+
+</body>
+
+</html>

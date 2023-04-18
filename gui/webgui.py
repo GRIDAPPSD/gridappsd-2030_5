@@ -20,7 +20,7 @@ from nicegui import background_tasks, ui
 from session import backend_session, endpoint
 
 import ieee_2030_5.models as m
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import dataclass_to_xml, uuid_2030_5, xml_to_dataclass
 
 tasks = []
 
@@ -58,7 +58,7 @@ def get_control_event_default():
     
     time_plus_10 = int(time.mktime((datetime.utcnow() + timedelta(seconds=10)).timetuple()))
 
-    derc = m.DERControl(mRID=str(uuid.uuid4()),
+    derc = m.DERControl(mRID=uuid_2030_5(),
                 description="New DER Control Event",                
                 DERControlBase=derbase,
                 interval=m.DateTimeInterval(duration=20, start=time_plus_10))
