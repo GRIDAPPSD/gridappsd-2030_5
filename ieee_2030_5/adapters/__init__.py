@@ -16,6 +16,8 @@ from ieee_2030_5.models.sep import List_type
 
 _log = logging.getLogger(__name__)
 
+class AlreadyExists(Exception):
+    pass
 
 class ReturnCode(Enum):
     OK = 200
@@ -81,6 +83,19 @@ class Adapter(Generic[T]):
     def href_prefix(self) -> str:
         return self._href_prefix
     
+    @property
+    def href(self) -> str:
+        return self._href_prefix
+    
+    @href.setter
+    def href(self, value:str) -> None:
+        self._href_prefix = value
+    
+    def fetch_by_property(self, prop: str, prop_value: Any) -> Optional[T]:
+        for obj in self._item_list.values():
+            if getattr(obj, prop) == prop_value:
+                return obj
+        
     def add_container(self, child_type: Type, href_prefix: str):
         self._child_prefix[child_type] = href_prefix
         
@@ -96,7 +111,7 @@ class Adapter(Generic[T]):
         for index in sorted(indexes, reverse=True):
             self._child_map[found_index][name].pop(index)
         
-    def add_child(self, parent: T, name: str, child: Any, href: str = None):
+    def add_replace_child(self, parent: T, name: str, child: Any, href: str = None):
         
         # Make sure parent is in the Adapter by looking for it's index.
         found_index = self.fetch_index(parent)
@@ -116,6 +131,14 @@ class Adapter(Generic[T]):
                 child.href = href
             else:
                 child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]))])
+        
+        # Replace based upon resource href
+        for index, c in enumerate(self._child_map[found_index][name]):
+            if c.href == child.href:
+                _log.debug(f"Replacing child {child.href}")
+                self._child_map[found_index][name][index] = child
+                return
+            
         self._child_map[found_index][name].append(child)
         
     def fetch_children_by_parent_index(self, parent_index: int, child_type: Type) -> List[Type]:
@@ -161,7 +184,7 @@ class Adapter(Generic[T]):
         self._item_list[self._current_index] = item
     
     def fetch_all(self, instance: Optional[D] = None, start: int = 0, after: int = 0, limit: int = 1) -> D:
-        
+
         if instance is not None:
             if not instance.__class__.__name__.endswith("List"):
                 raise ValueError("Must have List as the last portion of the name for instance")
@@ -191,12 +214,17 @@ class Adapter(Generic[T]):
             
         return instance
     
-    def fetch_index(self, obj: T) -> int:
+    def fetch_index(self, obj: T, using_prop: str = None) -> int:
         found_index = -1
-        for index, obj in self._item_list.items():
-            if obj == obj:
-                found_index = index
-                break
+        for index, obj1 in self._item_list.items():
+            if using_prop is None:    
+                if obj1 == obj:
+                    found_index = index
+                    break
+            else:
+                if getattr(obj, using_prop) == getattr(obj1, using_prop):
+                    found_index = index
+                    break
         if found_index == -1:
             raise KeyError(f"Object {obj} not found in adapter")
         return found_index
@@ -334,8 +362,8 @@ class BaseAdapter:
         })
 
 from ieee_2030_5.adapters.dcap import DeviceCapabilityAdapter
-from ieee_2030_5.adapters.der import (DERAdapter, DERControlAdapter,
-                                      DERCurveAdapter, DERProgramAdapter)
+from ieee_2030_5.adapters.der import (DERControlAdapter, DERCurveAdapter,
+                                      DERProgramAdapter)
 from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.log import LogAdapter
 from ieee_2030_5.adapters.mupupt import MirrorUsagePointAdapter
