@@ -183,13 +183,13 @@ class Adapter(Generic[T]):
         self._current_index += 1
         self._item_list[self._current_index] = item
     
-    def fetch_all(self, instance: Optional[D] = None, start: int = 0, after: int = 0, limit: int = 1) -> D:
+    def fetch_all(self, container: Optional[D] = None, start: int = 0, after: int = 0, limit: int = 1) -> D:
 
-        if instance is not None:
-            if not instance.__class__.__name__.endswith("List"):
+        if container is not None:
+            if not container.__class__.__name__.endswith("List"):
                 raise ValueError("Must have List as the last portion of the name for instance")
         
-            prop_found = instance.__class__.__name__[:instance.__class__.__name__.find("List")]
+            prop_found = container.__class__.__name__[:container.__class__.__name__.find("List")]
         
             items = list(self._item_list.values())
             all_len = len(items)
@@ -206,13 +206,13 @@ class Adapter(Generic[T]):
                     all_items = items[start: start + limit]
                 all_results = len(all_items)
                 
-            setattr(instance, prop_found, all_items)
-            setattr(instance, "all", all_len)
-            setattr(instance, "results", all_results)
+            setattr(container, prop_found, all_items)
+            setattr(container, "all", all_len)
+            setattr(container, "results", all_results)
         else:
-            instance = list(self._item_list.values())
+            container = list(self._item_list.values())
             
-        return instance
+        return container
     
     def fetch_index(self, obj: T, using_prop: str = None) -> int:
         found_index = -1

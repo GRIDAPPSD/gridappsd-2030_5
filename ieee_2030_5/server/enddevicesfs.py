@@ -104,45 +104,58 @@ class EDevRequests(RequestOp):
             /edev/0/der
 
         """
+        _log.debug(f"Args are: {request.args}")
         edev_href = hrefs.EdevHref.parse(request.path)
+        start = int(request.args.get("s", 0))
+        limit = int(request.args.get("l", 1))
+        after = int(request.args.get("a", 0))
+        
 
         ed = EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
         
-        if edev_href.edev_subtype == hrefs.EDevSubType.None_Available:
+        # means we don't have any /edev without any index
+        if edev_href.edev_subtype is hrefs.EDevSubType.None_Available:
             retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
+        
+        
+        elif edev_href.edev_subtype is hrefs.EDevSubType.FunctionSetAssignments:
+            
+            raise ValueError("FSA ???")
+            
+            # if edev_href.edev_subtype_index == hrefs.NO_INDEX:
+            #     retval = EndDeviceAdapter.fetch_children(m.DERList(request.path), hrefs.DERSubType)
+            # else:
+            #     retval = EndDeviceAdapter.fetch_child(ed, hrefs.FSA, edev_href.edev_subtype_index)
+                
+        # we have /edev_index_der or /edev_index_der_subindex or /edev_index_der_subindex_dersubtype
         elif edev_href.edev_subtype == hrefs.EDevSubType.DER:
-            if edev_href.edev_subtype_index == hrefs.NO_INDEX:
-                retval = EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
-            else:
-                retval = EndDeviceAdapter.fetch_child(ed, hrefs.FSA, edev_href.edev_subtype_index)
-        elif edev_href.edev_subtype == hrefs.EDevSubType.DER:
+        
             deradpt: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER, edev_href.edev_index)
-            
-            
+                        
             if edev_href.edev_subtype_index == hrefs.NO_INDEX:
-                retval = deradpt.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
+                retval = deradpt.fetch_all(m.DERList(href=request.path), start=start, after=after, limit=limit)
             else:
                 der = deradpt.fetch(edev_href.edev_subtype_index)
-                retval = deradpt.fetch_child(der, edev_href.edev_der_subtype)
-        
-            try:
-                ed = EndDeviceAdapter.fetch(int(pth_split[1]))
-                # FSA is a list off the end device, the rest are singleton items.
-                if pth_split[2] == hrefs.FSA:                   
-                    retval = EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
-                elif pth_split[2] == hrefs.DER:
-                    deradpt = EndDeviceAdapter.fetch_child(ed, hrefs.DER, )
-                    retval = EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
+                if edev_href.edev_der_subtype is hrefs.DERSubType.None_Available:
+                    retval = der
                 else:
-                    retval = EndDeviceAdapter.fetch_child(ed, pth_split[2], 0)
-            except KeyError:
-                raise werkzeug.exceptions.NotFound("Missing Resource")
+                    retval = deradpt.fetch_child(der, edev_href.edev_der_subtype.value)
+        
+            # try:
+            #     ed = EndDeviceAdapter.fetch(int(pth_split[1]))
+            #     # FSA is a list off the end device, the rest are singleton items.
+            #     if pth_split[2] == hrefs.FSA:                   
+            #         retval = EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
+            #     elif pth_split[2] == hrefs.DER:
+            #         deradpt = EndDeviceAdapter.fetch_child(ed, hrefs.DER, )
+            #         retval = EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
+            #     else:
+            #         retval = EndDeviceAdapter.fetch_child(ed, pth_split[2], 0)
+            # except KeyError:
+            #     raise werkzeug.exceptions.NotFound("Missing Resource")
             
         else:
-            if edev_href.edev_subtype_index != hrefs.NO_INDEX:
-                retval = EndDeviceAdapter.fetch_child(ed, edev_href.edev_der_subtype, edev_href.edev_subtype_index)
-            else:    
-                retval = EndDeviceAdapter.fetch_child(ed, edev_href.edev_der_subtype)
+            retval = EndDeviceAdapter.fetch_child(ed, edev_href.edev_subtype.value)
             # if pth_split[2] == "rg":
             #     retval = EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
             # elif pth_split[2] == "di":

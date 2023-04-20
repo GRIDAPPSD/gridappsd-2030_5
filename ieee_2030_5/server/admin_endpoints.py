@@ -57,7 +57,9 @@ class AdminEndpoints:
 
     def _admin_edev_ders(self, edevid: int) -> Response:
         ed = EndDeviceAdapter.fetch(edevid)
-        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList())))
+        deradpter = EndDeviceAdapter.fetch_child(ed, hrefs.DER)
+        
+        return Response(dataclass_to_xml(deradpter.fetch_all(m.DERList())))
     
     def _admin_edev_fsa(self, edevid: int, fsaid: int = -1) -> Response:
         if edevid > -1 and fsaid > -1:
