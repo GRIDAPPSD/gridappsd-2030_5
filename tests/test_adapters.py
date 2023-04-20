@@ -5,12 +5,30 @@ import ieee_2030_5.models as m
 from ieee_2030_5.adapters import Adapter
 
 
+def test_add_child_adapter():
+    me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
+    ed = m.EndDevice(href="first")
+    me.add(ed)
+    index = me.fetch_index(ed)
+    
+    you = Adapter[m.DER](hrefs.get_enddevice_href(index, hrefs.DER), generic_type=m.DER)
+    me.add_replace_child(ed, name="ders", child=you)
+    
+    assert str(hrefs.EdevHref(index, hrefs.EDevSubType.DER)) == you.href
+    
+    you.add(m.DER())
+    my_der = you.fetch(0)
+    
+    assert str(hrefs.EdevHref(index, hrefs.EDevSubType.DER, 0)) == my_der.href
+    
+
+
 def test_add_child_with_href():
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
     ed = m.EndDevice(href="first")
     me.add(ed)
     derc = m.DERControl()
-    me.add_child(ed, "test", derc, href="junk")
+    me.add_replace_child(ed, "test", derc, href="junk")
     assert "junk" == derc.href
 
 def test_add_child_no_parent_throws_error():
@@ -20,14 +38,14 @@ def test_add_child_no_parent_throws_error():
     
     # Note parent ed hasn't been added to the me adapter yet.
     with pytest.raises(KeyError):
-        me.add_child(ed, "test", derc)
+        me.add_replace_child(ed, "test", derc)
 
 def test_add_child_correct_href():
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
     ed = m.EndDevice(href="first")
     me.add(ed)
     derc = m.DERControl()
-    me.add_child(ed, "test", derc)
+    me.add_replace_child(ed, "test", derc)
     assert hrefs.SEP.join(["first", "test", "0"]) == derc.href
 
 def test_missing_type():
@@ -48,7 +66,7 @@ def test_fetch_missing_key_returns_empty():
     ed = m.EndDevice()
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
     me.add(ed)
-    me.add_child(ed, "foo", m.File())
+    me.add_replace_child(ed, "foo", m.File())
     assert [] == me.fetch_children(ed, "bar")
     
 
@@ -129,11 +147,11 @@ def test_add_child():
         me.add(program)
         assert program.href == hrefs.der_program_href(index)
     
-    me.add_child(der_programs[0], name="derc", child=m.DERControl())
+    me.add_replace_child(der_programs[0], name="derc", child=m.DERControl())
     with pytest.raises(ValueError):
-        me.add_child(der_programs[0], name="derc", child=m.DefaultDERControl())
+        me.add_replace_child(der_programs[0], name="derc", child=m.DefaultDERControl())
         
-    me.add_child(der_programs[0], name="derc", child=m.DERControl())
+    me.add_replace_child(der_programs[0], name="derc", child=m.DERControl())
     
     
     derc = me.fetch_children(der_programs[0], "derc", m.DERControlList())
