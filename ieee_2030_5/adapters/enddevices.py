@@ -13,7 +13,7 @@ from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.adapters.timeadapter import TimeAdapter
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.models.enums import DeviceCategoryType
-from ieee_2030_5.types_ import Lfdi, is_reloading
+from ieee_2030_5.types_ import Lfdi
 from ieee_2030_5.utils import uuid_2030_5
 
 _log = logging.getLogger(__file__)
