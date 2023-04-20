@@ -28,22 +28,23 @@ class EDevRequests(RequestOp):
     def put(self) -> Response:
         parsed = hrefs.EdevHref.parse(request.path)
         
-        if parsed.edev_der_subtype not in [x.value for x in hrefs.DERSubType]:
-            raise ValueError("Invalid subtype specified.")
-        
         mysubobj = xml_to_dataclass(request.data.decode('utf-8'))
+        
         
         ed = EndDeviceAdapter.fetch(parsed.edev_index)
         deradapter: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER)
         der = deradapter.fetch(parsed.edev_subtype_index)
         
+        
         try:
-            deradapter.fetch_child(der, parsed.edev_der_subtype)
+            deradapter.fetch_child(der, parsed.edev_der_subtype.value)
             response_status = 204
-        except KeyError:
+        except (KeyError, IndexError):
             response_status = 201
         finally:
-            deradapter.add_replace_child(der, parsed.edev_der_subtype, mysubobj)
+            if not mysubobj.href:
+                mysubobj.href = request.path
+            deradapter.add_replace_child(der, parsed.edev_der_subtype.value, mysubobj)
             
         return Response(status=response_status)
         # response_code = adpt.DERAdapter.store(parsed, xml_to_dataclass(request.data.decode('utf-8')))
