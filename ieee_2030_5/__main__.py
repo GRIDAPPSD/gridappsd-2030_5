@@ -197,13 +197,13 @@ def _main():
         # p = Process(target = _run_ui)
         # p.daemon = True
         # p.start()
-        
+                
         run_server(config,
                     tls_repo,
                     end_devices,
                     debug=opts.debug,
                     use_reloader=True,
-                    use_debugger=True,
+                    use_debugger=opts.debug,
                     threaded=False)
     except KeyboardInterrupt:
         _log.info("Shutting down server")
