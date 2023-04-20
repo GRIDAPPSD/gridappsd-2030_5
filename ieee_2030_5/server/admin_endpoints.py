@@ -5,7 +5,7 @@ from flask import Flask, Response, render_template, request
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters.der import DERAdapter, DERProgramAdapter
+from ieee_2030_5.adapters.der import DERProgramAdapter
 from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.certs import TLSRepository
@@ -26,12 +26,14 @@ class AdminEndpoints:
         app.add_url_rule("/admin/program-lists", view_func=self._admin_der_program_lists)
         app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
         app.add_url_rule("/admin/edev/<int:edev_index>/ders/<int:der_index>/current_derp", view_func=self._admin_der_update_current_derp, methods=['PUT', 'GET'])
-        app.add_url_rule("/admin/ders/<int:edev_index>", view_func=self._admin_ders)
+#        app.add_url_rule("/admin/ders/<int:edev_index>", view_func=self._admin_ders)
         
         # COMPLETE
         app.add_url_rule("/admin/edev/<int:edevid>/fsa/<int:fsaid>/derp", view_func=self._admin_edev_fsa_derp)
         app.add_url_rule("/admin/edev/<int:edevid>/fsa/<int:fsaid>", view_func=self._admin_edev_fsa)
         app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._admin_edev_fsa)
+        app.add_url_rule("/admin/edev/<int:edevid>/der", view_func=self._admin_edev_ders)
+        app.add_url_rule("/admin/edev", view_func=self._admin_edev)
         # END COMPLETE
         
         app.add_url_rule("/admin/derp/<int:derp_index>/derc/<int:control_index>",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
@@ -49,6 +51,13 @@ class AdminEndpoints:
             
             
         #fsa = FSAAdapter.fetch_by_end_device(edevid)
+        
+    def _admin_edev(self) -> Response:
+        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
+
+    def _admin_edev_ders(self, edevid: int) -> Response:
+        ed = EndDeviceAdapter.fetch(edevid)
+        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList())))
     
     def _admin_edev_fsa(self, edevid: int, fsaid: int = -1) -> Response:
         if edevid > -1 and fsaid > -1:
@@ -67,11 +76,11 @@ class AdminEndpoints:
     def _admin_der_program_lists(self) -> Response:
         return Response(dataclass_to_xml(DERProgramAdapter.fetch_list()))
     
-    def _admin_ders(self, edev_index: int) -> Response:
-        return Response(dataclass_to_xml(DERAdapter.fetch_list(edev_index=edev_index)))
+    # def _admin_ders(self, edev_index: int) -> Response:
+    #     return Response(dataclass_to_xml(DERAdapter.fetch_list(edev_index=edev_index)))
     
-    def _der_settings(self, edev_index: int, der_index: int):
-        return Response(dataclass_to_xml(DERAdapter.fetch_settings_at(edev_index=edev_index, der_index=der_index)))
+    # def _der_settings(self, edev_index: int, der_index: int):
+    #     return Response(dataclass_to_xml(DERAdapter.fetch_settings_at(edev_index=edev_index, der_index=der_index)))
         
     def _admin_der_update_current_derp(self, edev_index: int, der_index: int):
         if request.method == 'PUT':
@@ -140,7 +149,7 @@ class AdminEndpoints:
                     status_code = 204
                     DERProgramAdapter.remove_child(derp, hrefs.DDERC)
                 
-                DERProgramAdapter.add_child(derp, hrefs.DDERC, data)
+                DERProgramAdapter.add_replace_child(derp, hrefs.DDERC, data)
                 
                 return Response(headers={'Location': data.href}, status=status_code)
             elif isinstance(data, m.DERControl):
@@ -151,7 +160,7 @@ class AdminEndpoints:
                     DERProgramAdapter.replace_child(derp, hrefs.DERC, index, data)
                     status_code = 204
                 except KeyError:
-                    DERProgramAdapter.add_child(derp, hrefs.DERC, data)
+                    DERProgramAdapter.add_replace_child(derp, hrefs.DERC, data)
                                         
                 return Response(headers={'Location': data.href}, status=status_code)
         

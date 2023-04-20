@@ -4,9 +4,9 @@ from typing import Optional
 import werkzeug.exceptions
 from flask import Response, request
 
-import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
+from ieee_2030_5.adapters import Adapter
 from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.data.indexer import get_href
@@ -26,13 +26,28 @@ class EDevRequests(RequestOp):
         super().__init__(**kwargs)
         
     def put(self) -> Response:
-        parsed = hrefs.edev_parse(request.path)
+        parsed = hrefs.EdevHref.parse(request.path)
         
-        if parsed.der_sub not in [x.value for x in hrefs.DERSubType]:
+        if parsed.edev_der_subtype not in [x.value for x in hrefs.DERSubType]:
             raise ValueError("Invalid subtype specified.")
         
-        response_code = adpt.DERAdapter.store(parsed, xml_to_dataclass(request.data.decode('utf-8')))
-        return Response(status=int(response_code))                                              
+        mysubobj = xml_to_dataclass(request.data.decode('utf-8'))
+        
+        ed = EndDeviceAdapter.fetch(parsed.edev_index)
+        deradapter: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER)
+        der = deradapter.fetch(parsed.edev_subtype_index)
+        
+        try:
+            deradapter.fetch_child(der, parsed.edev_der_subtype)
+            response_status = 204
+        except KeyError:
+            response_status = 201
+        finally:
+            deradapter.add_replace_child(der, parsed.edev_der_subtype, mysubobj)
+            
+        return Response(status=response_status)
+        # response_code = adpt.DERAdapter.store(parsed, xml_to_dataclass(request.data.decode('utf-8')))
+        #return Response(status=int(response_code))                                              
                                               
                         
         
@@ -65,12 +80,12 @@ class EDevRequests(RequestOp):
         # This is what we should be using to get the device id of the registered end device.
         device_id = self.tls_repo.find_device_id_from_sfdi(ed.sFDI)
         ed.lFDI = self.tls_repo.lfdi(device_id)
-        if end_device := adpt.EndDeviceAdapter.fetch_by_lfdi(ed.lfdi):
+        if end_device := EndDeviceAdapter.fetch_by_lfdi(ed.lfdi):
             status = 200
             ed_href = end_device.href
         else:
             if not ed.href:
-                ed = adpt.EndDeviceAdapter.store(device_id, ed)
+                ed = EndDeviceAdapter.store(device_id, ed)
 
             ed_href = ed.href
             status = 201
@@ -89,37 +104,51 @@ class EDevRequests(RequestOp):
             /edev/0/der
 
         """
-        pth = request.path
+        edev_href = hrefs.EdevHref.parse(request.path)
 
-        if not pth.startswith(hrefs.DEFAULT_EDEV_ROOT):
-            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
-
-        pth_split = pth.split(hrefs.SEP)
+        ed = EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
         
-        if len(pth_split) == 1:
-            for ed in adpt.EndDeviceAdapter.fetch_all():
-                if ed.lFDI == self.lfdi:
-                    retval = m.EndDeviceList(EndDevice=[ed], all=1, results=1, href=pth)
-                    break
-                                
-        elif len(pth_split) == 3:
+        if edev_href.edev_subtype == hrefs.EDevSubType.None_Available:
+            retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
+        elif edev_href.edev_subtype == hrefs.EDevSubType.DER:
+            if edev_href.edev_subtype_index == hrefs.NO_INDEX:
+                retval = EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
+            else:
+                retval = EndDeviceAdapter.fetch_child(ed, hrefs.FSA, edev_href.edev_subtype_index)
+        elif edev_href.edev_subtype == hrefs.EDevSubType.DER:
+            deradpt: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER, edev_href.edev_index)
+            
+            
+            if edev_href.edev_subtype_index == hrefs.NO_INDEX:
+                retval = deradpt.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
+            else:
+                der = deradpt.fetch(edev_href.edev_subtype_index)
+                retval = deradpt.fetch_child(der, edev_href.edev_der_subtype)
+        
             try:
-                ed = adpt.EndDeviceAdapter.fetch(int(pth_split[1]))
+                ed = EndDeviceAdapter.fetch(int(pth_split[1]))
                 # FSA is a list off the end device, the rest are singleton items.
                 if pth_split[2] == hrefs.FSA:                   
-                    retval = adpt.EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
+                    retval = EndDeviceAdapter.fetch_children(ed, hrefs.FSA, m.FunctionSetAssignmentsList(href=request.path))
                 elif pth_split[2] == hrefs.DER:
-                    retval = adpt.EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
+                    deradpt = EndDeviceAdapter.fetch_child(ed, hrefs.DER, )
+                    retval = EndDeviceAdapter.fetch_children(ed, hrefs.DER, m.DERList(href=request.path))
                 else:
-                    retval = adpt.EndDeviceAdapter.fetch_child(ed, pth_split[2], 0)
+                    retval = EndDeviceAdapter.fetch_child(ed, pth_split[2], 0)
             except KeyError:
                 raise werkzeug.exceptions.NotFound("Missing Resource")
+            
+        else:
+            if edev_href.edev_subtype_index != hrefs.NO_INDEX:
+                retval = EndDeviceAdapter.fetch_child(ed, edev_href.edev_der_subtype, edev_href.edev_subtype_index)
+            else:    
+                retval = EndDeviceAdapter.fetch_child(ed, edev_href.edev_der_subtype)
             # if pth_split[2] == "rg":
-            #     retval = adpt.EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
+            #     retval = EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
             # elif pth_split[2] == "di":
             #     retval = "foo"
             # elif pth_split[2] == "fsa":
-            #     retval = adpt.EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
+            #     retval = EndDeviceAdapter.fetch_fsa_list(edev_index=int(pth_split[1]))
             # elif pth_split[2] == "der":
             #     retval = adpt.DERAdapter.fetch_list(edev_index=int(pth_split[1]))
             

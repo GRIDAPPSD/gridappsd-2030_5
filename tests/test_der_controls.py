@@ -47,7 +47,7 @@ def test_der_activate_deactivate():
     )
     
     DERProgramAdapter.add(der_program)
-    DERProgramAdapter.add_child(der_program, hrefs.DERC, der_control)
+    DERProgramAdapter.add_replace_child(der_program, hrefs.DERC, der_control)
     
     while True:
         next_timestamp = int(time.mktime(datetime.utcnow().timetuple()))
