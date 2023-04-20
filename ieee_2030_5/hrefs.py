@@ -227,7 +227,7 @@ class EdevHref:
     def parse(path: str) -> EdevHref:
         split_pth = path.split(SEP)
         
-        if split_pth[0] != EDEV:
+        if split_pth[0] != EDEV and split_pth[0][1:] != EDEV:
             raise ValueError(f"Must start with {EDEV}")
     
         if len(split_pth) == 1:
