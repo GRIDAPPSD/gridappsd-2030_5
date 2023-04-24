@@ -32,7 +32,7 @@ key/certs/ca unless --no-create-certs is passed to the server startup method.  T
 The configuration file holds the definitions for controls, der, end devices and other settings that will be used during the runtime
 of the server.
 
-Both of these configuration files should be placed in the current working directory where you will start the server.
+The following files, openssl.cnf and config.yml, should be placed in the same directory where the server is started from.
 
 ### Example openssl.cnf
 
@@ -448,6 +448,20 @@ curves:
       - exitation: 10
         xvalue: 5
         yvalue: 5
+```
+
+### Starting the server
+
+After installing one can start the server by the folloing command:
+
+```bash
+2030_5_server --no-validate config.yml
+```
+
+To learn about other options please use the help module.
+
+```bash
+2030_5_server --help
 ```
 
 ## Installing from source
