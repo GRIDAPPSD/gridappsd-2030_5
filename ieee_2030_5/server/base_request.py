@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 from dataclasses import dataclass
-from typing import Dict, Callable
+from typing import Dict, Callable, Optional
 
 import werkzeug
 from flask import request, Response
@@ -9,6 +9,7 @@ from flask import request, Response
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
+import ieee_2030_5.server.server_endpoints as eps
 
 from ieee_2030_5.types_ import SEP_XML
 from ieee_2030_5.utils import dataclass_to_xml
@@ -54,9 +55,8 @@ class ServerOperation:
 
 
 class RequestOp(ServerOperation):
-    def __init__(self, server_endpoints: ServerEndpoints):
+    def __init__(self, server_endpoints: eps.ServerEndpoints):
         super().__init__()
-        self._end_devices = server_endpoints.end_devices
         self._tls_repository = server_endpoints.tls_repo
         self._server_endpoints = server_endpoints
 
@@ -69,17 +69,32 @@ class RequestOp(ServerOperation):
         return self._server_endpoints.config
 
     @property
-    def lfid(self):
-        return self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
+    def lfdi(self):
+        return request.environ["ieee_2030_5_lfdi"] # self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
 
     @property
     def device_id(self):
         return request.environ.get("ieee_2030_5_subject")
 
-    @property
-    def is_admin_client(self) -> bool:
-        ed = self._end_devices.get_device_by_lfid(self.lfid)
-        return ed.deviceCategory == DeviceCategoryType.OTHER_CLIENT
+    def get_path(self, required_prefix: Optional[str] = None) -> str:
+        """
+        Retrieve the context web request environment PATH_INFO with optional required_prefix
+        argument.  If that argument is specified then it will be validated against PATH_INFO.  The
+        function will raise a ValueError if the PATH_INFO does not start with required_prefix.
+
+        Args:
+            required_prefix:
+
+        Returns:
+            The path specified in request.environ['PATH_INFO'
+        """
+
+        pth = request.environ['PATH_INFO']
+
+        if required_prefix and not pth.startswith(required_prefix):
+            raise ValueError(f"Invalid path for {self.__class__} {request.path}")
+
+        return pth
 
     def build_response_from_dataclass(self, obj: dataclass) -> Response:
         return Response(dataclass_to_xml(obj), headers=self._headers)

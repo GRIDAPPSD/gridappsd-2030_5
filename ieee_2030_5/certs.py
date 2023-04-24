@@ -1,23 +1,46 @@
+import argparse
+import hashlib
 import logging
+import os
+import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-from ieee_2030_5.execute import execute_command
-
 __all__ = ['TLSRepository']
 
-from ieee_2030_5.types_ import PathStr, Lfid
+from ieee_2030_5.types_ import Lfdi, PathStr
+from ieee_2030_5.utils.tls_wrapper import OpensslWrapper, TLSWrap
 
 _log = logging.getLogger(__name__)
 
 
+def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
+    fp = fingerprint.replace(":", "")
+    return Lfdi(fp[:40])
+
+
+def sfdi_from_lfdi(lfdi: Lfdi) -> int:
+    assert len(lfdi) == 40, "lfdi must be 160-bits (40 hex characters) long."
+    hex_str = str(int(lfdi[:9], 16))
+    check_bit = 0
+    full_sum = sum([int(x) for x in hex_str])
+    while not (full_sum + check_bit) % 10 == 0:
+        check_bit += 1
+    return int(hex_str + str(check_bit))
+
+
 class TLSRepository:
 
-    def __init__(self, repo_dir: PathStr, openssl_cnffile_template: PathStr, serverhost: str, proxyhost: str = None,
-                 clear=False):
+    def __init__(self,
+                 repo_dir: PathStr,
+                 openssl_cnffile_template: PathStr,
+                 serverhost: str,
+                 proxyhost: str = None,
+                 clear=False,
+                 **kwargs):
         if isinstance(repo_dir, str):
             repo_dir = Path(repo_dir).expanduser().resolve()
         if isinstance(openssl_cnffile_template, str):
@@ -66,69 +89,107 @@ class TLSRepository:
         if not serial.exists():
             serial.write_text("01")
 
-        new_contents = openssl_cnffile_template.read_text().replace("dir             = /home/gridappsd/tls",
-                                                                    f"dir = {repo_dir}")
+        new_contents = openssl_cnffile_template.read_text().replace(
+            "dir             = /home/gridappsd/tls", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
         self._ca_key = self._private_dir.joinpath("ca.pem")
-        self._ca_cert = self._certs_dir.joinpath("ca.crt")
+        self._ca_cert = self._certs_dir.joinpath("ca.pem")
         self._serverhost = serverhost
         self._proxyhost = proxyhost
+
+        self._tls: TLSWrap = OpensslWrapper(self._openssl_cnf_file)
+        self._cert_paths: List[Path] = []
 
         # Create a new ca key if not exists.
         if not Path(self._ca_key).exists():
             self.__create_ca__()
-            __openssl_create_private_key__(self.__get_key_file__(self._serverhost))
+            self._tls.tls_create_private_key(self.__get_key_file__(self._serverhost))
             self.create_cert(self._serverhost, True)
             if proxyhost:
                 self.create_cert(self._proxyhost, True)
 
         if not clear:
-            for f in self._certs_dir.glob('*.crt'):
+            #_log.debug(list(self._certs_dir.glob('*.pem')))
+            
+            # creating certs has something screwy so we are going
+            # to create the cert_paths based upon the private key
+            # files.
+            for f in self._private_dir.glob('*.pem'):
                 f = Path(f)
+                f = self._certs_dir.joinpath(f.name)
                 cn = self.get_common_name(f.stem)
                 if cn not in ('ca', serverhost):
                     self._client_common_name_set.add(cn)
 
+        generate_admin_cert = kwargs.pop('generate_admin_cert', False)
+
+        if generate_admin_cert:
+            admin_key = self._private_dir.joinpath("admin.pem")
+            admin_cert = self._certs_dir.joinpath("admin.pem")
+            if not admin_key.exists():
+                self._tls.tls_create_private_key(admin_key)
+                self.create_cert(admin_cert.stem)
+
+        for d in self._cert_paths:
+            lfdi_from_stem = self.lfdi(d.stem)
+            from_stem = self.sfdi(d.stem)
+            _log.debug(f"For cert {d.name}\n\tLFDI: {lfdi_from_stem}\n\tSFDI: {from_stem}")
+
+        if len(kwargs) > 0:
+            raise ValueError(f"Not all kwargs used: {kwargs.keys()}")
+
     def __create_ca__(self):
-        __openssl_create_private_key__(self._ca_key)
-        __openssl_create_ca_certificate__("ca", self._openssl_cnf_file, self._ca_key,
-                                          self._ca_cert)
-        __openssl_create_pkcs23_pem_and_cert__(self._ca_key, self._ca_cert,
-                                               self.__get_combined_file__("ca"))
+        self._tls.tls_create_private_key(self._ca_key)
+        self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
+        self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert,
+                                                 self.__get_combined_file__("ca"))
 
     def create_cert(self, common_name: str, as_server: bool = False):
 
         if not self.__get_key_file__(common_name).exists():
-            __openssl_create_private_key__(self.__get_key_file__(common_name))
-        __openssl_create_signed_certificate__(common_name, self._openssl_cnf_file, self._ca_key,
-                                              self._ca_cert, self.__get_key_file__(common_name),
-                                              self.__get_cert_file__(common_name), as_server)
+            self._tls.tls_create_private_key(self.__get_key_file__(common_name))
 
-        __openssl_create_pkcs23_pem_and_cert__(self.__get_key_file__(common_name), self.__get_cert_file__(common_name),
-                                               self.__get_combined_file__(common_name))
+        self._tls.tls_create_signed_certificate(common_name, self._ca_key, self._ca_cert,
+                                                self.__get_key_file__(common_name),
+                                                self.__get_cert_file__(common_name), as_server)
+
+        self._tls.tls_create_pkcs23_pem_and_cert(self.__get_key_file__(common_name),
+                                                 self.__get_cert_file__(common_name),
+                                                 self.__get_combined_file__(common_name))
 
         self._common_names[common_name] = common_name
+        self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
 
-    def lfdi(self, device_id: str) -> Lfid:
+    def lfdi(self, device_id: str) -> Lfdi:
+        """
+        Using the fingerprint of the certifcate return the left truncation of 160 bits with no check digit.
+        Example:
+          From:
+            3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A
+          Return:
+            3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5
+            as an integer.
+        """
+        # 160 / 4 == 40
         fp = self.fingerprint(device_id, True)
-        return Lfid(int(fp[:16], 16))
+        return Lfdi(lfdi_from_fingerprint(fp))
 
-    def sfdi(self, device_id: str):
-        lfdi_: int = self.lfdi(device_id)
-        bit_left_truncation_len = 36
-        # truncate the lFDI
-        sfdi_no_sod_checksum = lfdi_ >> (lfdi_.bit_length() - bit_left_truncation_len)
-        # calculate sum-of-digits checksum digit
-        sod_checksum = 10 - sum([int(digit) for digit in str(sfdi_no_sod_checksum)]) % 10
-        # right concatenate the checksum digit and return
-        return str(sfdi_no_sod_checksum) + str(sod_checksum)
+    def sfdi(self, device_id: str) -> int:
+        lfdi_ = self.lfdi(device_id)
+        return sfdi_from_lfdi(lfdi_)
 
     def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
-        value = __openssl_fingerprint__(self.__get_cert_file__(device_id))
+        if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
+            # _log.debug("Using hash from combined file.")
+            value = Path(self.__get_combined_file__(device_id)).read_text()
+            value = hashlib.sha256(value.encode('utf-8')).hexdigest()
+        else:
+            value = self._tls.tls_get_fingerprint_from_cert(self.__get_cert_file__(device_id))
         if without_colan:
             value = value.replace(":", "")
         if "=" in value:
             value = value.split("=")[1]
+        assert isinstance(value, str)
         return value
 
     def get_common_name(self, device_id: str) -> x509:
@@ -137,6 +198,7 @@ class TLSRepository:
         return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
 
     def get_file_pair(self, device_id: str) -> Tuple[str, str]:
+        """ Get cert, key from the repository based on passed device_id"""
         return (self.__get_cert_file__(device_id).as_posix(),
                 self.__get_key_file__(device_id).as_posix())
 
@@ -172,8 +234,28 @@ class TLSRepository:
     def server_cert_file(self) -> Path:
         return self.__get_cert_file__(self._serverhost)
 
+    def find_device_id_from_sfdi(self, sfdi: int) -> Optional[str]:
+        """
+        Searches the certificate paths for a device id that maps to the sfdi passed into the method.
+        Args:
+            sfdi:
+
+        Returns:
+
+        """
+        device_id = None
+        _log.debug(f"Attempting to find sfid: {sfdi}")
+        for d in self._certs_dir.glob("*.pem"):
+            try:
+                if sfdi == self.sfdi(d.stem):
+                    device_id = d.stem
+                    break
+            except FileNotFoundError:
+                pass
+        return device_id
+
     def __get_cert_file__(self, common_name: str) -> Path:
-        return self._certs_dir.joinpath(f"{common_name}.crt")
+        return self._certs_dir.joinpath(f"{common_name}.pem")
 
     def __get_key_file__(self, common_name: str) -> Path:
         return self._private_dir.joinpath(f"{common_name}.pem")
@@ -182,111 +264,90 @@ class TLSRepository:
         return self._combined_dir.joinpath(f"{common_name}-combined.pem")
 
 
-def __openssl_create_pkcs23_pem_and_cert__(private_key_file: Path, cert_file: Path, combined_file: Path):
-    # openssl pkcs12 -export -in certificate.pem -inkey privatekey.pem -out cert-and-key.pfx
-    tmpfile = Path("/tmp/tmp.p12")
-    tmpfile2 = Path("/tmp/all.pem")
-    tmpfile.unlink(missing_ok=True)
-    cmd = ["openssl", "pkcs12", "-export", "-in", str(cert_file), "-inkey", str(private_key_file), "-out", str(tmpfile), "-passout", "pass:"]
-    execute_command(cmd)
+def _main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", help="Directory of certificates determine lfdi and sfdi from.")
+    parser.add_argument("--file", help="File to determine lfdi and sfdi from.")
 
-    # openssl pkcs12 -in path.p12 -out newfile.pem -nodes
-    cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(tmpfile2), "-nodes", "-passin", "pass:"]
-    #cmd = ["openssl", "pkcs12", "-in", str(tmpfile), "-out", str(combined_file), "-clcerts", "-nokeys", "-passin", "pass:"]
-    # -clcerts -nokeys
-    execute_command(cmd)
+    opts = parser.parse_args()
 
-    with open(combined_file, "w") as fp:
-        in_between = False
-        for line in tmpfile2.read_text().split("\n"):
-            if not in_between:
-                if "BEGIN" in line:
-                    fp.write(f"{line}\n")
-                    in_between = True
-            else:
-                fp.write(f"{line}\n")
-                if "END" in line:
-                    in_between = False
+    if opts.dir and opts.file:
+        sys.stderr.write("Only specify dir or file.\n")
+        sys.exit(1)
+    elif opts.dir is None and opts.file is None:
+        sys.stderr.write("Must specify either --dir or --file.\n")
+        sys.exit(1)
 
+    target = opts.file
+    if opts.dir:
+        target = opts.dir
 
-def __openssl_create_private_key__(file_path: Path):
-    # openssl ecparam -out private/ec-cakey.pem -name prime256v1 -genkey
-    cmd = ["openssl", "ecparam", "-out", str(file_path), "-name", "prime256v1", "-genkey"]
-    return execute_command(cmd)
+    target = Path(target)
+    if not target.exists():
+        sys.stderr.write("Invalid file or directory refrence.\n")
+        sys.exit(1)
 
-
-def __openssl_create_ca_certificate__(common_name: str, opensslcnf: Path, private_key_file: Path,
-                                      ca_cert_file: Path):
-    # openssl req -new -x509 -days 3650 -config openssl.cnf \
-    #   -extensions v3_ca -key private/ec-cakey.pem -out certs/ec-cacert.pem
-    cmd = [
-        "openssl", "req", "-new", "-x509", "-days", "3650", "-subj", f"/C=US/CN={common_name}",
-        "-config",
-        str(opensslcnf), "-extensions", "v3_ca", "-key",
-        str(private_key_file), "-out",
-        str(ca_cert_file)
-    ]
-    return execute_command(cmd)
-
-
-def __openssl_create_csr__(common_name: str, opensslcnf: Path, private_key_file: Path,
-                           server_csr_file: Path):
-    subject_name = common_name.split(":")[0]
-    # openssl req -new -key server.key -out server.csr -sha256
-    cmd = [
-        "openssl", "req", "-new", "-config",
-        str(opensslcnf), "-subj", f"/C=US/CN={subject_name}", "-key",
-        str(private_key_file), "-out",
-        str(server_csr_file), "-sha256"
-    ]
-    return execute_command(cmd)
-
-
-def __openssl_create_signed_certificate__(common_name: str,
-                                          opensslcnf: Path,
-                                          ca_key_file: Path,
-                                          ca_cert_file: Path,
-                                          private_key_file: Path,
-                                          cert_file: Path,
-                                          as_server: bool = False):
-    subject_name = common_name.split(":")[0]
-    csr_file = Path(f"/tmp/{common_name}")
-    __openssl_create_csr__(common_name, opensslcnf, private_key_file, csr_file)
-    # openssl ca -keyfile /root/tls/private/ec-cakey.pem -cert /root/tls/certs/ec-cacert.pem \
-    #   -in server.csr -out server.crt -config /root/tls/openssl.cnf
-    cmd = [
-        "openssl",
-        "ca",
-        "-keyfile",
-        str(ca_key_file),
-        "-cert",
-        str(ca_cert_file),
-        "-subj",
-        f"/C=US/CN={subject_name}",
-        "-in",
-        str(csr_file),
-        "-out",
-        str(cert_file),
-        "-config",
-        str(opensslcnf),
-    # For no prompt use -batch
-        "-batch"
-    ]
-    # if as_server:
-    #     "-server"
-    # print(" ".join(cmd))
-    ret_value = execute_command(cmd)
-    csr_file.unlink()
-    return ret_value
-
-
-def __openssl_fingerprint__(cert_file: Path, algorithm: str = "sha1"):
-
-    if algorithm == "sha1":
-        algorithm = "-sha1"
+    if target.is_dir():
+        targets = [target.glob("*.crt")]
     else:
-        raise NotImplementedError()
+        targets = [target]
 
-    cmd = ["openssl", "x509", "-in", str(cert_file), "-noout", "-fingerprint", algorithm]
-    ret_value = execute_command(cmd)
-    return ret_value
+    for t in targets:
+        fingerprint = OpensslWrapper.tls_get_fingerprint_from_cert(t)
+        lfdi = lfdi_from_fingerprint(fingerprint)
+        sfdi = sfdi_from_lfdi(lfdi)
+        sys.stdout.write(f"certificate: {t}\n")
+        sys.stdout.write(f"-" * 60 + "\n")
+        sys.stdout.write(f"fingerprint: {fingerprint}\n")
+        sys.stdout.write(f"lfdi: {lfdi.decode('ascii')}\n")
+        sys.stdout.write(f"sfdi: {sfdi}\n\n")
+
+
+if __name__ == '__main__':
+
+    logging.basicConfig(level=logging.DEBUG)
+
+    fingerprint = "3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A".replace(
+        "-", "")
+    lfdi = lfdi_from_fingerprint(fingerprint)
+    sfdi = sfdi_from_lfdi(lfdi)
+    print(f"fingerprint: {fingerprint}")
+    print(f"lfdi: {lfdi}")
+    print(f"sfdi: {sfdi}")
+
+    fingerprint = "B5:65:B2:C4:D4:22:59:72:58:6E:4E:E2:B1:F2:98:D4:20:62:15:DB:53:49:AB:45:2F:D2:8F:BC:62:2C:28:1D".replace(
+        ":", "")
+    lfdi = lfdi_from_fingerprint(fingerprint)
+    sfdi = sfdi_from_lfdi(lfdi)
+    print(f"fingerprint: {fingerprint}")
+    print(f"lfdi: {lfdi}")
+    print(f"sfdi: {sfdi}")
+
+    #
+    # tlsrepo = TLSRepository(repo_dir="~/tls",
+    #                         openssl_cnffile_template="../openssl.cnf",
+    #                         clear=False,
+    #                         serverhost="gridappsd_dev_2004:8443")
+    # fingerprint = tlsrepo.fingerprint("dev1")
+    # # fingerprint = "3F4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213B".replace("-", "")
+    # print(len(fingerprint))
+    # print("my lfdi: ", fingerprint[:40])
+    # tlsrepo.sfdi_from_lfdi(fingerprint[:40].encode("ascii"))
+    # # Each char is 4 bits so 9*4 == 36
+    # print("left 36 bits: ", fingerprint[:9])
+    # print("to int from fingerprint", int(fingerprint[:9], 16))
+    # interum = str(int(fingerprint[:9], 16))
+    # print(int(interum[-2:]))
+    # add_value = 1
+    # while not (int(interum[-2:]) + add_value) % 10 == 0:
+    #     add_value += 1
+    #
+    # print(add_value)
+    # interum = interum + str(add_value)
+    # print(f"sfdi = ", interum)
+    #
+    # print(f" our sfdi: {tlsrepo.sfdi('dev1')}")
+    #
+    # _log.debug(f"fingerprint: {tlsrepo.fingerprint('dev1', False)}")
+    #
+    # _log.debug(f"dev1 lfdi: {tlsrepo.lfdi('dev1')}, sfdi: {tlsrepo.sfdi('dev1')}")

@@ -1,15 +1,16 @@
 import calendar
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import IntEnum
 from pathlib import Path
-from typing import Union
+from typing import Union, Any, List, Dict
 
 PathStr = Union[Path, str]
 StrPath = PathStr
 TimeType = int
 TimeOffsetType = int
-Lfid = int
+Lfdi = str
 
 SEP_XML = "application/sep+xml"
 

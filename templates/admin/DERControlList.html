@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DER Control List</title>
+</head>
+<body>
+    <h1>DER Control List</h1>
+    <ul>
+    {% for index, ed in der_control_list.items() %}
+        <li>{{ index }} {{ ed.lfdi }}<br/>
+            <ul>
+            {% for k, v in ed.__dict__.items() %}
+                <li>{{ k }} => {{ v }}</li>
+            {% endfor %}
+            </ul>
+        </li>
+    {% endfor %}
+    </ul>
+
+</body>
+</html>

@@ -8,7 +8,7 @@
     <h1>End Device List</h1>
     <ul>
     {% for index, ed in end_device_list.items() %}
-        <li>{{ index }} {{ ed.lfid }}<br/>
+        <li>{{ index }} {{ ed.lfdi }}<br/>
             <ul>
             {% for k, v in ed.__dict__.items() %}
                 <li>{{ k }} => {{ v }}</li>

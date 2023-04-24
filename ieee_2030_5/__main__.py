@@ -38,24 +38,25 @@
 # UNITED STATES DEPARTMENT OF ENERGY under Contract DE-AC05-76RL01830
 # -------------------------------------------------------------------------------
 
-import os
-import threading
-
-from argparse import ArgumentParser
 import logging
-from pathlib import Path
+import os
 import socket
 import sys
+import threading
+from argparse import ArgumentParser
+from multiprocessing import Process
+from pathlib import Path
 from time import sleep
 
 import yaml
 from werkzeug.serving import BaseWSGIServer
 
+import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.flask_server import build_server
+from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
+from ieee_2030_5.data.indexer import add_href
+from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.server.server_constructs import initialize_2030_5
-
 
 _log = logging.getLogger()
 
@@ -67,7 +68,7 @@ class ServerThread(threading.Thread):
         self.server = server
 
     def run(self):
-        _log.info('starting server')
+        _log.info(f'starting server on {self.server.host}:{self.server.port}')
         self.server.serve_forever()
 
     def shutdown(self):
@@ -75,12 +76,15 @@ class ServerThread(threading.Thread):
         self.server.shutdown()
 
 
-def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices: bool = True) -> TLSRepository:
+def get_tls_repository(cfg: ServerConfiguration,
+                       create_certificates_for_devices: bool = True) -> TLSRepository:
     tlsrepo = TLSRepository(cfg.tls_repository,
                             cfg.openssl_cnf,
                             cfg.server_hostname,
                             cfg.proxy_hostname,
-                            clear=create_certificates_for_devices)
+                            clear=create_certificates_for_devices,
+                            generate_admin_cert=cfg.generate_admin_cert)
+
     if create_certificates_for_devices:
         already_represented = set()
 
@@ -91,6 +95,8 @@ def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices
             else:
                 already_represented.add(k)
                 tlsrepo.create_cert(k.id)
+                _log.debug(
+                    f"for {k.id}\nlfdi -> {tlsrepo.lfdi(k.id)}\nsfdi -> {tlsrepo.sfdi(k.id)}")
     return tlsrepo
 
 
@@ -115,6 +121,11 @@ def remove_stop_file():
         os.remove(pth)
 
 
+def _run_ui():
+    
+    os.system('python gui/spa/main.py')
+    
+
 def _main():
     parser = ArgumentParser()
 
@@ -126,17 +137,15 @@ def _main():
         "--no-create-certs",
         action="store_true",
         help="If specified certificates for for client and server will not be created.")
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Debug level of the server"
-    )
+    parser.add_argument("--debug", action="store_true", help="Debug level of the server")
+    parser.add_argument("--production",
+                        action="store_true",
+                        default=False,
+                        help="Run the server in a threaded environment.")
     opts = parser.parse_args()
 
     logging_level = logging.DEBUG if opts.debug else logging.INFO
     logging.basicConfig(level=logging_level)
-
-    _log = logging.getLogger(__name__)
 
     os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
         Path(opts.config).expanduser().resolve(strict=True))
@@ -145,9 +154,14 @@ def _main():
 
     config = ServerConfiguration(**cfg_dict)
 
+    if config.lfdi_mode == "lfdi_mode_from_file":
+        os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
+
     assert config.tls_repository
     assert len(config.devices) > 0
     assert config.server_hostname
+
+    add_href(hrefs.get_server_config_href(), config)
     unknown = []
     # Only check for resolvability if not passed --no-validate
     if not opts.no_validate:
@@ -175,23 +189,46 @@ def _main():
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
 
+    # Initialize the repository of 2030.5 devices.
     end_devices = initialize_2030_5(config, tls_repo)
 
-    thread = None
+    #if not opts.production:
     try:
-        remove_stop_file()
-        server = build_server(config, tls_repo, enddevices=end_devices)
-        thread = ServerThread(server)
-        thread.start()
-        while not should_stop():
-            sleep(0.5)
-    except KeyboardInterrupt as ex:
-        pass
-    finally:
-        if thread:
-            thread.shutdown()
-            thread.join()
+        # p = Process(target = _run_ui)
+        # p.daemon = True
+        # p.start()
+                
+        run_server(config,
+                    tls_repo,
+                    end_devices,
+                    debug=opts.debug,
+                    use_reloader=True,
+                    use_debugger=opts.debug,
+                    threaded=False)
+    except KeyboardInterrupt:
+        _log.info("Shutting down server")
+    # else:
+    #     server = build_server(config, tls_repo, enddevices=end_devices)
+
+    #     thread = None
+    #     try:
+    #         remove_stop_file()
+    #         thread = ServerThread(server)
+    #         thread.start()
+    #         while not should_stop():
+    #             sleep(0.5)
+    #     except KeyboardInterrupt as ex:
+    #         _log.info("Exiting program.")
+    #     finally:
+    #         if thread:
+    #             thread.shutdown()
+    #             thread.join()
 
 
 if __name__ == '__main__':
-    _main()
+    try:
+        _main()
+    except InvalidConfigFile as ex:
+        print(ex.args[0])
+    except KeyboardInterrupt:
+        pass

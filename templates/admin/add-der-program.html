@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add DER Program</title>
+</head>
+<body>
+    <h1>New DER Program</h1>
+    <form action="{{ url_for("admin_der_program") }}" method="post">
+        <div>
+            <input type="hidden" name="mRID" value="{{ mRID }}" />
+            <div><label>Description:<input name="description" type="text" value="{{ description }}"/></label></div>
+
+            <div><label>Default DERControl:</label><br/>
+                {% for ctl in der_controls %}
+                <div><label><input name="default_der_control" type="radio" value="{{ ctl.href }}"/> {{ ctl.description }}</label></div>
+                {% endfor %}
+
+            </div>
+            <div><label>DERControls:</label><br />
+                {% for ctl in der_controls %}
+                <div><label><input name="der_control_checked{{ loop.index0 }}" type="checkbox" value="{{ ctl.href }}"/>{{ ctl.description }}</label></div>
+                {% endfor %}
+            </div>
+            <div><label>Primacy:<input type="text" name="primacy" size="5" /></label></div>
+            <div>
+                <input type="submit" value="Save" />
+            </div>
+        </div>
+    </form>
+</body>
+</html>
