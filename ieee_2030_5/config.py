@@ -165,6 +165,7 @@ class ServerConfiguration:
 
     log_event_list_poll_rate: int = 900
     device_capability_poll_rate: int = 900
+    usage_point_post_rate: int = 300
     end_device_list_poll_rate: int = 86400  # daily check-in
 
     generate_admin_cert: bool = False

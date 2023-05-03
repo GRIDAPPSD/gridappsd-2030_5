@@ -4,7 +4,7 @@ from typing import Container, List, Optional, Sized, Tuple
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import ReturnCode
+from ieee_2030_5.adapters import BaseAdapter, ReturnCode
 from ieee_2030_5.data.indexer import add_href, get_href
 
 _log = logging.getLogger(__name__)
@@ -142,7 +142,6 @@ class _UsagePointContainer(Container, Sized):
     
     def _fetch_wrapper_by_mRID(self, mRID: str) -> _UsagePointWrapper:
         for x in self.__usage_points__:
-            print(f"Comparing {x.usage_point.mRID} to {mRID}")
             if x.usage_point.mRID == mRID:
                 return x
         
@@ -194,7 +193,7 @@ class _MirrorUsagePointAdapter:
     
     def fetch_mirror_usage_point_list(self, start=0, after=0, limit=1) -> m.MirrorUsagePointList:
         return m.MirrorUsagePointList(href=hrefs.mirror_usage_point_href(), all=len(self.__mirror_usage_points__), results=len(self.__mirror_usage_points__),
-                                      MirrorUsagePoint=self.__mirror_usage_points__)
+                                      MirrorUsagePoint=self.__mirror_usage_points__, pollRate=BaseAdapter.server_config().usage_point_post_rate)
     
     def fetch_mirror_usage_by_href(self, href) -> m.MirrorUsagePoint:
         return next(filter(lambda x: x.href == href, self.__mirror_usage_points__))
@@ -234,6 +233,7 @@ class _MirrorUsagePointAdapter:
         if after > before:
             # TODO: Don't hard code here.
             mup.href = upt.href.replace('upt', 'mup')
+            mup.postRate = BaseAdapter.server_config().usage_point_post_rate
             self.__mirror_usage_points__.append(mup)
             return ReturnCode.CREATED.value, mup.href
         else:

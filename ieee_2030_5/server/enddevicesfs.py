@@ -121,7 +121,13 @@ class EDevRequests(RequestOp):
         
         elif edev_href.edev_subtype is hrefs.EDevSubType.FunctionSetAssignments:
             
-            raise ValueError("FSA ???")
+            fsaadpt: FSAAdapter = EndDeviceAdapter.fetch_child(ed, hrefs.FSA, edev_href.edev_index)
+            
+            if edev_href.edev_subtype_index == hrefs.NO_INDEX:
+                retval = fsaadpt.fetch_all(m.FunctionSetAssignmentsList(href=request.path), start=start, after=after, limit=limit)
+            else:
+                retval = fsaadpt.fetch(edev_href.edev_subtype_index)
+                
             
             # if edev_href.edev_subtype_index == hrefs.NO_INDEX:
             #     retval = EndDeviceAdapter.fetch_children(m.DERList(request.path), hrefs.DERSubType)

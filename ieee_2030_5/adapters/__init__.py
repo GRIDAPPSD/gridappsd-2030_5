@@ -95,7 +95,10 @@ class Adapter(Generic[T]):
         for obj in self._item_list.values():
             if getattr(obj, prop) == prop_value:
                 return obj
-        
+            
+    def fetch_child_names(self) -> List[str]:
+        return list(self._child_prefix.keys())
+    
     def add_container(self, child_type: Type, href_prefix: str):
         self._child_prefix[child_type] = href_prefix
         

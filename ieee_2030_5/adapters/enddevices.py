@@ -106,7 +106,7 @@ def initialize_end_device_adapter(sender):
             # fsa = FSAAdapter.create(fsa_programs)
             # edev.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=hrefs.fsa_href(edev_index=index))
             # self._fsa.append(fsa)
-            EndDeviceAdapter.add_replace_child(edev, hrefs.FSA, fsa)
+            EndDeviceAdapter.add_replace_child(edev, hrefs.FSA, FSAAdapter)
             
         if dev.ders:
             der_href = hrefs.EdevHref(index, hrefs.EDevSubType.DER)

@@ -5,6 +5,7 @@ from flask import Flask, Response, render_template, request
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
+from ieee_2030_5.adapters import Adapter
 from ieee_2030_5.adapters.der import DERProgramAdapter
 from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
@@ -33,6 +34,8 @@ class AdminEndpoints:
         app.add_url_rule("/admin/edev/<int:edevid>/fsa/<int:fsaid>", view_func=self._admin_edev_fsa)
         app.add_url_rule("/admin/edev/<int:edevid>/fsa", view_func=self._admin_edev_fsa)
         app.add_url_rule("/admin/edev/<int:edevid>/der", view_func=self._admin_edev_ders)
+        app.add_url_rule("/admin/edev/<int:edevid>/der/<int:derid>/current_derp", view_func=self._admin_edev_ders)
+        app.add_url_rule("/admin/edev/<int:edevid>/der/<int:derid>", view_func=self._admin_edev_ders)
         app.add_url_rule("/admin/edev", view_func=self._admin_edev)
         # END COMPLETE
         
@@ -55,11 +58,19 @@ class AdminEndpoints:
     def _admin_edev(self) -> Response:
         return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
 
-    def _admin_edev_ders(self, edevid: int) -> Response:
+    def _admin_edev_ders(self, edevid: int, derid: int = None) -> Response:
         ed = EndDeviceAdapter.fetch(edevid)
-        deradpter = EndDeviceAdapter.fetch_child(ed, hrefs.DER)
+        deradpter: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER)
+        if derid:
+            retval: m.DER = deradpter.fetch(derid)
+            if request.path.endswith('current_derp'):
+                derp_href = hrefs.DERProgramHref.parse(retval.CurrentDERProgramLink)
+                retval = DERProgramAdapter.fetch(derp_href.index)
+        else:
+            retval = deradpter.fetch_all(m.DERList())
+            
         
-        return Response(dataclass_to_xml(deradpter.fetch_all(m.DERList())))
+        return Response(dataclass_to_xml(retval))
     
     def _admin_edev_fsa(self, edevid: int, fsaid: int = -1) -> Response:
         if edevid > -1 and fsaid > -1:
@@ -99,7 +110,7 @@ class AdminEndpoints:
             else:
                 program = DERProgramAdapter.create(data).data
                 response_status = 201
-            
+            print(EndDeviceAdapter.fetch_child_names())
             der = DERAdapter.fetch_at(edev_index, der_index)
             der.CurrentDERProgramLink = m.CurrentDERProgramLink(program.href)
             return Response(dataclass_to_xml(program), status=response_status)
@@ -210,7 +221,7 @@ class AdminEndpoints:
 
     def _admin_enddevices(self, index:int = None) -> Response:
         
-        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_list()))
+        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
     
     def _lfdi_lists(self) -> Response:
         items = []
