@@ -1,5 +1,6 @@
+import base64
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Optional, Type
 
@@ -9,9 +10,11 @@ from xsdata.formats.dataclass.parsers.xml import XmlParser
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
 
+from ieee_2030_5.models.sep import EndDevice, EndDeviceList
+
 __xml_context__ = XmlContext()
-__parser_config__ = ParserConfig(fail_on_unknown_attributes=False,
-                                 fail_on_unknown_properties=False)
+__parser_config__ = ParserConfig(fail_on_unknown_attributes=True,
+                                 fail_on_unknown_properties=True)
 __xml_parser__ = XmlParser(config=__parser_config__, context=__xml_context__)
 __config__ = SerializerConfig(xml_declaration=False, pretty_print=True)
 __serializer__ = XmlSerializer(config=__config__)
@@ -33,7 +36,21 @@ def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:
     """
     Parse the xml passed and return result from loaded classes.
     """
-    return __xml_parser__.from_string(xml, type)
+    parsed = __xml_parser__.from_string(xml, type)
+    
+    # The xml parser from string seems to double decode the lfDI which
+    # probably means I am doing something wrong.  However, this fixes
+    # the issue and it is correct after we encode the lFDI.  I will
+    # do the same with other entities as needed.    
+    if isinstance(parsed, EndDevice):
+        parsed.lFDI = base64.b16encode(parsed.lFDI)
+    elif isinstance(parsed, EndDeviceList):
+        for ed in parsed.EndDevice:
+            ed.lFDI = base64.b16encode(ed.lFDI)
+            
+    return parsed
+    
+        
 
 
 def dataclass_to_xml(dc: dataclass) -> str:
