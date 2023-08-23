@@ -1,11 +1,13 @@
 import argparse
+from copy import deepcopy
 import hashlib
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+import yaml
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
@@ -99,7 +101,7 @@ class TLSRepository:
 
         self._tls: TLSWrap = OpensslWrapper(self._openssl_cnf_file)
         self._cert_paths: List[Path] = []
-
+        self._certificate_specs: Dict[str, Dict[str, str]] = {}
         # Create a new ca key if not exists.
         if not Path(self._ca_key).exists():
             self.__create_ca__()
@@ -133,6 +135,7 @@ class TLSRepository:
         for d in self._cert_paths:
             lfdi_from_stem = self.lfdi(d.stem)
             from_stem = self.sfdi(d.stem)
+                                               'Lfdi': lfdi_from_stem, 
             _log.debug(f"For cert {d.name}\n\tLFDI: {lfdi_from_stem}\n\tSFDI: {from_stem}")
 
         if len(kwargs) > 0:
@@ -144,6 +147,7 @@ class TLSRepository:
         self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert,
                                                  self.__get_combined_file__("ca"))
 
+        
     def create_cert(self, common_name: str, as_server: bool = False):
 
         if not self.__get_key_file__(common_name).exists():
@@ -159,6 +163,7 @@ class TLSRepository:
 
         self._common_names[common_name] = common_name
         self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
+        self._certificate_specs[common_name] = dict(common_name=common_name,
 
     def lfdi(self, device_id: str) -> Lfdi:
         """
@@ -203,7 +208,7 @@ class TLSRepository:
                 self.__get_key_file__(device_id).as_posix())
 
     @property
-    def client_list(self) -> List[str]:
+    def client_list(self) -> Dict[str, Dict[str, str]]:
         return list(self._client_common_name_set)
 
     @property
@@ -288,7 +293,7 @@ def _main():
         sys.exit(1)
 
     if target.is_dir():
-        targets = [target.glob("*.crt")]
+        targets = target.glob("*.crt")
     else:
         targets = [target]
 

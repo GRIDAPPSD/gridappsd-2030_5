@@ -13,7 +13,9 @@ from queue import Queue
 
 import OpenSSL
 import werkzeug.exceptions
-from flask import Flask, Response, redirect, render_template, request, url_for
+from flask import (Flask, Response, g, redirect, render_template, request,
+                   url_for)
+from flask_session import Session
 # from flask_socketio import SocketIO, send
 from werkzeug.serving import BaseWSGIServer, make_server
 
@@ -35,6 +37,9 @@ from ieee_2030_5.server.server_constructs import EndDevices, get_groups
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 
 _log = logging.getLogger(__file__)
+
+server_config: ServerConfiguration = None
+tls_repository: TLSRepository = None
 
 
 class LogProtocolHandler(logging.Handler):
@@ -150,12 +155,15 @@ def handle_chunking():
 
 
 def before_request():
+
+    g.SERVER_CONFIG = server_config
+    g.TLS_REPOSITORY = tls_repository
     # if request.scheme == 'http':
     #     url = request.url.replace('http://', 'https://', 1)
     #     url = url.replace('8080', '7443')
     #     code = 301
     #     return redirect(url, code=code)
-    pass
+    #session['SERVER_CONFIG'] = server_config
     #PeerCertWSGIRequestHandler.reqresponse.put(request)
     # _log.debug(f"HEADERS: {request.headers}")
     # _log.debug(f"REQ_path: {request.path}")
@@ -221,6 +229,7 @@ def __build_http_app__(config: ServerConfiguration) -> Flask:
 def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath('templates')))
 
+    
     # Debug headers path and request arguments
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.
@@ -378,6 +387,10 @@ def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices,
                **kwargs):
+    global server_config, tls_repository
+    server_config = config
+    tls_repository = tlsrepo
+    
     app = __build_app__(config, tlsrepo)
     ssl_context = __build_ssl_context__(tlsrepo)
 
