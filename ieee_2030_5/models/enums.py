@@ -1,6 +1,24 @@
 from enum import IntEnum
 
 
+class DERUnitRefType(IntEnum):
+    # 0 - N/A
+    # 1 - %setMaxW
+    # 2 - %setMaxVar
+    # 3 - %statVarAvail
+    # 4 - %setEffectiveV
+    # 5 - %setMaxChargeRateW
+    # 6 - %setMaxDischargeRateW
+    # 7 - %statWAvail
+    NA = 0
+    setMaxW = 1
+    setMaxVar = 2
+    statVarAvail = 3
+    setEffectiveV = 4
+    setMaxChargeRateW = 5
+    setMaxDischargeRateW = 6
+    statWAvail = 7
+
 class CurveType(IntEnum):
     # 0 - opModFreqWatt (Frequency-Watt Curve Mode)
     # 1 - opModHFRTMayTrip (High Frequency Ride Through, May Trip Mode)

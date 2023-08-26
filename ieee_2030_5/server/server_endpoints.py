@@ -83,6 +83,7 @@ class RegexConverter(BaseConverter):
 class ServerEndpoints:
 
     def __init__(self, app: Flask, tls_repo: TLSRepository, config: ServerConfiguration):
+        
         self.config = config
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"

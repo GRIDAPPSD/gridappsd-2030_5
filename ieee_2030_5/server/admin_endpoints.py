@@ -1,12 +1,14 @@
 import json
+import logging
 from typing import Optional
 
-from flask import Flask, Response, render_template, request
+import flask
+from flask import Flask, Response, g, render_template, request
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.adapters import Adapter
-from ieee_2030_5.adapters.der import DERProgramAdapter
+from ieee_2030_5.adapters.der import DERCurveAdapter, DERProgramAdapter
 from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
 from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.certs import TLSRepository
@@ -14,6 +16,7 @@ from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.server.server_constructs import EndDevices
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
+_log = logging.getLogger()
 
 class AdminEndpoints:
     def __init__(self, app: Flask, tls_repo: TLSRepository, config: ServerConfiguration):
@@ -27,6 +30,8 @@ class AdminEndpoints:
         app.add_url_rule("/admin/program-lists", view_func=self._admin_der_program_lists)
         app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
         app.add_url_rule("/admin/edev/<int:edev_index>/ders/<int:der_index>/current_derp", view_func=self._admin_der_update_current_derp, methods=['PUT', 'GET'])
+        
+        app.add_url_rule("/admin/certs", endpoint="admin/certs", view_func=self._admin_certs)
 #        app.add_url_rule("/admin/ders/<int:edev_index>", view_func=self._admin_ders)
         
         # COMPLETE
@@ -39,6 +44,8 @@ class AdminEndpoints:
         app.add_url_rule("/admin/edev", view_func=self._admin_edev)
         # END COMPLETE
         
+        app.add_url_rule("/admin/curves", methods=['GET', 'PUT', 'POST'], view_func=self._admin_curves)
+            
         app.add_url_rule("/admin/derp/<int:derp_index>/derc/<int:control_index>",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
         app.add_url_rule("/admin/derp/<int:derp_index>/derc",  methods=['GET', 'POST'], view_func=self._admin_derp_derc)
         app.add_url_rule("/admin/derp/<int:derp_index>/derca",  methods=['GET'], view_func=self._admin_derp_derca)
@@ -54,6 +61,60 @@ class AdminEndpoints:
             
             
         #fsa = FSAAdapter.fetch_by_end_device(edevid)
+        
+    def _admin_certs(self) -> Response:
+        headers = {'CONTENT-TYPE': "application/json"}
+        tls_repo: TLSRepository = g.TLS_REPOSITORY
+        
+        return Response(json.dumps(tls_repo.client_list), headers=headers)
+    
+    def _admin_curves(self) -> Response:
+        """Returns DERCurve or DERCurve List depending upon request method.
+        
+        If request method is GET, return a DERCurveList object.
+        
+        If request method is POST or PUT, return a DERCurve object.
+        
+        If request method is DELETE return None.        
+        """
+        if request.method in ('POST', 'PUT'):
+            data = request.data.decode('utf-8')
+            curve = xml_to_dataclass(data)
+            if not isinstance(curve, m.DERCurve):
+                _log.error("DERCurve was not passed via data.")
+                return Response(status=400)
+            
+            if request.method == 'POST':
+                if curve.href:
+                    _log.error(f"POST method with existing object {curve.href}")
+                    return Response(400)
+                
+                curve = DERCurveAdapter.add(curve)
+                response_status = 201
+                
+            elif request.method == 'PUT':
+                if not curve.href:
+                    _log.error(f"PUT method without an existing object.")
+                    return Response(400)
+
+                index = int(curve.href.rsplit(hrefs.SEP)[-1])
+                DERCurveAdapter.put(index, curve)
+                response_status = 200
+                
+                
+            return Response(dataclass_to_xml(curve), status=response_status)
+        
+            
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+        
+        return Response(dataclass_to_xml(DERCurveAdapter.fetch_all(m.DERCurveList(), 
+                                                                   start=start, 
+                                                                   after=after, 
+                                                                   limit=limit)),
+                        status=200)
+        
         
     def _admin_edev(self) -> Response:
         return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
@@ -73,12 +134,25 @@ class AdminEndpoints:
         return Response(dataclass_to_xml(retval))
     
     def _admin_edev_fsa(self, edevid: int, fsaid: int = -1) -> Response:
-        if edevid > -1 and fsaid > -1:
-            obj = EndDeviceAdapter.fetch_fsa(edev_index=edevid, fsa_index=fsaid)
-        elif edevid > -1:
-            obj = EndDeviceAdapter.fetch_fsa_list(edev_index=edevid)
+        if not edevid > -1:
+            raise ValueError("Invalid end device id passed")
+        
+        ed = EndDeviceAdapter.fetch(edevid)
+        
+        if fsaid > -1:
+            obj = FSAAdapter.fetch(fsaid)
         else:
-            return Response("Invalid edevid specified", status=400)
+            obj = FSAAdapter.fetch_all(m.FunctionSetAssignmentsList())
+            
+        # if edevid > -1 and fsaid > -1:
+        #     obj = EndDeviceAdapter.fetch_all(m.FunctionSetAssignmentsList())
+        #     #obj = EndDeviceAdapter.fetch_fsa(edev_index=edevid, fsa_index=fsaid)
+        # elif edevid > -1:
+        #     ed = EndDeviceAdapter.fetch(edevid)
+        #     obj = EndDeviceAdapter.fetch_child(ed, hrefs.FSA)
+        #     #obj = EndDeviceAdapter.fetch_fsa_list(edev_index=edevid)
+        # else:
+        #     return Response("Invalid edevid specified", status=400)
         
         return Response(dataclass_to_xml(obj))
     
@@ -220,7 +294,6 @@ class AdminEndpoints:
         
 
     def _admin_enddevices(self, index:int = None) -> Response:
-        
         return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
     
     def _lfdi_lists(self) -> Response:
