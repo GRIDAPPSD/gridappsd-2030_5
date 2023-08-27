@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -5,6 +6,8 @@ from dotenv import load_dotenv
 from nicegui import ui
 from pages import Pages, show_global_header
 from session import get_certs, get_end_devices
+
+_log = logging.getLogger(__name__)
 
 
 def initialize_app():
@@ -59,6 +62,8 @@ if __name__ in {'__main__', "__mp_main__"}:
         if os.getenv(x) is None or os.getenv(x).strip() == "":
             sys.stderr.write(f'Missing {x} in .env file\n')
             sys.exit(1)
+            
+    logging.basicConfig(level=logging.DEBUG)
     
     initialize_app()
     

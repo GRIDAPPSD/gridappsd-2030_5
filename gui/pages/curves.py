@@ -16,25 +16,29 @@ curve_data_points: List[m.CurveData] = [m.CurveData() for x in range(10)]
 curve_list: m.DERCurveList = m.DERCurveList()
 current_curve: m.DERCurve = m.DERCurve()
 der_ref_type: DERUnitRefType = DERUnitRefType.NA
+updating_curve: bool = False
 
 @ui.refreshable
 def render_select():
-    global ui_select
     with ui.row():
         der_curves = [c.description for c in curve_list.DERCurve]
         der_curves.insert(0, "NEW")
         if not current_curve.description:
             ui.select(der_curves, label="Curves", value=der_curves[0],
-                      on_change=lambda e: change_curve(e.value))
+                      on_change=lambda e: change_der_curve(e.value)).classes("w-50")
         else:
             ui.select(der_curves, label="Curves", value=current_curve.description,
-                      on_change=lambda e: change_curve(e.value))
+                      on_change=lambda e: change_der_curve(e.value)).classes("w-50")
         if current_curve.href:
             ui.label(f"Href: {current_curve.href}")
 
-def change_curve(new_curve_description: str):
-    global curve_data_points, current_curve, der_ref_type
-        
+def change_der_curve_type(new_curve_type: DERUnitRefType):
+    pass
+
+def change_der_curve(new_curve_description: str):
+    global curve_data_points, current_curve, der_ref_type, updating_curve
+    
+    updating_curve = True
     # Create a new item.
     if new_curve_description is None or new_curve_description == "NEW":
         current_curve = m.DERCurve()
@@ -58,10 +62,10 @@ def change_curve(new_curve_description: str):
         while len(curve_data_points) < 10:
             curve_data_points.append(m.CurveData())
     
-    assert len(curve_data_points) == 10
-    
+    assert len(curve_data_points) == 10    
     render_curve_form.refresh()
     render_curve_data.refresh()
+    updating_curve = False
     # render_curve_form()    
     # render_curve_data()
 
@@ -71,45 +75,62 @@ def render_curve_data():
         for i in range(10):
             with ui.column():
                 ui.checkbox(f"excitation-{i}").bind_value(curve_data_points[i], "excitation")
-                ui.input(f"x-value-{i}").props("size=10").bind_value(curve_data_points[i], "xvalue")
-                ui.input(f"y-value-{i}").props("size=10").bind_value(curve_data_points[i], "yvalue")
-
+                ui.number(f"x-value-{i}").props("size=10").bind_value(curve_data_points[i], "xvalue")
+                ui.number(f"y-value-{i}").props("size=10").bind_value(curve_data_points[i], "yvalue")
+                
+def curve_type_refresh(select: ui.select):
+    _log.debug(f"select: {select.value}")
+    if current_curve.curveType != select.value:
+        current_curve.curveType = select.value
+        render_curve_form.refresh()
+        
 @ui.refreshable
 def render_curve_form():
+    _log.debug("Rendering curve form")
     with ui.row():
-        with ui.column():
-            description = ui.input('description').bind_value(current_curve, 'description')
+        with ui.column():            
+            curveType = ui.select({curve_type.value: curve_type.name for index, curve_type in enumerate(CurveType)},
+                                  label="Curve Type").classes("w-64").bind_value_from(current_curve, "curveType")
+            curveType.on_value_change = lambda e: curve_type_refresh(curveType)
+    with ui.row():
         with ui.column():
             mRID = ui.input('mRID').bind_value(current_curve, "mRID")
         with ui.column():
+            description = ui.input('description').bind_value(current_curve, 'description')
+        with ui.column():
             version = ui.input('version').bind_value(current_curve, "version")
-        with ui.column():
-            curveType = ui.select({curve_type.value: curve_type.name for index, curve_type in enumerate(CurveType)},
-                                  label="Curve Type")        
-        with ui.column():
-            autonomousVRefEnable = ui.checkbox("autonomousVRefEnable").bind_value(current_curve, "autonomousVRefEnable")        
-        with ui.column():
-            autonomousVRefTimeConstant = ui.input("autonomousVRefTimeConstant").bind_value(current_curve, "autonomousVRefTimeConstant")
+            
+    if current_curve.curveType == CurveType.opModVoltVar:
+        with ui.row():
+            if current_curve.autonomousVRefEnable is None:
+                current_curve.autonomousVRefEnable = False
+                
+            with ui.column():
+                autonomousVRefEnable = ui.checkbox("Enable", value=False).bind_value(current_curve, "autonomousVRefEnable")       
+            with ui.column():
+                autonomousVRefTimeConstant = ui.number("autonomousVRefTimeConstant").bind_value(current_curve, "autonomousVRefTimeConstant").classes("w-64") \
+                                                                                    .bind_enabled(autonomousVRefEnable, "value")
+                
     with ui.row():
         with ui.column():
-            openLoopTms = ui.input("openLoopTms").bind_value(current_curve, "openLoopTms")
+            openLoopTms = ui.number("openLoopTms").bind_value(current_curve, "openLoopTms")
         with ui.column():
-            rampDecTms = ui.input("rampDecTms").bind_value(current_curve, "rampDecTms")
+            rampDecTms = ui.number("rampDecTms").bind_value(current_curve, "rampDecTms")
         with ui.column():
-            rampIncTms = ui.input("rampIncTms").bind_value(current_curve, "rampIncTms")
+            rampIncTms = ui.number("rampIncTms").bind_value(current_curve, "rampIncTms")
         with ui.column():
-            rampPT1Tms = ui.input("rampPT1Tms").bind_value(current_curve, "rampPT1Tms")
+            rampPT1Tms = ui.number("rampPT1Tms").bind_value(current_curve, "rampPT1Tms")
         with ui.column():
             vRef = ui.input("vRef").bind_value(current_curve, "vRef")
     with ui.row():
         with ui.column():
-            xMultiplier = ui.input("xMultiplier").bind_value(current_curve, "xMultiplier")
-        with ui.column():
-            yMultiplier = ui.input("yMultiplier").bind_value(current_curve, "yMultiplier")
-        with ui.column():
             yRefType = ui.select({ v.value: v.name for index, v in enumerate(DERUnitRefType)},
-                                 label="DER Unit Ref Type").bind_value(current_curve, "yRefType")
-            yRefType.props("width=50")
+                                 label="DER Unit Ref Type").bind_value(current_curve, "yRefType").classes("w-64")
+        with ui.column():
+            xMultiplier = ui.number("xMultiplier").bind_value(current_curve, "xMultiplier").classes("w-24")
+        with ui.column():
+            yMultiplier = ui.number("yMultiplier").bind_value(current_curve, "yMultiplier").classes("w-24")
+        
 
     
 data_row = None  
@@ -177,7 +198,9 @@ def show_curves():
     show_global_header(Pages.CURVES)
     
     render_select()
+    ui.separator()
     render_curve_form()
+    ui.separator()
     render_curve_data()
     
     
