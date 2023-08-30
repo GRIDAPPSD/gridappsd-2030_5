@@ -1,20 +1,19 @@
 import json
 import logging
+from pathlib import Path
 from typing import Optional
 
 import flask
+from blinker import Signal
 from flask import Flask, Response, g, render_template, request
 
+import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import Adapter
-from ieee_2030_5.adapters.der import DERCurveAdapter, DERProgramAdapter
-from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
-from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.server.server_constructs import EndDevices
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import (dataclass_to_xml, get_lfdi_from_cert,
+                               get_sfdi_from_lfdi, xml_to_dataclass)
 
 _log = logging.getLogger()
 
@@ -24,14 +23,14 @@ class AdminEndpoints:
         self.server_config = config
         
         app.add_url_rule("/admin", view_func=self._admin)
-        app.add_url_rule("/admin/enddevices/<int:index>", view_func=self._admin_enddevices)    
-        app.add_url_rule("/admin/enddevices", view_func=self._admin_enddevices)
-        app.add_url_rule("/admin/end-device-list", view_func=self._admin_enddevice_list)
-        app.add_url_rule("/admin/program-lists", view_func=self._admin_der_program_lists)
-        app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
-        app.add_url_rule("/admin/edev/<int:edev_index>/ders/<int:der_index>/current_derp", view_func=self._admin_der_update_current_derp, methods=['PUT', 'GET'])
+        #app.add_url_rule("/admin/enddevices/<int:index>", view_func=self._admin_enddevices)    
+        #app.add_url_rule("/admin/enddevices", view_func=self._admin_enddevices)
+        #app.add_url_rule("/admin/end-device-list", view_func=self._admin_enddevice_list)
+        #app.add_url_rule("/admin/program-lists", view_func=self._admin_der_program_lists)
+        #app.add_url_rule("/admin/lfdi", endpoint="admin/lfdi", view_func=self._lfdi_lists)
+        #app.add_url_rule("/admin/edev/<int:edev_index>/ders/<int:der_index>/current_derp", view_func=self._admin_der_update_current_derp, methods=['PUT', 'GET'])
         
-        app.add_url_rule("/admin/certs", endpoint="admin/certs", view_func=self._admin_certs)
+        
 #        app.add_url_rule("/admin/ders/<int:edev_index>", view_func=self._admin_ders)
         
         # COMPLETE
@@ -44,7 +43,14 @@ class AdminEndpoints:
         app.add_url_rule("/admin/edev", view_func=self._admin_edev)
         # END COMPLETE
         
-        app.add_url_rule("/admin/curves", methods=['GET', 'PUT', 'POST'], view_func=self._admin_curves)
+        app.add_url_rule("/admin/certs", endpoint="admin/certs", 
+                         view_func=self._admin_certs)
+        app.add_url_rule("/admin/enddevices", methods=['GET', 'PUT', 'POST', 'DELETE'],
+                         view_func=self._admin_enddevices)
+        app.add_url_rule("/admin/curves", methods=['GET', 'PUT', 'POST', 'DELETE'], 
+                         view_func=self._admin_curves)
+        app.add_url_rule("/admin/controls", methods=['GET', 'PUT', 'POST', 'DELETE'], 
+                         view_func=self._admin_controls)
             
         app.add_url_rule("/admin/derp/<int:derp_index>/derc/<int:control_index>",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
         app.add_url_rule("/admin/derp/<int:derp_index>/derc",  methods=['GET', 'POST'], view_func=self._admin_derp_derc)
@@ -68,6 +74,119 @@ class AdminEndpoints:
         
         return Response(json.dumps(tls_repo.client_list), headers=headers)
     
+    def _admin_enddevices(self) -> Response:
+        """Returns EndDevice or EndDeviceList depending on the request method.
+        
+        If request method is GET, return an EndDeviceList object.
+        
+        If request method is POST, save the EndDevice object and return it with new href for the end device.
+        
+        If request method is PUT, update the EndDevice object and return it.
+        
+        If request method is DELETE, remove the EndDevice object and return None.
+        """
+        if request.method in ('POST', 'PUT'):
+            data = request.data.decode('utf-8')
+            item = xml_to_dataclass(data)
+            if not isinstance(item, m.EndDevice):
+                _log.error("EndDevice was not passed via data.")
+                return Response(status=400)
+            
+            if request.method == 'POST':
+                if item.href:
+                    _log.error(f"POST method with existing object {item.href}")
+                    return Response(400)
+                
+                item = adpt.EndDeviceAdapter.add(item)
+                edev_id = item.href
+                tls_repo: TLSRepository = g.TLS_REPOSITORY
+                cert, key = tls_repo.get_file_pair(edev_id.replace('/', '-'))
+                Path(cert).unlink(missing_ok=True)
+                Path(key).unlink(missing_ok=True)
+                tls_repo.create_cert(edev_id.replace('/', '-'))
+                
+                item.lFDI = get_lfdi_from_cert(cert)
+                item.sFDI = get_sfdi_from_lfdi(item.lFDI)
+                index = int(item.href.rsplit(hrefs.SEP)[-1])
+                adpt.EndDeviceAdapter.put(index, item)
+                response_status = 201
+                
+            elif request.method == 'PUT':
+                if not item.href:
+                    _log.error(f"PUT method without an existing object.")
+                    return Response(400)
+
+                index = int(item.href.rsplit(hrefs.SEP)[-1])
+                adpt.EndDeviceAdapter.put(index, item)
+                response_status = 200
+                
+                
+            return Response(dataclass_to_xml(item), status=response_status)
+        
+        # Get all end devices
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+        
+        allofem = adpt.EndDeviceAdapter.fetch_all(m.EndDeviceList(), 
+                                                                   start=start, 
+                                                                   after=after, 
+                                                                   limit=limit)
+        return Response(dataclass_to_xml(allofem),
+                        status=200)
+        
+    def _admin_controls(self) -> Response:
+        """Returns DERControl or DERControlList depending on the request method.
+        
+        If request method is GET, return a DERControlList object.
+        
+        If request method is POST, save the DERControl object and return it with new href for the control.
+        
+        If request method is PUT, update the DERControl object and return it.
+        
+        If request method is DELETE, remove the DERControl object and return None.
+        
+        """
+        
+        if request.method in ('POST', 'PUT'):
+            data = request.data.decode('utf-8')
+            control = xml_to_dataclass(data)
+            if not isinstance(control, m.DERControl):
+                _log.error("DERControl was not passed via data.")
+                return Response(status=400)
+            
+            if request.method == 'POST':
+                if control.href:
+                    _log.error(f"POST method with existing object {control.href}")
+                    return Response(400)
+                
+                control = adpt.DERControlAdapter.add(control)
+                response_status = 201
+                
+            elif request.method == 'PUT':
+                if not control.href:
+                    _log.error(f"PUT method without an existing object.")
+                    return Response(400)
+
+                index = int(control.href.rsplit(hrefs.SEP)[-1])
+                adpt.DERControlAdapter.put(index, control)
+                response_status = 200
+                
+                
+            return Response(dataclass_to_xml(control), status=response_status)
+        
+        
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+        
+        return Response(dataclass_to_xml(adpt.DERControlAdapter.fetch_all(m.DERControlList(), 
+                                                                   start=start, 
+                                                                   after=after, 
+                                                                   limit=limit)),
+                        status=200)
+        
+    
     def _admin_curves(self) -> Response:
         """Returns DERCurve or DERCurve List depending upon request method.
         
@@ -89,7 +208,7 @@ class AdminEndpoints:
                     _log.error(f"POST method with existing object {curve.href}")
                     return Response(400)
                 
-                curve = DERCurveAdapter.add(curve)
+                curve = adpt.DERControlAdapter.add(curve)
                 response_status = 201
                 
             elif request.method == 'PUT':
@@ -98,7 +217,7 @@ class AdminEndpoints:
                     return Response(400)
 
                 index = int(curve.href.rsplit(hrefs.SEP)[-1])
-                DERCurveAdapter.put(index, curve)
+                adpt.DERControlAdapter.put(index, curve)
                 response_status = 200
                 
                 
@@ -109,7 +228,7 @@ class AdminEndpoints:
         after = int(request.args.get('a', 0))
         limit = int(request.args.get('l', 1))
         
-        return Response(dataclass_to_xml(DERCurveAdapter.fetch_all(m.DERCurveList(), 
+        return Response(dataclass_to_xml(adpt.DERCurveAdapter.fetch_all(m.DERCurveList(), 
                                                                    start=start, 
                                                                    after=after, 
                                                                    limit=limit)),
@@ -117,7 +236,7 @@ class AdminEndpoints:
         
         
     def _admin_edev(self) -> Response:
-        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
+        return Response(dataclass_to_xml(adpt.EndDeviceAdapter.fetch_all(m.EndDeviceList())))
 
     def _admin_edev_ders(self, edevid: int, derid: int = None) -> Response:
         ed = EndDeviceAdapter.fetch(edevid)
@@ -293,8 +412,7 @@ class AdminEndpoints:
         
         
 
-    def _admin_enddevices(self, index:int = None) -> Response:
-        return Response(dataclass_to_xml(EndDeviceAdapter.fetch_all(m.EndDeviceList())))
+    
     
     def _lfdi_lists(self) -> Response:
         items = []
