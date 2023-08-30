@@ -25,10 +25,10 @@ def render_select():
         der_curves.insert(0, "NEW")
         if not current_curve.description:
             ui.select(der_curves, label="Curves", value=der_curves[0],
-                      on_change=lambda e: change_der_curve(e.value)).classes("w-50")
+                      on_change=lambda e: change_der_curve(e.value)).classes("w-64")
         else:
             ui.select(der_curves, label="Curves", value=current_curve.description,
-                      on_change=lambda e: change_der_curve(e.value)).classes("w-50")
+                      on_change=lambda e: change_der_curve(e.value)).classes("w-64")
         if current_curve.href:
             ui.label(f"Href: {current_curve.href}")
 
