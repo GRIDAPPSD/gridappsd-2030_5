@@ -42,11 +42,12 @@ def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:
     # probably means I am doing something wrong.  However, this fixes
     # the issue and it is correct after we encode the lFDI.  I will
     # do the same with other entities as needed.    
-    if isinstance(parsed, EndDevice):
+    if isinstance(parsed, EndDevice) and parsed.lFDI:
         parsed.lFDI = base64.b16encode(parsed.lFDI)
     elif isinstance(parsed, EndDeviceList):
         for ed in parsed.EndDevice:
-            ed.lFDI = base64.b16encode(ed.lFDI)
+            if ed.lFDI:
+                ed.lFDI = base64.b16encode(ed.lFDI)
             
     return parsed
     
