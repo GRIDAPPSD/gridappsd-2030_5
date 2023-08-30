@@ -155,13 +155,16 @@ class ProgramList:
 class ServerConfiguration:
     openssl_cnf: str
 
-    devices: List[DeviceConfiguration]
+    #devices: List[DeviceConfiguration]
 
     tls_repository: str
     openssl_cnf: str
 
     server: str
     https_port: int
+    http_port: int = None
+    
+    storage_path: str = None
 
     log_event_list_poll_rate: int = 900
     device_capability_poll_rate: int = 900
@@ -169,8 +172,6 @@ class ServerConfiguration:
     end_device_list_poll_rate: int = 86400  # daily check-in
 
     generate_admin_cert: bool = False
-
-    http_port: int = None
 
     server_mode: Union[
         Literal["enddevices_create_on_start"],
@@ -181,10 +182,10 @@ class ServerConfiguration:
         Literal["lfdi_mode_from_cert_fingerprint"]] = "lfdi_mode_from_cert_fingerprint"
 
 
-    programs: List[DERProgramConfiguration] = field(default_factory=list)
-    controls: List[DERControlConfiguration] = field(default_factory=list)
-    curves: List[DERCurveConfiguration] = field(default_factory=list)
-    events: List[Dict] = field(default_factory=list)
+    # programs: List[DERProgramConfiguration] = field(default_factory=list)
+    # controls: List[DERControlConfiguration] = field(default_factory=list)
+    # curves: List[DERCurveConfiguration] = field(default_factory=list)
+    # events: List[Dict] = field(default_factory=list)
 
     # # map into program_lists array for programs for specific
     # # named list.
@@ -211,12 +212,12 @@ class ServerConfiguration:
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __post_init__(self):
-        self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
-        self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
-        self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
-        self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
-        for d in self.devices:
-            d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
+        # self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
+        # self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
+        # self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
+        # self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
+        # for d in self.devices:
+        #     d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
             #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
 
         # der_controls, der_default_control = None, None

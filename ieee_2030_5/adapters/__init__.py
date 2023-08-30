@@ -1,23 +1,64 @@
+from __future__ import annotations
+
 import inspect
 import logging
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
+from pathlib import Path
 from typing import (Any, Dict, Generic, List, Optional, Protocol, Type,
                     TypeVar, get_args, get_origin)
 
+import yaml
 from blinker import Signal
 
 import ieee_2030_5.config as cfg
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.models.sep import List_type
 
 _log = logging.getLogger(__name__)
 
 class AlreadyExists(Exception):
     pass
+
+load_event = Signal("load-store-event")
+store_event = Signal("store-data-event")
+
+def __get_store__(store_name: str) -> Path:
+    store_path = Path("data_store") 
+    store_path.mkdir(parents=True, exist_ok=True)
+    store_path = store_path / f"{store_name}.yml"
+    
+    return store_path
+
+def do_load_event(caller: Adapter) -> None:
+    """Load an adaptor type from the data_store path.
+    
+    
+    """
+    _log.debug(f"Loading store {caller.generic_type_name}")
+    store = __get_store__(caller.generic_type_name)
+    
+    if not store.exists():
+        _log.debug(f"Store {store.as_posix()} does not exist at present.")
+        return
+    
+    # Load from yaml unsafe values etc.
+    with open(store, "r") as f:
+        caller._item_list = yaml.load(f, Loader=yaml.UnsafeLoader)
+    
+def do_save_event(caller: Adapter) -> None:
+    _log.debug(f"Storing: {caller.generic_type_name}")
+    store = __get_store__(caller.generic_type_name)
+    
+    with open(store, 'w') as f:
+        yaml.dump(caller._item_list, f, default_flow_style=False, allow_unicode=True)
+    
+
+load_event.connect(do_load_event)    
+store_event.connect(do_save_event)
+
 
 class ReturnCode(Enum):
     OK = 200
@@ -78,7 +119,12 @@ class Adapter(Generic[T]):
         self._item_list: Dict[int, T] = {}
         self._child_prefix: Dict[Type, str] = {}
         self._child_map: Dict[int, Dict[str, List[C]]] = {}
-        
+        _log.debug(f"Intializing adapter {self.generic_type_name}")
+        load_event.send(self)
+    
+    @property
+    def generic_type_name(self) -> str:
+        return self._generic_type.__name__
     @property
     def href_prefix(self) -> str:
         return self._href_prefix
@@ -176,7 +222,7 @@ class Adapter(Generic[T]):
     def fetch_child(self, parent: T, name: str, index: int = 0) -> Type:
         return self.fetch_children(parent, name)[index]
             
-    def add(self, item: T):
+    def add(self, item: T) -> T:
         if not isinstance(item, self._generic_type):
             raise ValueError(f"Item {item} is not of type {self._generic_type}")
         
@@ -185,6 +231,9 @@ class Adapter(Generic[T]):
             setattr(item, 'href', hrefs.SEP.join([self._href_prefix, str(self._current_index + 1)]))
         self._current_index += 1
         self._item_list[self._current_index] = item
+        
+        store_event.send(self)
+        return item
     
     def fetch_all(self, container: Optional[D] = None, start: int = 0, after: int = 0, limit: int = 1) -> D:
 
@@ -234,6 +283,10 @@ class Adapter(Generic[T]):
     
     def fetch(self, index: int):
         return self._item_list[index]
+    
+    def put(self, index: int, obj: T):
+        self._item_list[index] = obj
+        store_event.send(self)
     
     def fetch_by_mrid(self, mRID: str):
         for item in self._item_list:
@@ -334,14 +387,16 @@ class BaseAdapter:
         BaseAdapter.__server_configuration__ = server_config
         BaseAdapter.__lfdi__mapped_configuration__ = {}
         BaseAdapter.__tls_repository__ = tlsrepo
+        
+        
 
-        # Map from the configuration id and lfdi to the device configuration.
-        for cfg in server_config.devices:
-            lfdi = tlsrepo.lfdi(cfg.id)
-            BaseAdapter.__lfdi__mapped_configuration__[lfdi] = cfg
+        # # Map from the configuration id and lfdi to the device configuration.
+        # for cfg in server_config.devices:
+        #     lfdi = tlsrepo.lfdi(cfg.id)
+        #     BaseAdapter.__lfdi__mapped_configuration__[lfdi] = cfg
 
         #BaseAdapter.after_initialized.send(BaseAdapter)
-        ready_signal.send(BaseAdapter)
+        #ready_signal.send(BaseAdapter)
         # BaseAdapter.ready().send(BaseAdapter)
         # Find subclasses of us and initialize them calling _initalize method
         # TODO make this non static
@@ -364,9 +419,19 @@ class BaseAdapter:
             for k, v in cfg_dict.items() if k in inspect.signature(signature_cls).parameters
         })
 
-from ieee_2030_5.adapters.dcap import DeviceCapabilityAdapter
-from ieee_2030_5.adapters.der import (DERControlAdapter, DERCurveAdapter,
-                                      DERProgramAdapter)
-from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
-from ieee_2030_5.adapters.log import LogAdapter
-from ieee_2030_5.adapters.mupupt import MirrorUsagePointAdapter
+
+from ieee_2030_5.adapters.adapters import (DERControlAdapter, DERCurveAdapter,
+                                           DERProgramAdapter,
+                                           DeviceCapabilityAdapter,
+                                           EndDeviceAdapter, FSAAdapter)
+
+__all__ = [
+    'DERControlAdapter',
+    'DERCurveAdapter',
+    'DERProgramAdapter',
+    'DeviceCapabilityAdapter',
+    'EndDeviceAdapter',
+    'FSAAdapter',
+]
+# from ieee_2030_5.adapters.log import LogAdapter
+# from ieee_2030_5.adapters.mupupt import MirrorUsagePointAdapter

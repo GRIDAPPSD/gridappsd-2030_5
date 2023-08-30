@@ -33,7 +33,7 @@ from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.data.indexer import get_href, get_href_all_names
 from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
-from ieee_2030_5.server.server_constructs import EndDevices, get_groups
+#from ieee_2030_5.server.server_constructs import EndDevices, get_groups
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 
 _log = logging.getLogger(__file__)
@@ -385,8 +385,7 @@ def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
             **kwargs)
 
 
-def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, enddevices: EndDevices,
-               **kwargs):
+def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs):
     global server_config, tls_repository
     server_config = config
     tls_repository = tlsrepo
