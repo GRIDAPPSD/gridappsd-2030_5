@@ -31,22 +31,12 @@ class InvalidConfigFile(Exception):
 
 
 @dataclass
-class DeviceConfiguration(m.EndDevice):
-    # This id will be used to create certificates.
+class DeviceConfiguration:
     id: str = None
-
-    # This is used in the Registration function set but is
-    # configured on the server and used to verify the correct location
-    # on the client
+    post_rate: int = 900
     pin: int = None
-    # hostname: str = None
-    # ip: str = None
-    # poll_rate: int = 900
-    # # TODO: Direct control means that only one FSA will be available to the client.
-    # direct_control: bool = True
-    programs: List[str] = field(default_factory=list)
+    poll_rate: int = 900
     
-    ders: List[Dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, env):
@@ -155,7 +145,7 @@ class ProgramList:
 class ServerConfiguration:
     openssl_cnf: str
 
-    #devices: List[DeviceConfiguration]
+    devices: List[DeviceConfiguration]
 
     tls_repository: str
     openssl_cnf: str
@@ -215,9 +205,9 @@ class ServerConfiguration:
         # self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
         # self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
         # self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
-        # self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
+        self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
         # for d in self.devices:
-        #     d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
+            # d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
             #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
 
         # der_controls, der_default_control = None, None
