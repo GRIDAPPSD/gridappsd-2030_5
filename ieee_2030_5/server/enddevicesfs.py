@@ -4,11 +4,9 @@ from typing import Optional
 import werkzeug.exceptions
 from flask import Response, request
 
+import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import Adapter
-from ieee_2030_5.adapters.enddevices import EndDeviceAdapter
-from ieee_2030_5.adapters.fsa import FSAAdapter
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.models import Registration
 from ieee_2030_5.server.base_request import RequestOp
@@ -31,8 +29,8 @@ class EDevRequests(RequestOp):
         mysubobj = xml_to_dataclass(request.data.decode('utf-8'))
         
         
-        ed = EndDeviceAdapter.fetch(parsed.edev_index)
-        deradapter: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER)
+        ed = adpt.EndDeviceAdapter.fetch(parsed.edev_index)
+        deradapter: Adapter[m.DER] = adpt.EndDeviceAdapter.fetch_child(ed, hrefs.DER)
         der = deradapter.fetch(parsed.edev_subtype_index)
         
         
@@ -81,12 +79,12 @@ class EDevRequests(RequestOp):
         # This is what we should be using to get the device id of the registered end device.
         device_id = self.tls_repo.find_device_id_from_sfdi(ed.sFDI)
         ed.lFDI = self.tls_repo.lfdi(device_id)
-        if end_device := EndDeviceAdapter.fetch_by_lfdi(ed.lfdi):
+        if end_device := adpt.EndDeviceAdapter.fetch_by_lfdi(ed.lfdi):
             status = 200
             ed_href = end_device.href
         else:
             if not ed.href:
-                ed = EndDeviceAdapter.store(device_id, ed)
+                ed = adpt.EndDeviceAdapter.store(device_id, ed)
 
             ed_href = ed.href
             status = 201
@@ -112,7 +110,7 @@ class EDevRequests(RequestOp):
         after = int(request.args.get("a", 0))
         
 
-        ed = EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
+        ed = adpt.EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
         
         # means we don't have any /edev without any index
         if edev_href.edev_subtype is hrefs.EDevSubType.None_Available:
@@ -121,7 +119,7 @@ class EDevRequests(RequestOp):
         
         elif edev_href.edev_subtype is hrefs.EDevSubType.FunctionSetAssignments:
             
-            fsaadpt: FSAAdapter = EndDeviceAdapter.fetch_child(ed, hrefs.FSA, edev_href.edev_index)
+            fsaadpt: adpt.FunctionSetAssignmentsAdapter = adpt.EndDeviceAdapter.fetch_child(ed, hrefs.FSA, edev_href.edev_index)
             
             if edev_href.edev_subtype_index == hrefs.NO_INDEX:
                 retval = fsaadpt.fetch_all(m.FunctionSetAssignmentsList(href=request.path), start=start, after=after, limit=limit)
@@ -137,7 +135,7 @@ class EDevRequests(RequestOp):
         # we have /edev_index_der or /edev_index_der_subindex or /edev_index_der_subindex_dersubtype
         elif edev_href.edev_subtype == hrefs.EDevSubType.DER:
         
-            deradpt: Adapter[m.DER] = EndDeviceAdapter.fetch_child(ed, hrefs.DER, edev_href.edev_index)
+            deradpt: adpt.Adapter[m.DER] = adpt.EndDeviceAdapter.fetch_child(ed, hrefs.DER, edev_href.edev_index)
                         
             if edev_href.edev_subtype_index == hrefs.NO_INDEX:
                 retval = deradpt.fetch_all(m.DERList(href=request.path), start=start, after=after, limit=limit)
@@ -162,7 +160,7 @@ class EDevRequests(RequestOp):
             #     raise werkzeug.exceptions.NotFound("Missing Resource")
             
         else:
-            retval = EndDeviceAdapter.fetch_child(ed, edev_href.edev_subtype.value)
+            retval = adpt.EndDeviceAdapter.fetch_child(ed, edev_href.edev_subtype.value)
             # if pth_split[2] == "rg":
             #     retval = EndDeviceAdapter.fetch_registration(edev_index=int(pth_split[1]))
             # elif pth_split[2] == "di":
@@ -205,13 +203,13 @@ class FSARequests(RequestOp):
         fsa_href = hrefs.fsa_parse(request.path)
         
         if fsa_href.fsa_index == hrefs.NO_INDEX:
-            retval = FSAAdapter.fetch_all(m.FunctionSetAssignmentsList(), "FunctionSetAssignments")
+            retval = adpt.FunctionSetAssignmentsAdapter.fetch_all(m.FunctionSetAssignmentsList(), "FunctionSetAssignments")
         elif fsa_href.fsa_sub == hrefs.FSASubType.DERProgram.value:
-            fsa = FSAAdapter.fetch(fsa_href.fsa_index)
-            retval = FSAAdapter.fetch_children(fsa, "fsa", m.DERProgramList())
+            fsa = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
+            retval = adpt.FunctionSetAssignmentsAdapter.fetch_children(fsa, "fsa", m.DERProgramList())
             # retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
         else:
-            retval = FSAAdapter.fetch(fsa_href.fsa_index)
+            retval = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
             
         # pth_split = request.path.split(hrefs.SEP)
         

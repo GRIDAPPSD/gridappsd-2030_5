@@ -27,7 +27,6 @@ from ieee_2030_5.server.enddevicesfs import (EDevRequests, FSARequests,
 # module level instance of hrefs class.
 from ieee_2030_5.server.meteringfs import (MirrorUsagePointRequest,
                                            UsagePointRequest)
-from ieee_2030_5.server.server_constructs import EndDevices
 from ieee_2030_5.server.timefs import TimeRequest
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import TimeOffsetType, format_time
