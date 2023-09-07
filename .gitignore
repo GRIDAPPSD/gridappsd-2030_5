@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 .vscode/
+data_store/
 
 # C extensions
 *.so
