@@ -377,11 +377,19 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     return app
 
 
-def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):    
+def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
+    exclude_patterns = [
+        "data_store/**",
+        "docs/**",
+        "examples/**",
+        "ieee_2030_5_gui/**",
+        "logs/**"
+    ]
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=request_handler,
             port=port,
+            exclude_patterns=exclude_patterns,
             **kwargs)
 
 
