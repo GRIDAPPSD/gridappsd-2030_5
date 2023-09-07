@@ -1,6 +1,7 @@
 from flask import Response
 
 import ieee_2030_5.adapters as adpt
+import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.server.base_request import RequestOp
 
 
@@ -13,6 +14,9 @@ class Dcap(RequestOp):
         # TODO: Test for allowed dcap here.
         # if not self._end_devices.allowed_to_connect(self.lfdi):
         #     raise werkzeug.exceptions.Unauthorized()
-        dcap = adpt.DeviceCapabilityAdapter.get_by_lfdi(self.lfdi)
-
-        return self.build_response_from_dataclass(dcap)
+        device = adpt.EndDeviceAdapter.fetch_by_property("lFDI", self.lfdi)
+        device_index = adpt.EndDeviceAdapter.fetch_index(device)
+        device_href = hrefs.EndDeviceHref.parse(device.href)
+        cap = adpt.DeviceCapabilityAdapter.fetch(device_index)
+        
+        return self.build_response_from_dataclass(cap)
