@@ -3,10 +3,11 @@ from copy import deepcopy
 from typing import Dict, List
 
 from nicegui import ui
-from pages import Pages, show_global_header
-from session import get_controls, get_curves, send_control
 
 import ieee_2030_5.models as m
+
+from ..pages import Pages, show_global_header
+from ..session import get_control_list, get_curve_list, send_control
 
 _log = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ der_default = m.DefaultDERControl()
 der_base.DERControlBase = der_default
 current_control.DERControlBase = der_base
 
-ui.refreshable
+@ui.refreshable
 def render_select():
     der_controls = [c.description for c in controls.DERControl]
     der_controls.insert(0, "NEW")
@@ -169,11 +170,13 @@ def validate_and_submit():
     Returns:
         bool: True if successful, False otherwise.
     """
-    global der_base, der_default
+    global der_base, der_default, current_control
     
     if append_new_control := current_control.href is None:
         ...
-        
+    
+    
+    current_control.DERControlBase = der_base
     control = send_control(current_control)
     
     assert isinstance(control, m.DERControl)
@@ -181,7 +184,9 @@ def validate_and_submit():
     if append_new_control:
         controls.DERControl.append(control)
     
+    current_control = control
     render_select.refresh()
+    #render_select.refresh()
     # global curve_data_points, current_curve
     # current_curve.CurveData = curve_data_points
     
@@ -210,7 +215,7 @@ def validate_and_submit():
 def show_controls():
     global curve_list, curve_type_filtered
     
-    curve_response = get_curves()
+    curve_response = get_curve_list()
     if curve_response:
         curve_list = curve_response
         curve_type_filtered.clear()

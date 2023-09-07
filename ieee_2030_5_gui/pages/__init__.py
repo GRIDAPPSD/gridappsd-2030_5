@@ -18,9 +18,11 @@ class Pages(Enum):
     HOME = PageContext('home', 'Home', '/')
     CERTS = PageContext('certs', 'Certificates', '/certs')
     CURVES = PageContext('curves', 'Curves', '/curves')
-    CONTROLS = PageContext('controls', 'Controls', '/controls')
-    DEVICES = PageContext('devices', 'Devices', '/devices')
-    PROGRAMS = PageContext('programs', 'Programs', '/programs')
+    CONTROLS = PageContext('controls', 'DER Controls', '/controls')
+    DEFAULT_CONTROLS = PageContext('default_controls', 'Default DER Controls', '/default_controls')
+    ENDDEVICES = PageContext('enddevices', 'End Devices', '/enddevices')
+    PROGRAMS = PageContext('programs', 'DER Programs', '/programs')
+    FSA = PageContext('fsa', 'Function Set Assignments', '/fsa')
     # LOGIN = 'login'
     # LOGOUT = 'logout'
     # SETTINGS = 'settings'
@@ -38,10 +40,16 @@ def show_global_header(page: PageContext):
 from .certs import show_certs
 from .controls import show_controls
 from .curves import show_curves
+from .enddevices import show_enddevices
+from .fsa import show_fsa
+from .programs import show_programs
 
 Pages.CERTS.value.module = show_certs
 Pages.CONTROLS.value.module = show_controls
 Pages.CURVES.value.module = show_curves
+Pages.ENDDEVICES.value.module = show_enddevices
+Pages.PROGRAMS.value.module = show_programs
+Pages.FSA.value.module = show_fsa
 
 # def load_pages():
 #     import glob

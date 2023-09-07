@@ -1,14 +1,30 @@
+from __future__ import annotations
+
+#import io
 import logging
 import os
 import sys
 
 from dotenv import load_dotenv
+#from fastapi import FastAPI
 from nicegui import ui
-from pages import Pages, show_global_header
-from session import get_certs, get_end_devices
 
+from ieee_2030_5_gui.pages import Pages, show_global_header
+
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 _log = logging.getLogger(__name__)
 
+# @ui.page("/")
+# def run_page():
+#     ui.markdown("""Ignoring this""")
+
+# ui.run()
+
+# app = FastAPI()
+
+# __all__ = [
+#     "run_gui"
+# ]
 
 def initialize_app():
     
@@ -20,36 +36,20 @@ def initialize_app():
 
 This is a work in progress""")
     
-    # device_list = get_end_devices()
-    # certs = get_certs()
-
-    # print(certs)
-    # print(device_list)
-    # row_data = []
-    # for ed in device_list.EndDevice:
-    #     row = dict(name=f'{ed.lFDI}',
-    #             cert=f'<a href="/admin/cert/{ed.lFDI}">cert</a>')
-    #     row_data.append(row)
-        
-
-    # ui.aggrid({
-    #     'columnDefs': [
-    #         {'headerName': '', 'field': 'cert'},
-    #         {'headerName': 'Name', 'field': 'name'},
-    #     ],
-    #     'rowData': row_data,
-    # }, html_columns=[0])
-    
-
-
-if __name__ in {'__main__', "__mp_main__"}:
+if __name__ in {"__main__", "__mp_main__"}:
+    # out_file = open(sys.stdout.fileno(), 'wb', 0)
+    # sys.stdout = io.TextIOWrapper(out_file, write_through=True)
     from pathlib import Path
-    
-    env_path = Path(__file__).parent / ".env"
-    
-    load_dotenv(dotenv_path=env_path.as_posix())
 
     PREFIX = "2030_5"
+
+    # Allow custmization of the 2030_5_ENV_PATH
+    env_path = Path(os.environ.get(f"{PREFIX}_ENV_PATH", 
+                                    str(Path(__file__).parent / ".env"))) 
+
+
+    load_dotenv(dotenv_path=env_path.as_posix())
+
     required_env = [
         f"{PREFIX}_HOST",
         f"{PREFIX}_PORT",
@@ -57,22 +57,54 @@ if __name__ in {'__main__', "__mp_main__"}:
         f"{PREFIX}_CLIENT_CERT",
         f"{PREFIX}_CA_CERT"
     ]
-    
+
     for x in required_env:
         if os.getenv(x) is None or os.getenv(x).strip() == "":
             sys.stderr.write(f'Missing {x} in .env file\n')
             sys.exit(1)
             
     logging.basicConfig(level=logging.DEBUG)
-    
+
     initialize_app()
     
+    # excludes = ['data_store/**',
+    #             'ieee_2030_5/adapters/**',
+    #             'ieee_2030_5/client', 
+    #             'ieee_2030_5/data]
+    includes = ['ieee_2030_5_gui/**',]
+
+    ui.run(show=False, uvicorn_reload_includes=",".join(includes))
     
-    ui.run(show=False)
+    # from pathlib import Path
+    
+    # env_path = Path(__file__).parent / ".env"
+    
+    # load_dotenv(dotenv_path=env_path.as_posix())
+
+    # PREFIX = "2030_5"
+    # required_env = [
+    #     f"{PREFIX}_HOST",
+    #     f"{PREFIX}_PORT",
+    #     f"{PREFIX}_CLIENT_KEY",
+    #     f"{PREFIX}_CLIENT_CERT",
+    #     f"{PREFIX}_CA_CERT"
+    # ]
+    
+    # for x in required_env:
+    #     if os.getenv(x) is None or os.getenv(x).strip() == "":
+    #         sys.stderr.write(f'Missing {x} in .env file\n')
+    #         sys.exit(1)
+            
+    # logging.basicConfig(level=logging.DEBUG)
+    
+    # initialize_app()
+    
+    
+    # ui.run(show=False)
     
     
             
-    
+
 
 # ui.html("""
 #     <table>

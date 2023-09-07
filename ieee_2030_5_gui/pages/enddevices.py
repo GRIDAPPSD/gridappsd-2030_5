@@ -3,10 +3,11 @@ from copy import deepcopy
 from typing import Dict, List
 
 from nicegui import ui
-from pages import Pages, show_global_header
-from session import get_enddevices, send_enddevice
 
 import ieee_2030_5.models as m
+
+from ..pages import Pages, show_global_header
+from ..session import get_enddevice_list, send_enddevice
 
 _log = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ def validate_and_submit():
 def show_enddevices():
     global enddevice_list
     
-    response = get_enddevices()
+    response = get_enddevice_list()
     if response:
         enddevice_list = response
         

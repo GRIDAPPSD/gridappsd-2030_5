@@ -4,11 +4,12 @@ import logging
 from typing import List
 
 from nicegui import ui
-from pages import Pages, show_global_header
-from session import get_curves, send_curve
 
 import ieee_2030_5.models as m
 from ieee_2030_5.models.enums import CurveType, DERUnitRefType
+
+from ..pages import Pages, show_global_header
+from ..session import get_curve_list, send_curve
 
 _log = logging.getLogger(__name__)
 
@@ -191,7 +192,7 @@ def validate_and_submit():
 @ui.page("/curves")
 def show_curves():
     global curve_list
-    curve_response = get_curves()
+    curve_response = get_curve_list()
     if curve_response:
         curve_list = curve_response
     

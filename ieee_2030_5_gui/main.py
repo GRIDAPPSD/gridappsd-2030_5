@@ -6,7 +6,8 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-from pages.init import init
+
+from ieee_2030_5_gui.init import init
 
 logging.basicConfig(level=logging.DEBUG)
 
