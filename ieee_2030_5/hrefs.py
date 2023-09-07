@@ -20,6 +20,7 @@ DERC = "derc"
 DDERC = "dderc"
 DERCA = "derca"
 FSA = "fsa"
+TIME = "tm"
 
 DER_PROGRAM = "derp"
 # DER Available
@@ -36,6 +37,7 @@ END_DEVICE_POWER_STATUS = "ps"
 END_DEVICE_LOG_EVENT_LIST = "lel"
 END_DEVICE_INFORMATION = "di"
 
+DEFAULT_TIME_ROOT = f"/{TIME}"
 DEFAULT_DCAP_ROOT = f"/{DCAP}"
 DEFAULT_EDEV_ROOT = f"/{EDEV}"
 DEFAULT_UPT_ROOT = f"/{UTP}"
@@ -55,6 +57,69 @@ MATCH_REG = "[a-zA-Z0-9_]*"
 
 # Used as a sentinal value when we only want the href of the root
 NO_INDEX = -1
+
+class EndDeviceHref:
+    def __init__(self, index: int):
+        if index is None:
+            raise ValueError("index cannot be None")
+        self.index = index
+    
+    @staticmethod
+    def parse(href: str) -> EndDeviceHref:
+        index = int(href.split(SEP)[1])
+        return EndDeviceHref(index)
+        
+    def __str__(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index)])
+    
+    @property
+    def configuration(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), "cfg"])
+    
+    @property
+    def der_list(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), DER])
+    
+    @property
+    def device_information(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_INFORMATION])
+    
+    @property
+    def device_status(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_STATUS])
+    
+    @property
+    def device_power_status(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_POWER_STATUS])
+    
+    @property
+    def registration(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_REGISTRATION]) 
+    
+    @property
+    def function_set_assignments(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_FSA])
+    
+    @property
+    def log_event_list(self) -> str:
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_LOG_EVENT_LIST])
+    
+class DeviceCapabilityHref:
+    def __init__(self, index: int = None, enddevice: EndDeviceHref = None):
+        if index is None and enddevice is None:
+            raise ValueError(f"index and enddevice cannot both be None")
+        elif index is not None and enddevice is not None:
+            if enddevice.index != index:
+                raise ValueError(f"index and enddevice.index must match if both are specified")
+        
+        if enddevice is not None:
+            index = enddevice.index
+            
+        self.index = index    
+    
+    def __str__(self) -> str:
+        return SEP.join([DEFAULT_DCAP_ROOT, str(self.index)])
+    
 
 class DERSubType(Enum):
     Capability = "dercap"
