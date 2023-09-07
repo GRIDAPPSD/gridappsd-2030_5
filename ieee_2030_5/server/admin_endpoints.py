@@ -12,6 +12,7 @@ import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
+from ieee_2030_5.server.server_constructs import create_device_capability
 from ieee_2030_5.utils import (dataclass_to_xml, get_lfdi_from_cert,
                                get_sfdi_from_lfdi, xml_to_dataclass)
 
@@ -51,6 +52,10 @@ class AdminEndpoints:
                          view_func=self._admin_curves)
         app.add_url_rule("/admin/controls", methods=['GET', 'PUT', 'POST', 'DELETE'], 
                          view_func=self._admin_controls)
+        app.add_url_rule("/admin/programs", methods=['GET', 'PUT', 'POST', 'DELETE'], 
+                         view_func=self._admin_programs)
+        app.add_url_rule("/admin/fsa", methods=['GET', 'PUT', 'POST', 'DELETE'], 
+                         view_func=self._admin_fsa)
             
         app.add_url_rule("/admin/derp/<int:derp_index>/derc/<int:control_index>",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
         app.add_url_rule("/admin/derp/<int:derp_index>/derc",  methods=['GET', 'POST'], view_func=self._admin_derp_derc)
@@ -74,6 +79,115 @@ class AdminEndpoints:
         
         return Response(json.dumps(tls_repo.client_list), headers=headers)
     
+    def _admin_programs(self) -> Response:
+        """Returns EndDevice or EndDeviceList depending on the request method.
+        
+        If request method is GET, return an EndDeviceList object.
+        
+        If request method is POST, save the EndDevice object and return it with new href for the end device.
+        
+        If request method is PUT, update the EndDevice object and return it.
+        
+        If request method is DELETE, remove the EndDevice object and return None.
+        """
+        if request.method in ('POST', 'PUT'):
+            def normalize_certificate_name(pre_name: str) -> str:
+                if pre_name.startswith('/'):
+                    pre_name = pre_name[1:]
+                return pre_name.replace('/', '-')
+            
+            data = request.data.decode('utf-8')
+            item = xml_to_dataclass(data)
+            if not isinstance(item, m.DERProgram):
+                _log.error("DERProgram was not passed via data.")
+                return Response(status=400)
+            
+            if request.method == 'POST':
+                if item.href:
+                    _log.error(f"POST method with existing object {item.href}")
+                    return Response(400)
+                
+                item = adpt.DERProgramAdapter.add(item)
+                response_status = 201
+                
+            elif request.method == 'PUT':
+                if not item.href:
+                    _log.error(f"PUT method without an existing object.")
+                    return Response(400)
+
+                index = int(item.href.rsplit(hrefs.SEP)[-1])
+                adpt.DERProgramAdapter.put(index, item)
+                response_status = 200
+                
+                
+            return Response(dataclass_to_xml(item), status=response_status)
+        
+        # Get all end devices
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+        
+        allofem = adpt.DERProgramAdapter.fetch_all(m.DERProgramList(), 
+                                                   start=start, 
+                                                   after=after, 
+                                                   limit=limit)
+        return Response(dataclass_to_xml(allofem),
+                        status=200)
+    def _admin_fsa(self) -> Response:
+        """Returns EndDevice or EndDeviceList depending on the request method.
+        
+        If request method is GET, return an EndDeviceList object.
+        
+        If request method is POST, save the EndDevice object and return it with new href for the end device.
+        
+        If request method is PUT, update the EndDevice object and return it.
+        
+        If request method is DELETE, remove the EndDevice object and return None.
+        """
+        if request.method in ('POST', 'PUT'):
+            def normalize_certificate_name(pre_name: str) -> str:
+                if pre_name.startswith('/'):
+                    pre_name = pre_name[1:]
+                return pre_name.replace('/', '-')
+            
+            data = request.data.decode('utf-8')
+            item = xml_to_dataclass(data)
+            if not isinstance(item, m.FunctionSetAssignments):
+                _log.error("FuncitonSetAssignments was not passed via data.")
+                return Response(status=400)
+            
+            if request.method == 'POST':
+                if item.href:
+                    _log.error(f"POST method with existing object {item.href}")
+                    return Response(400)
+                
+                item = adpt.FunctionSetAssignmentsAdapter.add(item)
+                response_status = 201
+                
+            elif request.method == 'PUT':
+                if not item.href:
+                    _log.error(f"PUT method without an existing object.")
+                    return Response(400)
+
+                index = int(item.href.rsplit(hrefs.SEP)[-1])
+                adpt.FunctionSetAssignmentsAdapter.put(index, item)
+                response_status = 200
+                
+                
+            return Response(dataclass_to_xml(item), status=response_status)
+        
+        # Get all end devices
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+        
+        allofem = adpt.FunctionSetAssignmentsAdapter.fetch_all(m.FunctionSetAssignmentsList(), 
+                                                                   start=start, 
+                                                                   after=after, 
+                                                                   limit=limit)
+        return Response(dataclass_to_xml(allofem),
+                        status=200)
+    
     def _admin_enddevices(self) -> Response:
         """Returns EndDevice or EndDeviceList depending on the request method.
         
@@ -86,6 +200,11 @@ class AdminEndpoints:
         If request method is DELETE, remove the EndDevice object and return None.
         """
         if request.method in ('POST', 'PUT'):
+            def normalize_certificate_name(pre_name: str) -> str:
+                if pre_name.startswith('/'):
+                    pre_name = pre_name[1:]
+                return pre_name.replace('/', '-')
+            
             data = request.data.decode('utf-8')
             item = xml_to_dataclass(data)
             if not isinstance(item, m.EndDevice):
@@ -98,17 +217,18 @@ class AdminEndpoints:
                     return Response(400)
                 
                 item = adpt.EndDeviceAdapter.add(item)
-                edev_id = item.href
+                cert_filename = normalize_certificate_name(item.href)
                 tls_repo: TLSRepository = g.TLS_REPOSITORY
-                cert, key = tls_repo.get_file_pair(edev_id.replace('/', '-'))
+                cert, key = tls_repo.get_file_pair(cert_filename)
                 Path(cert).unlink(missing_ok=True)
                 Path(key).unlink(missing_ok=True)
-                tls_repo.create_cert(edev_id.replace('/', '-'))
+                tls_repo.create_cert(cert_filename)
                 
                 item.lFDI = get_lfdi_from_cert(cert)
                 item.sFDI = get_sfdi_from_lfdi(item.lFDI)
                 index = int(item.href.rsplit(hrefs.SEP)[-1])
                 adpt.EndDeviceAdapter.put(index, item)
+                create_device_capability(index)
                 response_status = 201
                 
             elif request.method == 'PUT':
