@@ -40,6 +40,18 @@
 
 import logging
 import os
+
+log_level = os.environ.get('LOGGING_LEVEL', 'DEBUG').upper()
+   
+levels = {
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR
+}
+
+logging.basicConfig(level=levels[log_level])
+
 import socket
 import sys
 import threading
@@ -55,10 +67,11 @@ import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
-from ieee_2030_5.flask_server import run_server
 from ieee_2030_5.server.server_constructs import initialize_2030_5
 
 _log = logging.getLogger()
+
+
 
 
 class ServerThread(threading.Thread):
@@ -88,10 +101,11 @@ def get_tls_repository(cfg: ServerConfiguration,
     if create_certificates_for_devices:
         already_represented = set()
 
+        
         # registers the devices, but doesn't initialize_device the end devices here.
         for k in cfg.devices:
             if k in already_represented:
-                _log.error(f"Already have {k.id} represented by {k.device_category_type}")
+                _log.error(f"Already have {k.id} represented.")
             else:
                 already_represented.add(k)
                 tlsrepo.create_cert(k.id)
@@ -121,10 +135,6 @@ def remove_stop_file():
         os.remove(pth)
 
 
-def _run_ui():
-    
-    os.system('python gui/spa/main.py')
-    
 
 def _main():
     parser = ArgumentParser()
@@ -158,7 +168,6 @@ def _main():
         os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
 
     assert config.tls_repository
-    assert len(config.devices) > 0
     assert config.server_hostname
 
     add_href(hrefs.get_server_config_href(), config)
@@ -188,25 +197,47 @@ def _main():
 
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
+    initialize_2030_5(config, tls_repo)
+    
+    
+    from ieee_2030_5.flask_server import run_server
 
-    # Initialize the repository of 2030.5 devices.
-    end_devices = initialize_2030_5(config, tls_repo)
-
+    #from ieee_2030_5.gui import run_gui
     #if not opts.production:
-    try:
-        # p = Process(target = _run_ui)
-        # p.daemon = True
-        # p.start()
+    # #try:
+    # p_server = Process(target=run_server,
+    #                     kwargs=dict(
+    #                         config=config,
+    #                         tlsrepo=tls_repo,
+    #                         debug=opts.debug,
+    #                         use_reloader=False,
+    #                         use_debugger=opts.debug,
+    #                         threaded=False))
+    # p_server.daemon = True
+    # p_server.start()
+    # if __name__ in {"__main__", "__mp_main__"}:
+    #     ui = run_gui()
+    #     ui.run_with(app)
+    
+        #run_gui()
+        
+        # p_gui = Process(target = run_gui)
+        # p_gui.daemon = True
+        # p_gui.start()
                 
-        run_server(config,
-                    tls_repo,
-                    end_devices,
-                    debug=opts.debug,
-                    use_reloader=True,
-                    use_debugger=opts.debug,
-                    threaded=False)
-    except KeyboardInterrupt:
-        _log.info("Shutting down server")
+                
+        # # while True:
+        # #     sleep(1)
+    run_server(config,
+                tls_repo,
+                debug=opts.debug,
+                use_reloader=True,
+                use_debugger=opts.debug,
+                threaded=False)
+    # except KeyboardInterrupt:
+    #     _log.info("Shutting down server")
+    # finally:
+    #     _log.info("Ending Server.")
     # else:
     #     server = build_server(config, tls_repo, enddevices=end_devices)
 
