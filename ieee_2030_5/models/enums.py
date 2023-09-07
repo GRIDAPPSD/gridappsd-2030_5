@@ -1,6 +1,19 @@
 from enum import IntEnum
 
 
+class PrimacyType(IntEnum):
+    # Values possible for indication of "Primary" provider:
+    # 0: In home energy management system
+    # 1: Contracted premises service provider
+    # 2: Non-contractual service provider
+    # 3 - 64: Reserved
+    # 65 - 191: User-defined
+    #192 - 255: Reserved
+    InHomeManagementSystem = 0
+    ContractedPremisesServiceProvider = 1
+    NonContractualServiceProvider = 2
+        
+
 class DERUnitRefType(IntEnum):
     # 0 - N/A
     # 1 - %setMaxW
