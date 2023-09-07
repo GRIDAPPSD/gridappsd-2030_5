@@ -46,14 +46,17 @@ def do_load_event(caller: Adapter) -> None:
     
     # Load from yaml unsafe values etc.
     with open(store, "r") as f:
-        caller._item_list = yaml.load(f, Loader=yaml.UnsafeLoader)
+        items = yaml.load(f, Loader=yaml.UnsafeLoader)
+        
+        caller.__dict__.update(items)
+    _log.debug(f"Loaded {len(caller._item_list)} items from store")
     
 def do_save_event(caller: Adapter) -> None:
     _log.debug(f"Storing: {caller.generic_type_name}")
     store = __get_store__(caller.generic_type_name)
     
     with open(store, 'w') as f:
-        yaml.dump(caller._item_list, f, default_flow_style=False, allow_unicode=True)
+        yaml.dump(caller.__dict__, f, default_flow_style=False, allow_unicode=True)
     
 
 load_event.connect(do_load_event)    
@@ -423,7 +426,9 @@ class BaseAdapter:
 from ieee_2030_5.adapters.adapters import (DERControlAdapter, DERCurveAdapter,
                                            DERProgramAdapter,
                                            DeviceCapabilityAdapter,
-                                           EndDeviceAdapter, FSAAdapter)
+                                           EndDeviceAdapter,
+                                           FunctionSetAssignmentsAdapter,
+                                           RegistrationAdapter)
 
 __all__ = [
     'DERControlAdapter',
@@ -431,7 +436,8 @@ __all__ = [
     'DERProgramAdapter',
     'DeviceCapabilityAdapter',
     'EndDeviceAdapter',
-    'FSAAdapter',
+    'FunctionSetAssignmentsAdapter',
+    'RegistrationAdapter'
 ]
 # from ieee_2030_5.adapters.log import LogAdapter
 # from ieee_2030_5.adapters.mupupt import MirrorUsagePointAdapter
