@@ -1,5 +1,4 @@
 import argparse
-from copy import deepcopy
 import hashlib
 import logging
 import os
@@ -18,6 +17,14 @@ from ieee_2030_5.utils.tls_wrapper import OpensslWrapper, TLSWrap
 
 _log = logging.getLogger(__name__)
 
+PRIVATE_EXTENTION = 'pem'
+CERTIFICATE_EXTENSION = 'crt'
+
+PRIVATE_EXTENTION = os.environ.get('2030_5_PRIVATE_EXTENSION', PRIVATE_EXTENTION)
+CERTIFICATE_EXTENSION = os.environ.get('2030_5_PUBLIC_EXTENSION', CERTIFICATE_EXTENSION)
+
+GLOB_PRIVATE = f'*.{PRIVATE_EXTENTION}'
+GLOB_CERT = f'*.{CERTIFICATE_EXTENSION}'
 
 def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
     fp = fingerprint.replace(":", "")
@@ -94,14 +101,15 @@ class TLSRepository:
         new_contents = openssl_cnffile_template.read_text().replace(
             "dir             = /home/gridappsd/tls", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
-        self._ca_key = self._private_dir.joinpath("ca.pem")
-        self._ca_cert = self._certs_dir.joinpath("ca.pem")
+        self._ca_key = self._private_dir / f"ca.{PRIVATE_EXTENTION}"
+        self._ca_cert = self._certs_dir / f"ca.{CERTIFICATE_EXTENSION}"
         self._serverhost = serverhost
         self._proxyhost = proxyhost
 
         self._tls: TLSWrap = OpensslWrapper(self._openssl_cnf_file)
         self._cert_paths: List[Path] = []
         self._certificate_specs: Dict[str, Dict[str, str]] = {}
+        
         # Create a new ca key if not exists.
         if not Path(self._ca_key).exists():
             self.__create_ca__()
@@ -111,14 +119,14 @@ class TLSRepository:
                 self.create_cert(self._proxyhost, True)
 
         if not clear:
-            #_log.debug(list(self._certs_dir.glob('*.pem')))
             
             # creating certs has something screwy so we are going
             # to create the cert_paths based upon the private key
             # files.
-            for f in self._private_dir.glob('*.pem'):
+            for f in self._private_dir.glob(GLOB_PRIVATE):
                 f = Path(f)
                 f = self._certs_dir.joinpath(f.name)
+                
                 cn = self.get_common_name(f.stem)
                 if cn not in ('ca', serverhost):
                     self._client_common_name_set.add(cn)
@@ -126,8 +134,8 @@ class TLSRepository:
         generate_admin_cert = kwargs.pop('generate_admin_cert', False)
 
         if generate_admin_cert:
-            admin_key = self._private_dir.joinpath("admin.pem")
-            admin_cert = self._certs_dir.joinpath("admin.pem")
+            admin_key = self._private_dir / f"admin.{PRIVATE_EXTENTION}"
+            admin_cert = self._certs_dir / f"admin.{CERTIFICATE_EXTENSION}"
             if not admin_key.exists():
                 self._tls.tls_create_private_key(admin_key)
                 self.create_cert(admin_cert.stem)
@@ -135,7 +143,9 @@ class TLSRepository:
         for d in self._cert_paths:
             lfdi_from_stem = self.lfdi(d.stem)
             from_stem = self.sfdi(d.stem)
-                                               'Lfdi': lfdi_from_stem, 
+            self._certificate_specs[d.stem] = {'common_name': d.stem,
+                                               'lFDI': lfdi_from_stem, 
+                                               'path': d.as_posix()}
             _log.debug(f"For cert {d.name}\n\tLFDI: {lfdi_from_stem}\n\tSFDI: {from_stem}")
 
         if len(kwargs) > 0:
@@ -164,6 +174,9 @@ class TLSRepository:
         self._common_names[common_name] = common_name
         self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
         self._certificate_specs[common_name] = dict(common_name=common_name,
+                                                    lFDI=self.lfdi(common_name),
+                                                    path=self.__get_cert_file__(common_name).as_posix())
+        
 
     def lfdi(self, device_id: str) -> Lfdi:
         """
@@ -209,7 +222,21 @@ class TLSRepository:
 
     @property
     def client_list(self) -> Dict[str, Dict[str, str]]:
-        return list(self._client_common_name_set)
+        # TODO: Use precalculated specs rather than this each time.
+        specs: Dict[str, Dict[str, str]] = {}
+        for d in self._private_dir.glob(GLOB_PRIVATE):
+            
+            paths = self.get_file_pair(d.stem)
+            
+            specs[d.stem] = {'common_name': d.stem,
+                             'path': ','.join(paths),
+                             'device': False}
+            
+            if ':' not in d.stem or 'admin' != d.stem:
+                specs[d.stem]['lFID'] = self.lfdi(d.stem)
+                specs[d.stem]['device'] = True
+                         
+        return specs
 
     @property
     def ca_key_file(self) -> Path:
@@ -250,7 +277,7 @@ class TLSRepository:
         """
         device_id = None
         _log.debug(f"Attempting to find sfid: {sfdi}")
-        for d in self._certs_dir.glob("*.pem"):
+        for d in self._certs_dir.glob(GLOB_CERT):
             try:
                 if sfdi == self.sfdi(d.stem):
                     device_id = d.stem
@@ -260,13 +287,13 @@ class TLSRepository:
         return device_id
 
     def __get_cert_file__(self, common_name: str) -> Path:
-        return self._certs_dir.joinpath(f"{common_name}.pem")
+        return self._certs_dir.joinpath(f"{common_name}.{CERTIFICATE_EXTENSION}")
 
     def __get_key_file__(self, common_name: str) -> Path:
-        return self._private_dir.joinpath(f"{common_name}.pem")
+        return self._private_dir.joinpath(f"{common_name}.{PRIVATE_EXTENTION}")
 
     def __get_combined_file__(self, common_name: str) -> Path:
-        return self._combined_dir.joinpath(f"{common_name}-combined.pem")
+        return self._combined_dir.joinpath(f"{common_name}-combined.{PRIVATE_EXTENTION}")
 
 
 def _main():
@@ -312,21 +339,21 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    fingerprint = "3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A".replace(
-        "-", "")
-    lfdi = lfdi_from_fingerprint(fingerprint)
-    sfdi = sfdi_from_lfdi(lfdi)
-    print(f"fingerprint: {fingerprint}")
-    print(f"lfdi: {lfdi}")
-    print(f"sfdi: {sfdi}")
+    # fingerprint = "3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A".replace(
+    #     "-", "")
+    # lfdi = lfdi_from_fingerprint(fingerprint)
+    # sfdi = sfdi_from_lfdi(lfdi)
+    # print(f"fingerprint: {fingerprint}")
+    # print(f"lfdi: {lfdi}")
+    # print(f"sfdi: {sfdi}")
 
-    fingerprint = "B5:65:B2:C4:D4:22:59:72:58:6E:4E:E2:B1:F2:98:D4:20:62:15:DB:53:49:AB:45:2F:D2:8F:BC:62:2C:28:1D".replace(
-        ":", "")
-    lfdi = lfdi_from_fingerprint(fingerprint)
-    sfdi = sfdi_from_lfdi(lfdi)
-    print(f"fingerprint: {fingerprint}")
-    print(f"lfdi: {lfdi}")
-    print(f"sfdi: {sfdi}")
+    # fingerprint = "B5:65:B2:C4:D4:22:59:72:58:6E:4E:E2:B1:F2:98:D4:20:62:15:DB:53:49:AB:45:2F:D2:8F:BC:62:2C:28:1D".replace(
+    #     ":", "")
+    # lfdi = lfdi_from_fingerprint(fingerprint)
+    # sfdi = sfdi_from_lfdi(lfdi)
+    # print(f"fingerprint: {fingerprint}")
+    # print(f"lfdi: {lfdi}")
+    # print(f"sfdi: {sfdi}")
 
     #
     # tlsrepo = TLSRepository(repo_dir="~/tls",
