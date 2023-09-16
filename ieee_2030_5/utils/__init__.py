@@ -20,8 +20,9 @@ __config__ = SerializerConfig(xml_declaration=False, pretty_print=True)
 __serializer__ = XmlSerializer(config=__config__)
 __ns_map__ = {None: "urn:ieee:std:2030.5:ns"}
 
+
 import ieee_2030_5.types_ as t
-import ieee_2030_5.utils.tls_wrapper as tls
+import ieee_2030_5.utils as tls
 
 
 def serialize_dataclass(obj: dataclass) -> str:
@@ -90,3 +91,103 @@ def get_sfdi_from_lfdi(lfdi: t.Lfdi) -> int:
 
 def uuid_2030_5() -> str:
     return str(uuid.uuid4()).replace('-', '').upper()
+
+
+class TLSWrap:
+
+    @staticmethod
+    def tls_create_private_key(file_path: Path):
+        """
+        Creates a private key in the path that is specified.  The path will be overwritten
+        if it already exists.
+
+        Args:
+            file_path:
+
+        Returns:
+
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def tls_create_ca_certificate(common_name: str, private_key_file: Path, ca_cert_file: Path):
+        """
+        Create a ca certificate from using common name private key and ca certificate file.
+
+        Args:
+            common_name:
+            private_key_file:
+            ca_cert_file:
+
+        Returns:
+
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def tls_create_csr(common_name: str, private_key_file: Path, server_csr_file: Path):
+        """
+
+        Args:
+            common_name:
+            private_key_file:
+            server_csr_file:
+
+        Returns:
+
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def tls_create_signed_certificate(common_name: str,
+                                      ca_key_file: Path,
+                                      ca_cert_file: Path,
+                                      private_key_file: Path,
+                                      cert_file: Path,
+                                      as_server: bool = False):
+        """
+
+        Args:
+            common_name:
+            ca_key_file:
+            ca_cert_file:
+            private_key_file:
+            cert_file:
+            as_server:
+
+        Returns:
+
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def tls_get_fingerprint_from_cert(cert_file: Path, algorithm: str = "sha256") -> str:
+        """
+
+        Args:
+            cert_file:
+            algorithm:
+
+        Returns:
+
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
+                                       combined_file: Path):
+        """
+
+        Args:
+            private_key_file:
+            cert_file:
+            combined_file:
+
+        Returns:
+
+        """
+        raise NotImplementedError()
+    
+
+from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
+from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
