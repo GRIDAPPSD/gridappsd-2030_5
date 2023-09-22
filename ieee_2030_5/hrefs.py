@@ -140,6 +140,28 @@ class DERProgramSubType(Enum):
     DERCurveListLink= 4
     DERControlReplyTo = 5
     DERControl = 6
+
+class DERHref:
+    def __init__(self, root: str) -> None:
+        """Constructs a DERHref.  The root will be appended onto for 
+        the different references for a der.
+        """
+        self.root = root
+    @property
+    def der_availability(self) -> str:
+        return SEP.join([self.root, "DER_AVAILABILITY"])
+    @property
+    def der_status(self) -> str:
+        return SEP.join([self.root, DER_STATUS])
+    @property
+    def der_capability(self) ->str:
+        return SEP.join([self.root, "dercap"])
+    @property
+    def der_settings(self) -> str:
+        return SEP.join([self.root, DER_SETTINGS])
+    @property
+    def der_current_program(self) -> str:
+        return SEP.join([self.root, DER_PROGRAM])
     
 class DERProgramHref(NamedTuple):
     root: str
@@ -352,23 +374,139 @@ def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX):
     
     return ret
 
-@dataclass
-class UsagePointHref:
-    usage_point_index: int= NO_INDEX
-    meter_reading_list_index: int= NO_INDEX
-    meter_reading_index: int= NO_INDEX
-    reading_set_index: int= NO_INDEX
-    reading_index: int= NO_INDEX
-    
-    @staticmethod
-    def parse(href: str) -> UsagePointHref:
-        items = href.split(SEP)
-        if len(items) == 1:
-            return UsagePointHref()
+class ParsedUsagePointHref:
+    def __init__(self, href: str):
+        self._href = href
+        self._split = href.split(SEP)
         
-        if len(items) == 2:
-            return UsagePointHref(usage_point_index = int(items[1]))
+    def has_usage_point(self) -> bool:
+        return self.usage_point_index is not None
+    
+    def has_extra(self) -> bool:
+        return self.has_meter_reading_list() or \
+                self.has_reading_list() or \
+                self.has_reading_set_list() or \
+                self.has_reading_set_reading_list()
+    
+    def has_meter_reading_list(self) -> bool:
+        try:
+            if retval := self._split[2] == "mr":
+                ...
+            return retval
+        except IndexError:
+            return False
+    
+    def has_reading_set_list(self) -> bool:
+        try:
+            if retval := self._split[4] == "rs":
+                ...
+            return retval
+        except IndexError:
+            return False
+    
+    def has_reading_set_reading_list(self) -> bool:
+        try:
+            if retval := self._split[6] == "r":
+                ...
+            return retval
+        except IndexError:
+            return False
+    
+    def has_reading_list(self) -> bool:
+        try:
+            if retval:= self._split[4] == "r":
+                ...
+            return retval
+        except IndexError:
+            return False
+    
+    @property
+    def usage_point_index(self) -> Optional[int]:
+        try:
+            return int(self._split[1])
+        except IndexError:
+            pass
+        return None
+    
+    @property
+    def meter_reading_index(self) -> Optional[int]:
+        try:
+            return int(self._split[3])
+        except IndexError:
+            pass
+        return None
+    
+    @property
+    def reading_set_index(self) -> Optional[int]:
+        try:
+            if self._split[4] == "rs":
+                return int(self._split[5])
+        except IndexError:
+            pass
+        return None
+    
+    @property
+    def reading_set_reading_index(self) -> Optional[int]:
+        try:
+            if self._split[6] == "r":
+                return int(self._split[7])
+        except IndexError:
+            pass
+        return None
+    
+    @property
+    def reading_index(self) -> Optional[int]:
+        try:
+            if self._split[4] == "r":
+                return int(self._split[5])
+        except IndexError:
+            pass
+        
+        return None
 
+class UsagePointHref:
+    def __init__(self, href: str = None, root: str = '/upt'):
+        self._href = href
+        self._root = root
+    
+    def is_root(self) -> bool:
+        return self._href == self._root
+    
+    
+        
+    def value(self) -> str:
+        return self._root
+    
+    def usage_point(self, usage_point_index: int):
+        return SEP.join([self._root, str(usage_point_index)])
+    
+    def meterreading_list(self, usage_point_index: int) -> str:
+        return SEP.join([self._root, str(usage_point_index), "mr"])
+    
+    def meterreading(self, usage_point_index: int, meter_reading_index: int) -> str:
+        return SEP.join([self.meterreading_list(usage_point_index), str(meter_reading_index)])
+    
+    def readingset_list(self, usage_point_index: int, meter_reading_index: int) -> str:
+        return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "rs"])
+    
+    def readingtype(self, usage_point_index: int, meter_reading_index: int) -> str:
+        return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "rt"])
+    
+    def readingset(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int) -> str:
+        return SEP.join([self.readingset_list(usage_point_index, meter_reading_index), str(reading_set_index)])
+    
+    def readingsetreading_list(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int):
+        return SEP.join([self.readingset(usage_point_index, meter_reading_index, reading_set_index), "r"])
+    
+    def readingsetreading(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int, reading_index: int):
+        return SEP.join([self.readingsetreading_list(usage_point_index, meter_reading_index, reading_set_index), str(reading_index)])
+        
+    def reading_list(self, usage_point_index: int,  meter_reading_index: int) -> str:
+        return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "r"])
+    
+    def reading(self, usage_point_index: int,  meter_reading_index: int, reading_index: int) -> str:
+        return SEP.join([self.reading_list(usage_point_index, meter_reading_index), str(reading_index)])
+        
 @dataclass
 class MirrorUsagePointHref:
     mirror_usage_point_index: int = NO_INDEX
