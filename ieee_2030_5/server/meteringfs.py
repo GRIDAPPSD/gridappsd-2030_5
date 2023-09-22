@@ -32,12 +32,19 @@ class ResponseStatus:
 class UsagePointRequest(RequestOp):
     
     def get(self) -> Response:
-        pth_info = request.environ['PATH_INFO']
-        try:
-            upt = adpt.MirrorUsagePointAdapter.fetch_usage_point_by_href(pth_info)
-        except StopIteration:
-            return Response(status=404, response="Not Found")
-        return self.build_response_from_dataclass(upt)
+        
+        parsed = hrefs.ParsedUsagePointHref(request.path)
+        
+        # /upt
+        if not parsed.has_usage_point():
+            obj = adpt.UsagePointAdapter.fetch_all(m.UsagePointList(request.path))
+        else:
+            obj = adpt.UsagePointAdapter.fetch(parsed.usage_point_index)
+            
+        if parsed.has_extra():
+            obj = get_href(request.path)
+        
+        return self.build_response_from_dataclass(obj)
 
 
 class MirrorUsagePointRequest(RequestOp):
@@ -54,9 +61,13 @@ class MirrorUsagePointRequest(RequestOp):
         mup_href = hrefs.MirrorUsagePointHref.parse(pth_info)
         try:
             if mup_href.mirror_usage_point_index == hrefs.NO_INDEX:
-                mup = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_point_list(pth_info)
+                mup = adpt.MirrorUsagePointAdapter.fetch_all(m.MirrorUsagePointList(href=request.path))
             else:
-                mup = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_by_href(pth_info)
+                mup = adpt.MirrorUsagePointAdapter.fetch(mup_href.mirror_usage_point_index)
+            # if mup_href.mirror_usage_point_index == hrefs.NO_INDEX:
+            #     mup = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_point_list(pth_info)
+            # else:
+            #     mup = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_by_href(pth_info)
                 
             return self.build_response_from_dataclass(mup)
         except StopIteration:
@@ -82,14 +93,19 @@ class MirrorUsagePointRequest(RequestOp):
 
         # Creating a new mup
         if data_type == m.MirrorUsagePoint:
-            result = adpt.MirrorUsagePointAdapter.create(mup=data)
+            result = adpt.create_mirror_usage_point(mup=data)
+            #result = adpt.MirrorUsagePointAdapter.create(mup=data)
         else:
-            result = adpt.MirrorUsagePointAdapter.create_reading(href=pth_info, data=data)
+            result = adpt.create_mirror_meter_reading(mup_href=request.path, mr=data)
+            
+        if result.success:
+            status = '204' if result.was_update == True else '201'
+        else:
+            status = '405'
         
-        result = ResponseStatus(status=result[0], location = result[1])
-
-        if isinstance(result, Error):
-            return Response(result.args[1], status=500)
-        # Note response to the post is different due to added endpoint.
+        if status.startswith('20'):
+            return Response(headers={'Location': result.an_object.href}, status=status)    
+        else:
+            return Response(result.an_object, status=status)
         
-        return Response(headers={'Location': result.location}, status=result.status if isinstance(result.status, int) else result.status.value)
+        
