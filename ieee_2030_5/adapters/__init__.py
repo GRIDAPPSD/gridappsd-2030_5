@@ -146,10 +146,28 @@ class Adapter(Generic[T]):
         self._child_prefix: Dict[Type, str] = {}
         self._child_map: Dict[int, Dict[str, List[C]]] = {}
         store_event.send(self)
+        
+    def fetch_by_mrid(self, mrid: str) -> Optional[T]:
+        return self.fetch_by_property("mRID", mrid)
+        
+    def fetch_by_href(self, href: str) -> Optional[T]:
+        return self.fetch_by_property("href", href)
+    
     def fetch_by_property(self, prop: str, prop_value: Any) -> Optional[T]:
         for obj in self._item_list.values():
-            if getattr(obj, prop) == prop_value:
-                return obj
+            # Most properties are pointers to other objects so we are going to
+            # check both the property and the sub object property here, because
+            # that should save some of the time later when we are looking for 
+            # hrefs and and can't get to them because they are wrapped in a 
+            # Link object.
+            under_test = getattr(obj, prop)
+            if isinstance(under_test, str):
+                if under_test == prop_value:
+                    return obj
+            else:
+                if getattr(under_test, prop) == prop_value:
+                    return obj
+            
             
     def fetch_child_names(self) -> List[str]:
         return list(self._child_prefix.keys())
@@ -298,7 +316,7 @@ class Adapter(Generic[T]):
         store_event.send(self)
     
     def fetch_by_mrid(self, mRID: str):
-        for item in self._item_list:
+        for item in self._item_list.values():
             if not hasattr(item, 'mRID'):
                 raise ValueError(f"Item of {type(T)} does not have mRID property")
             if item.mRID == mRID:
@@ -329,112 +347,18 @@ class Adapter(Generic[T]):
         self._child_map[parent_index][name][index] = child
     
     
-    
-            
-
-class BaseAdapter:
-    __count__: int = 0
-    __server_configuration__: cfg.ServerConfiguration
-    __tls_repository__: cfg.TLSRepository = None
-    __lfdi__mapped_configuration__: Dict[str, cfg.DeviceConfiguration] = {}
-    after_initialized = Signal('after-initialized')
         
-    @classmethod
-    def get_next_index(cls) -> int:
-        """Retrieve the next index for an adapter list."""
-        return cls.__count__
-
-    @classmethod
-    def increment_index(cls) -> int:
-        """Increment the list to the next index and return the result to the caller.
-        
-        
-        """
-        next = cls.get_next_index()
-        cls.__count__ += 1
-        return next
-    
-    @classmethod
-    def ready(cls) -> Signal:
-        return Signal("ready")
-
-    @classmethod
-    def get_current_index(cls) -> int:
-        return cls.__count__
-
-    @staticmethod
-    def server_config() -> cfg.ServerConfiguration:
-        return BaseAdapter.__server_configuration__
-
-    @staticmethod
-    def device_configs() -> List[cfg.DeviceConfiguration]:
-        return BaseAdapter.__server_configuration__.devices
-
-    @staticmethod
-    def tls_repo() -> cfg.TLSRepository:
-        return BaseAdapter.__tls_repository__
-
-    @staticmethod
-    def get_config_from_lfdi(lfdi: str) -> Optional[cfg.DeviceConfiguration]:
-        return BaseAdapter.__lfdi__mapped_configuration__.get(lfdi)
-
-    @staticmethod
-    def is_initialized():
-        return BaseAdapter.__device_configurations__ is not None and BaseAdapter.__tls_repository__ is not None
-
-    @staticmethod
-    def initialize(server_config: cfg.ServerConfiguration, tlsrepo: TLSRepository):
-        """Initialize all of the adapters
-        
-        The initialization means that there are concrete object backing the storage system based upon
-        urls that can be read during the http call to the spacific end point.  In other words a
-        DERCurve dataclass can be retrieved from storage by going to the href /dc/1 rather than
-        having to get it through an object.  
-        
-        The adapters are responsible for storing data into the object store using add_href function.
-        """
-        BaseAdapter.__server_configuration__ = server_config
-        BaseAdapter.__lfdi__mapped_configuration__ = {}
-        BaseAdapter.__tls_repository__ = tlsrepo
-        
-        
-
-        # # Map from the configuration id and lfdi to the device configuration.
-        # for cfg in server_config.devices:
-        #     lfdi = tlsrepo.lfdi(cfg.id)
-        #     BaseAdapter.__lfdi__mapped_configuration__[lfdi] = cfg
-
-        #BaseAdapter.after_initialized.send(BaseAdapter)
-        #ready_signal.send(BaseAdapter)
-        # BaseAdapter.ready().send(BaseAdapter)
-        # Find subclasses of us and initialize them calling _initalize method
-        # TODO make this non static
-        #EndDeviceAdapter._initialize()
-
-    @staticmethod
-    def build(**kwargs) -> dataclass:
-        raise NotImplementedError()
-
-    @staticmethod
-    def store(value: dataclass) -> dataclass:
-        raise NotImplementedError()
-
-    @staticmethod
-    def build_instance(cls, cfg_dict: Dict, signature_cls=None) -> object:
-        if signature_cls is None:
-            signature_cls = cls
-        return cls(**{
-            k: v
-            for k, v in cfg_dict.items() if k in inspect.signature(signature_cls).parameters
-        })
-
-
-from ieee_2030_5.adapters.adapters import (DERControlAdapter, DERCurveAdapter,
-                                           DERProgramAdapter,
+from ieee_2030_5.adapters.adapters import (DERAdapter, 
+                                           DERControlAdapter,
+                                           DERCurveAdapter, DERProgramAdapter,
                                            DeviceCapabilityAdapter,
                                            EndDeviceAdapter,
                                            FunctionSetAssignmentsAdapter,
-                                           RegistrationAdapter)
+                                           RegistrationAdapter,
+                                           MirrorUsagePointAdapter,
+                                           UsagePointAdapter,
+                                           create_mirror_usage_point,
+                                           create_mirror_meter_reading)
 
 __all__ = [
     'DERControlAdapter',
@@ -445,7 +369,6 @@ __all__ = [
     'FunctionSetAssignmentsAdapter',
     'RegistrationAdapter',
     'DERAdapter',
-    'GenericListAdapter',
     'MirrorUsagePointAdapter',
     'UsagePointAdapter',
     'create_mirror_usage_point',
