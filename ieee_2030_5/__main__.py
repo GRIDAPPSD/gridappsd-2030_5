@@ -73,8 +73,6 @@ from ieee_2030_5.server.server_constructs import initialize_2030_5
 _log = logging.getLogger()
 
 
-
-
 class ServerThread(threading.Thread):
 
     def __init__(self, server: BaseWSGIServer):
@@ -206,7 +204,13 @@ def _main():
     # is run.  Note this is dependent on the adapter being filestore
     # not database.  I will have to modify later to deal with that.
     if config.cleanse_storage and config.storage_path.exists():
+        _log.debug(f"Removing {config.storage_path}")
         shutil.rmtree(config.storage_path)
+        
+    data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
+    if config.cleanse_storage and data_store_userdir.exists():
+        _log.debug(f"Removing {data_store_userdir}")
+        shutil.rmtree(data_store_userdir)
         
     
     # Has to be after we remove the storage path if necessary
@@ -273,6 +277,9 @@ def _main():
 
 if __name__ == '__main__':
     try:
+        # from werkzeug.serving import is_running_from_reloader
+        # print(is_running_from_reloader())
+        #if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         _main()
     except InvalidConfigFile as ex:
         print(ex.args[0])

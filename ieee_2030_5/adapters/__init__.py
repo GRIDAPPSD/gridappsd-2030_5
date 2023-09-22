@@ -139,7 +139,13 @@ class Adapter(Generic[T]):
     @href.setter
     def href(self, value:str) -> None:
         self._href_prefix = value
-    
+        
+    def clear(self) -> None:
+        self._current_index = -1
+        self._item_list: Dict[int, T] = {}
+        self._child_prefix: Dict[Type, str] = {}
+        self._child_map: Dict[int, Dict[str, List[C]]] = {}
+        store_event.send(self)
     def fetch_by_property(self, prop: str, prop_value: Any) -> Optional[T]:
         for obj in self._item_list.values():
             if getattr(obj, prop) == prop_value:
@@ -437,7 +443,19 @@ __all__ = [
     'DeviceCapabilityAdapter',
     'EndDeviceAdapter',
     'FunctionSetAssignmentsAdapter',
-    'RegistrationAdapter'
+    'RegistrationAdapter',
+    'DERAdapter',
+    'GenericListAdapter',
+    'MirrorUsagePointAdapter',
+    'UsagePointAdapter',
+    'create_mirror_usage_point',
+    'create_mirror_meter_reading'
 ]
+
+def clear_all_adapters():
+    for adpt in __all__:
+        obj = eval(adpt)
+        if isinstance(obj, Adapter):
+            obj.clear()
 # from ieee_2030_5.adapters.log import LogAdapter
 # from ieee_2030_5.adapters.mupupt import MirrorUsagePointAdapter
