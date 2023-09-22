@@ -1,5 +1,38 @@
 import ieee_2030_5.hrefs as hrefs
 
+def test_usage_point_href():
+    mup_root = hrefs.UsagePointHref()
+    
+    # If no argument passed to the constructor then nothing to compare with
+    assert not mup_root.is_root()
+    assert "/upt_0" == mup_root.usage_point(0)
+    assert "/upt_0_mr" == mup_root.meterreading_list(0)
+    assert "/upt_0_mr_0" == mup_root.meterreading(0, 0)
+    assert "/upt_0_mr_0_rs" == mup_root.readingset_list(0, 0)
+    assert "/upt_0_mr_0_rs_0" == mup_root.readingset(0, 0, 0)
+    assert "/upt_0_mr_0_rs_0_r" == mup_root.readingsetreading_list(0, 0, 0)
+    assert "/upt_0_mr_0_rs_0_r_0" == mup_root.readingsetreading(0, 0, 0, 0)
+    
+    
+    assert "/upt_0_mr_0_r" == mup_root.reading_list(0, 0)
+    assert "/upt_0_mr_0_r_0" == mup_root.reading(0, 0, 0)  
+
+def test_usage_point_parsing():
+    h = hrefs.ParsedUsagePointHref("/upt_0")
+    
+    assert h.usage_point_index == 0
+    assert not h.has_reading_list()
+    
+    h = hrefs.ParsedUsagePointHref("/upt_1_mr_2_rs_3_r_4")
+    
+    assert h.has_meter_reading_list()
+    assert h.has_reading_set_list()
+    assert h.has_reading_set_reading_list()
+    assert 1 == h.usage_point_index 
+    assert 2 == h.meter_reading_index
+    assert 3 == h.reading_set_index
+    assert 4 == h.reading_set_reading_index
+    
 
 def test_edev_href():
         
