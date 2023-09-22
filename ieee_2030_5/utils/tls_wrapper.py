@@ -1,6 +1,9 @@
 import subprocess
 from pathlib import Path
 from ieee_2030_5.utils import TLSWrap
+import logging
+
+_log = logging.getLogger(__name__)
 
 class OpensslWrapper(TLSWrap):
     opensslcnf: Path = None
@@ -34,6 +37,7 @@ class OpensslWrapper(TLSWrap):
             str(private_key_file), "-out",
             str(ca_cert_file)
         ]
+        _log.debug(" ".join(cmd))
         return subprocess.check_output(cmd, text=True)
 
     @staticmethod
