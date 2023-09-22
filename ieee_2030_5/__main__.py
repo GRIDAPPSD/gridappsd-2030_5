@@ -40,6 +40,7 @@
 
 import logging
 import os
+import shutil
 
 log_level = os.environ.get('LOGGING_LEVEL', 'DEBUG').upper()
    
@@ -104,13 +105,10 @@ def get_tls_repository(cfg: ServerConfiguration,
         
         # registers the devices, but doesn't initialize_device the end devices here.
         for k in cfg.devices:
-            if k in already_represented:
-                _log.error(f"Already have {k.id} represented.")
-            else:
+            if tlsrepo.has_device(k.id):
                 already_represented.add(k)
+            else:
                 tlsrepo.create_cert(k.id)
-                _log.debug(
-                    f"for {k.id}\nlfdi -> {tlsrepo.lfdi(k.id)}\nsfdi -> {tlsrepo.sfdi(k.id)}")
     return tlsrepo
 
 
@@ -197,6 +195,23 @@ def _main():
 
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
+    
+    # Initialize the data storage for the adapters
+    if config.storage_path is None:
+        config.storage_path = Path("data_store")
+    else:
+        config.storage_path = Path(config.storage_path)
+    
+    # Cleanse means we want to reload the storage each time the server
+    # is run.  Note this is dependent on the adapter being filestore
+    # not database.  I will have to modify later to deal with that.
+    if config.cleanse_storage and config.storage_path.exists():
+        shutil.rmtree(config.storage_path)
+        
+    
+    # Has to be after we remove the storage path if necessary
+    from ieee_2030_5.server.server_constructs import initialize_2030_5
+    
     initialize_2030_5(config, tls_repo)
     
     

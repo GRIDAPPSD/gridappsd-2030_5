@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-
+import shutil
 import yaml
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -14,6 +14,7 @@ __all__ = ['TLSRepository']
 
 from ieee_2030_5.types_ import Lfdi, PathStr
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper, TLSWrap
+from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
 
 _log = logging.getLogger(__name__)
 
@@ -65,6 +66,9 @@ class TLSRepository:
         if proxyhost:
             self._common_names[proxyhost] = proxyhost
         self._client_common_name_set = set()
+        
+        if clear:
+            shutil.rmtree(self._repo_dir)
 
         if not self._repo_dir.exists() or not self._certs_dir.exists() or \
                 not self._private_dir.exists() or not self._combined_dir.exists():
@@ -125,11 +129,35 @@ class TLSRepository:
             # files.
             for f in self._private_dir.glob(GLOB_PRIVATE):
                 f = Path(f)
-                f = self._certs_dir.joinpath(f.name)
+                self._current_pk[f.stem] = f
+            
+            for f in self._certs_dir.glob(GLOB_CERT):
+                f = Path(f)
+                self._current_certs[f.stem] = f
                 
-                cn = self.get_common_name(f.stem)
-                if cn not in ('ca', serverhost):
-                    self._client_common_name_set.add(cn)
+        assert len(self._current_pk) == len(self._current_certs)
+        
+        if not self._ca_key.exists() or not self._ca_cert.exists():
+            self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
+            self._current_pk["ca"] = self._ca_key
+            self._current_certs["ca"] = self._ca_cert
+            
+        if not self.server_cert_file.exists() or not self.server_key_file.exists():
+            self._tls.tls_create_private_key(self.server_key_file)
+            self._tls.tls_create_signed_certificate(serverhost, self.ca_key_file, self.ca_cert_file,
+                                                    self.server_key_file, self.server_cert_file,
+                                                    as_server=True)
+            self._current_pk[serverhost] = self.server_key_file
+            self._current_certs[serverhost] = self.server_cert_file
+        
+        if proxyhost is not None and (not self.proxy_cert_file.exists() or \
+            not self.proxy_key_file.exists()):
+            self._tls.tls_create_private_key(self.proxy_key_file)
+            self._tls.tls_create_signed_certificate(proxyhost, self.ca_key_file, self.ca_cert_file,
+                                                    self.proxy_key_file, self.proxy_cert_file,
+                                                    as_server=True)
+            self._current_pk[proxyhost] = self.proxy_key_file
+            self._current_certs[proxyhost] = self.proxy_cert_file
 
         generate_admin_cert = kwargs.pop('generate_admin_cert', False)
 
@@ -139,14 +167,12 @@ class TLSRepository:
             if not admin_key.exists():
                 self._tls.tls_create_private_key(admin_key)
                 self.create_cert(admin_cert.stem)
+                
+        
 
-        for d in self._cert_paths:
-            lfdi_from_stem = self.lfdi(d.stem)
-            from_stem = self.sfdi(d.stem)
-            self._certificate_specs[d.stem] = {'common_name': d.stem,
-                                               'lFDI': lfdi_from_stem, 
-                                               'path': d.as_posix()}
-            _log.debug(f"For cert {d.name}\n\tLFDI: {lfdi_from_stem}\n\tSFDI: {from_stem}")
+        for crt in self._current_certs:
+            if crt not in (serverhost, proxyhost, "ca", "admin"):
+                self._devices[crt] = (self.lfdi(crt), self.sfdi(crt))
 
         if len(kwargs) > 0:
             raise ValueError(f"Not all kwargs used: {kwargs.keys()}")
@@ -157,25 +183,29 @@ class TLSRepository:
         self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert,
                                                  self.__get_combined_file__("ca"))
 
+    def has_device(self, common_name: str) -> bool:
+        return common_name in self._devices
         
     def create_cert(self, common_name: str, as_server: bool = False):
 
         if not self.__get_key_file__(common_name).exists():
             self._tls.tls_create_private_key(self.__get_key_file__(common_name))
+            self._current_pk[common_name] = self.__get_key_file__(common_name)
 
         self._tls.tls_create_signed_certificate(common_name, self._ca_key, self._ca_cert,
                                                 self.__get_key_file__(common_name),
                                                 self.__get_cert_file__(common_name), as_server)
-
+        self._current_certs[common_name] = self.__get_cert_file__(common_name)
+        
         self._tls.tls_create_pkcs23_pem_and_cert(self.__get_key_file__(common_name),
                                                  self.__get_cert_file__(common_name),
                                                  self.__get_combined_file__(common_name))
 
-        self._common_names[common_name] = common_name
-        self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
-        self._certificate_specs[common_name] = dict(common_name=common_name,
-                                                    lFDI=self.lfdi(common_name),
-                                                    path=self.__get_cert_file__(common_name).as_posix())
+        # self._common_names[common_name] = common_name
+        # self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
+        # self._certificate_specs[common_name] = dict(common_name=common_name,
+        #                                             lFDI=self.lfdi(common_name),
+        #                                             path=self.__get_cert_file__(common_name).as_posix())
         
 
     def lfdi(self, device_id: str) -> Lfdi:
