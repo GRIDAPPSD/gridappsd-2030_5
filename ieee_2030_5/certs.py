@@ -67,7 +67,7 @@ class TLSRepository:
             self._common_names[proxyhost] = proxyhost
         self._client_common_name_set = set()
         
-        if clear:
+        if clear and self._repo_dir.exists():
             shutil.rmtree(self._repo_dir)
 
         if not self._repo_dir.exists() or not self._certs_dir.exists() or \
@@ -78,30 +78,17 @@ class TLSRepository:
 
         index_txt = self._repo_dir.joinpath("index.txt")
         serial = self._repo_dir.joinpath("serial")
-        if clear:
-            for x in self._private_dir.iterdir():
-                x.unlink()
-            for x in self._certs_dir.iterdir():
-                x.unlink()
-            for x in self._combined_dir.iterdir():
-                x.unlink()
-            for x in self._repo_dir.iterdir():
-                if x.is_file():
-                    x.unlink()
-            try:
-                index_txt.unlink()
-            except FileNotFoundError:
-                pass
-            try:
-                serial.unlink()
-            except FileNotFoundError:
-                pass
-
+        
         if not index_txt.exists():
             index_txt.write_text("")
         if not serial.exists():
             serial.write_text("01")
 
+        self._current_pk: Dict[str, Path] = {}
+        self._current_certs: Dict[str, Path] = {}
+        # lfdi -> sfdi and sfdi -> lfdi for devices.
+        self._devices: Dict[str, str] = {}
+        
         new_contents = openssl_cnffile_template.read_text().replace(
             "dir             = /home/gridappsd/tls", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
@@ -111,17 +98,8 @@ class TLSRepository:
         self._proxyhost = proxyhost
 
         self._tls: TLSWrap = OpensslWrapper(self._openssl_cnf_file)
-        self._cert_paths: List[Path] = []
-        self._certificate_specs: Dict[str, Dict[str, str]] = {}
-        
-        # Create a new ca key if not exists.
-        if not Path(self._ca_key).exists():
-            self.__create_ca__()
-            self._tls.tls_create_private_key(self.__get_key_file__(self._serverhost))
-            self.create_cert(self._serverhost, True)
-            if proxyhost:
-                self.create_cert(self._proxyhost, True)
-
+        # self._cert_paths: List[Path] = []
+        # self._certificate_specs: Dict[str, Dict[str, str]] = {}
         if not clear:
             
             # creating certs has something screwy so we are going
@@ -134,13 +112,12 @@ class TLSRepository:
             for f in self._certs_dir.glob(GLOB_CERT):
                 f = Path(f)
                 self._current_certs[f.stem] = f
-                
-        assert len(self._current_pk) == len(self._current_certs)
-        
+                        
         if not self._ca_key.exists() or not self._ca_cert.exists():
-            self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
-            self._current_pk["ca"] = self._ca_key
-            self._current_certs["ca"] = self._ca_cert
+            self._tls.tls_create_private_key(self.ca_key_file)
+            self._tls.tls_create_ca_certificate("ca", self.ca_key_file, self.ca_cert_file)
+            self._current_pk["ca"] = self.ca_key_file
+            self._current_certs["ca"] = self.ca_cert_file
             
         if not self.server_cert_file.exists() or not self.server_key_file.exists():
             self._tls.tls_create_private_key(self.server_key_file)
@@ -167,6 +144,8 @@ class TLSRepository:
             if not admin_key.exists():
                 self._tls.tls_create_private_key(admin_key)
                 self.create_cert(admin_cert.stem)
+                self._current_pk["admin"] = admin_key
+                self._current_certs["admin"] = admin_cert
                 
         
 
@@ -174,6 +153,8 @@ class TLSRepository:
             if crt not in (serverhost, proxyhost, "ca", "admin"):
                 self._devices[crt] = (self.lfdi(crt), self.sfdi(crt))
 
+        assert len(self._current_pk) == len(self._current_certs)
+        
         if len(kwargs) > 0:
             raise ValueError(f"Not all kwargs used: {kwargs.keys()}")
 
@@ -182,6 +163,8 @@ class TLSRepository:
         self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
         self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert,
                                                  self.__get_combined_file__("ca"))
+        self._current_certs["ca"] = self.ca_cert_file
+        self._current_pk["ca"] = self.ca_key_file
 
     def has_device(self, common_name: str) -> bool:
         return common_name in self._devices
