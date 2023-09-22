@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from email.utils import format_datetime
 from typing import Dict, Optional, List
+from ieee_2030_5.models.sep import Link
 from ieee_2030_5.persistance.points import set_point, get_point
 
 __all__: List[str] = [
@@ -45,6 +46,10 @@ class Indexer:
     def add(self, href: str, item: dataclass):
         self.init()
 
+        # TODO: Verify that this method actually works with a new object.
+        # If using a link, we need the true href to cache the object.
+        if isinstance(href, Link):
+            href = href.href
         cached = self.__items__.get(href)
         if cached and cached.item == item:
             _log.debug(f"Item already cached {href}")
@@ -60,6 +65,9 @@ class Indexer:
 
     def get(self, href) -> dataclass:
         self.init()
+        # If using a link, we need the true href to cache the object.
+        if isinstance(href, Link):
+            href = href.href
         if href in self.__items__:
             index = pickle.loads(get_point(href))  # pickle.loads(get_point(href))
             # index = pickle.loads(self.__items__.get(href))
