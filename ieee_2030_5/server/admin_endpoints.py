@@ -56,6 +56,8 @@ class AdminEndpoints:
                          view_func=self._admin_programs)
         app.add_url_rule("/admin/fsa", methods=['GET', 'PUT', 'POST', 'DELETE'], 
                          view_func=self._admin_fsa)
+        app.add_url_rule("/admin/der", methods=['GET', 'PUT', 'POST', 'DELETE'], 
+                         view_func=self._admin_ders)
             
         app.add_url_rule("/admin/derp/<int:derp_index>/derc/<int:control_index>",  methods=['GET', 'PUT'], view_func=self._admin_derp_derc)
         app.add_url_rule("/admin/derp/<int:derp_index>/derc",  methods=['GET', 'POST'], view_func=self._admin_derp_derc)
@@ -78,6 +80,45 @@ class AdminEndpoints:
         tls_repo: TLSRepository = g.TLS_REPOSITORY
         
         return Response(json.dumps(tls_repo.client_list), headers=headers)
+    
+    def _admin_ders(self) -> Response:
+        """Returns DER or DERList depending on the request method.
+        
+        If request method is GET, return an DERList object.
+        
+        If request method is POST, save the DER object and return it with new href for the end device.
+        
+        If request method is PUT, update the DER object and return it.
+        
+        If request method is DELETE, remove the DER object and return None.
+        """
+        if request.method in ('POST', 'PUT'):           
+            data = request.data.decode('utf-8')
+            item = xml_to_dataclass(data)
+            if not isinstance(item, m.DER):
+                _log.error("DER was not passed via data.")
+                return Response(status=400)
+            
+            if request.method == 'POST':
+                if item.href:
+                    _log.error(f"POST method with existing object {item.href}")
+                    return Response(400)
+                
+                item = adpt.DERAdapter.add(item)
+                response_status = 201
+                
+            elif request.method == 'PUT':
+                if not item.href:
+                    _log.error(f"PUT method without an existing object.")
+                    return Response(400)
+
+                index = int(item.href.rsplit(hrefs.SEP)[-1])
+                adpt.DERAdapter.put(index, item)
+                response_status = 200
+                
+                
+            return Response(dataclass_to_xml(item), status=response_status)
+    
     
     def _admin_programs(self) -> Response:
         """Returns EndDevice or EndDeviceList depending on the request method.
