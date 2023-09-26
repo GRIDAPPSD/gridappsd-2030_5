@@ -5,13 +5,11 @@ from ieee_2030_5.client import IEEE2030_5_Client
 
 
 def test_starting_server_using_fixture(server_startup):
-    tls_repo, end_devices, server_config = server_startup
+    tls_repo, server_config = server_startup
 
     assert tls_repo
-    assert end_devices
     assert server_config
-    assert len(end_devices) == 1
-    
+        
     ed_config = server_config.devices[0]
     
     server_host, server_port = server_config.server_hostname.split(":")
