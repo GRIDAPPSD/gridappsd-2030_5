@@ -42,8 +42,17 @@ class DERProgramRequests(RequestOp):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-                
-        retval = get_href(request.path)
+        
+        parsed = hrefs.HrefParser(request.path)
+        
+        if not parsed.has_index():
+            retval = adpt.DERProgramAdapter.fetch_all(m.DERProgramList(href=request.path, all=adpt.DERProgramAdapter.size()))
+        elif parsed.count() == 2:
+            retval = adpt.DERProgramAdapter.fetch(parsed.at(1))
+        else:
+            retval = get_href(request.path)
+                    
+        
         if not retval:
             raise NotFound(f"{request.path}")
 

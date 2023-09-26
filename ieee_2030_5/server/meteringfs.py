@@ -36,7 +36,7 @@ class UsagePointRequest(RequestOp):
         parsed = hrefs.ParsedUsagePointHref(request.path)
         
         # /upt
-        if not parsed.has_usage_point():
+        if not parsed.has_usage_point_index():
             obj = adpt.UsagePointAdapter.fetch_all(m.UsagePointList(request.path))
         else:
             obj = adpt.UsagePointAdapter.fetch(parsed.usage_point_index)
@@ -58,25 +58,18 @@ class MirrorUsagePointRequest(RequestOp):
         if not pth_info.startswith(hrefs.DEFAULT_MUP_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
         
-        mup_href = hrefs.MirrorUsagePointHref.parse(pth_info)
-        try:
-            if mup_href.mirror_usage_point_index == hrefs.NO_INDEX:
-                mup = adpt.MirrorUsagePointAdapter.fetch_all(m.MirrorUsagePointList(href=request.path))
-            else:
-                mup = adpt.MirrorUsagePointAdapter.fetch(mup_href.mirror_usage_point_index)
-            # if mup_href.mirror_usage_point_index == hrefs.NO_INDEX:
-            #     mup = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_point_list(pth_info)
-            # else:
-            #     mup = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_by_href(pth_info)
-                
-            return self.build_response_from_dataclass(mup)
-        except StopIteration:
-            if pth_info == hrefs.mirror_usage_point_href():
-                mupl = adpt.MirrorUsagePointAdapter.fetch_mirror_usage_point_list()
-                
-                
-            return Response("Not Found", status=404)
         
+        mup_href = hrefs.ParsedUsagePointHref(request.path)
+        
+        if not mup_href.has_usage_point_index():
+            # /mup
+                mup = adpt.MirrorUsagePointAdapter.fetch_all(m.MirrorUsagePointList(href=request.path))
+        else:
+            # /mup_0
+            mup = adpt.MirrorUsagePointAdapter.fetch(mup_href.usage_point_index)
+                
+        return self.build_response_from_dataclass(mup)
+       
 
     def post(self) -> Response:
         xml = request.data.decode('utf-8')

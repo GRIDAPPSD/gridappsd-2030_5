@@ -50,11 +50,16 @@ def update_enddevice_links(device: m.EndDevice) -> m.EndDevice:
     ed_href = hrefs.EndDeviceHref(index)
     device.DERListLink = m.DERListLink(href=ed_href.der_list)
     device.ConfigurationLink = m.ConfigurationLink(href=ed_href.configuration)
+    add_href(ed_href.configuration, m.Configuration(href=ed_href.configuration))
     device.DeviceInformationLink = m.DeviceInformationLink(href=ed_href.device_information)
+    add_href(ed_href.device_information, m.DeviceInformation(href=ed_href.device_information))
     device.DeviceStatusLink = m.DeviceStatusLink(href=ed_href.device_status)
+    add_href(ed_href.device_status, m.DeviceStatus(href=ed_href.device_status))
     device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href=ed_href.function_set_assignments)
     device.PowerStatusLink = m.PowerStatusLink(href=ed_href.device_power_status)
+    add_href(ed_href.device_power_status, m.PowerStatus(href=ed_href.device_power_status))
     device.LogEventListLink = m.LogEventListLink(href=ed_href.log_event_list)
+    add_href(ed_href.log_event_list, m.LogEventList(href=ed_href.log_event_list))
     device.RegistrationLink = m.RegistrationLink(href=ed_href.registration)
     adpt.EndDeviceAdapter.put(index, device)
     return device
@@ -189,13 +194,18 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     
     for href, derptr in end_device_ders.items():
         der_list = m.DERList(href)
-        for index, ptr in enumerate(derptr):
+        for index, ptr in enumerate(config.ders):
             der_href = hrefs.DERHref(hrefs.SEP.join([href, str(index)]))
             
             der_obj = adpt.DERAdapter.fetch_by_property("description", ptr)
             if der_obj is None:
                 der_obj = m.DER(href=der_href.root)
-            der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(der_href.der_current_program)
+            
+            if 'program' in ptr:
+                program = adpt.DERProgramAdapter.fetch_by_property("description", ptr['program'])
+                if program is not None:
+                    der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(program.href)
+            #der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(der_href.der_current_program)
             der_obj.DERAvailabilityLink = m.DERAvailabilityLink(der_href.der_availability)
             der_obj.DERCapabilityLink = m.DERCapabilityLink(der_href.der_capability)
             der_obj.DERSettingsLink = m.DERSettingsLink(der_href.der_settings)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
-from typing import List, NamedTuple, Optional
+from typing import List, NamedTuple, Optional, Union
 
 EDEV = "edev"
 DCAP = "dcap"
@@ -57,6 +57,29 @@ MATCH_REG = "[a-zA-Z0-9_]*"
 
 # Used as a sentinal value when we only want the href of the root
 NO_INDEX = -1
+
+class HrefParser:
+    def __init__(self, href: str):
+        self.href = href
+        self._split = href.split(SEP)
+    
+    def has_index(self) -> bool:
+        return len(self._split) > 1
+    
+    def count(self) -> int:
+        return len(self._split)
+    
+    def startswith(self, value: str) -> bool:
+        return self.href.startswith(value)
+    
+    def at(self, index: int) -> Union[str, int, None]:
+        try:
+            intvalue = int(self._split[index])
+            return intvalue
+        except ValueError:
+            return self._split[index]
+        except IndexError:
+            return None
 
 class EndDeviceHref:
     def __init__(self, index: int):
@@ -379,7 +402,7 @@ class ParsedUsagePointHref:
         self._href = href
         self._split = href.split(SEP)
         
-    def has_usage_point(self) -> bool:
+    def has_usage_point_index(self) -> bool:
         return self.usage_point_index is not None
     
     def has_extra(self) -> bool:
