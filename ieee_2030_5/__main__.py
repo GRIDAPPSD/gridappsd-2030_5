@@ -148,6 +148,10 @@ def _main():
                         action="store_true",
                         default=False,
                         help="Run the server in a threaded environment.")
+    parser.add_argument("--lfdi", 
+                        help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
+    parser.add_argument("--show-lfdi", action="store_true",
+                        help="Show all of the lfdi for the generated certificates and exit.")
     opts = parser.parse_args()
 
     logging_level = logging.DEBUG if opts.debug else logging.INFO
@@ -190,10 +194,23 @@ def _main():
         for host in unknown:
             _log.error(host)
         sys.exit(1)
+        
+    if opts.show_lfdi and not opts.no_create_certs:
+        sys.stderr.write("Can't show lfdi when creating certificates.\n")
+        sys.exit(1)
 
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
     
+    if opts.show_lfdi:
+        for cn in config.devices:
+            sys.stdout.write(f"{cn.id} {tls_repo.lfdi(cn.id)}\n")
+        sys.exit(0)    
+    
+    # Puts the server into http single client lfdi mode.
+    if opts.lfdi:
+        config.lfdi_client = opts.lfdi
+            
     # Initialize the data storage for the adapters
     if config.storage_path is None:
         config.storage_path = Path("data_store")
