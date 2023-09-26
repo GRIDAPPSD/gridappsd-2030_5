@@ -24,6 +24,26 @@ __ns_map__ = {None: "urn:ieee:std:2030.5:ns"}
 import ieee_2030_5.types_ as t
 import ieee_2030_5.utils as tls
 
+class PrivateKeyDeosntExist(Exception):
+    def __init__(self, private_key_path: Path):
+        super().__init__()
+        self.pk_path = private_key_path
+        
+    def __str__(self) -> str:
+        return f"The path {self.pk_path} does not exist!"
+
+class CertExistsError(Exception):
+    def __init__(self, cert_path: Path):
+        super().__init__()
+        self.cert_path = cert_path
+        
+    def __str__(self) -> str:
+        return f"The path {self.cert_path} already exists!"
+    
+class CADoesNotExist(Exception):
+    def __str__(self) -> str:
+        return "The CA certificate does not exist!"
+    
 
 def serialize_dataclass(obj: dataclass) -> str:
     """
@@ -171,8 +191,7 @@ class TLSWrap:
         Returns:
 
         """
-        raise NotImplementedError()
-
+        
     @staticmethod
     def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
                                        combined_file: Path):
@@ -191,3 +210,8 @@ class TLSWrap:
 
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
+
+__all__ = [
+    'OpensslWrapper',
+    'CryptographyWrapper'
+]

@@ -212,17 +212,4 @@ class ServerEndpoints:
     def _curves(self, path) -> Response:
         pth = request.environ['PATH_INFO']
         obj = get_href(pth)
-        # if index is None:
-        #     items = get_href_filtered(hrefs.curve)
-        #     curve_list = DERCurveList(DERCurve=items, all=len(items), href=request.path, results=len(items))
-        #     response = Response(dataclass_to_xml(curve_list))
-        # else:
-        #     response = Response(dataclass_to_xml(get_href(request.path)))
         return RequestOp(server_endpoints=self).build_response_from_dataclass(obj)
-        # if index is None:
-        #     items = get_href_filtered(href_prefix=hrefs.program)
-        #     program_list = DERProgramList(DERProgram=items, all=len(items), href=request.path, results=len(items))
-        #     response = Response(dataclass_to_xml(program_list))
-        # else:
-        #     response = Response(dataclass_to_xml(get_href(request.path)))
-        # return response

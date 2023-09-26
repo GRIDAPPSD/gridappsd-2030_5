@@ -114,6 +114,8 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         else:
             curve = m.DERCurve(href=m.DERCurveLink(hrefs.curve_href(index)), **curve_cfg)
             adpt.DERCurveAdapter.add(curve)
+            
+        add_href(hrefs.curve_href(), adpt.DERCurveAdapter.fetch_all(m.DERCurveList(href=hrefs.curve_href(), all=adpt.DERCurveAdapter.size())))
         
 
     for index, program_cfg in enumerate(config.programs):
@@ -122,9 +124,37 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             _log.warning(f"Updating existing program {hrefs.der_program_href(index)}")
         else:
             devices_cfg = program_cfg.pop("devices", [])
-            program = m.DERProgram(href=m.DERProgramLink(hrefs.der_program_href(index)),
+            default_der_control = program_cfg.pop("DefaultDERControl", None)
+            der_controls = program_cfg.pop("DERControls", None)
+            
+            program = m.DERProgram(href=hrefs.der_program_href(index),
                                    **program_cfg)
-            adpt.DERProgramAdapter.add(program)    
+            program = adpt.DERProgramAdapter.add(program)
+            
+            if default_der_control is not None:
+                default_der_control_href = program.href + hrefs.SEP + "dderc"
+                default_der_control = m.DefaultDERControl(href=default_der_control_href, **default_der_control)
+                add_href(default_der_control_href, default_der_control)
+                program.DefaultDERControlLink = m.DefaultDERControlLink(href=default_der_control_href)
+            
+            if der_controls is not None:
+                der_control_list = m.DERControlList(href=program.href + hrefs.SEP + "derc", all=len(der_controls))
+                for derc_index, der_control in enumerate(der_controls):
+                    derc_href = program.href + hrefs.SEP + "derc" + hrefs.SEP + str(derc_index)
+                    der_control_list.DERControl.append(m.DERControl(href=derc_href, **der_control))
+                
+                add_href(der_control_list.href, der_control_list)
+                program.DERControlListLink = m.DERControlListLink(href=der_control_list.href, all=der_control_list.all)
+
+            active_control_list_href = program.href + hrefs.SEP + "dera"
+            active_control_list = m.DERControlList(href=active_control_list_href, all=0, DERControl=[])
+            add_href(active_control_list_href, active_control_list)
+            program.ActiveDERControlListLink = m.ActiveDERControlListLink(href=active_control_list_href, all=0)
+            
+            program.DERCurveListLink = m.DERCurveListLink(href=hrefs.curve_href(), all=adpt.DERCurveAdapter.size())
+            
+            program.primacy = "0"
+            
         
     for index, fsa in enumerate(config.fsa):
         fsa_obj = adpt.FunctionSetAssignmentsAdapter.fetch_by_href(hrefs.fsa_href(index))
@@ -134,8 +164,20 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         else:
             programs_cfg = fsa.pop("programs", [])
             fsa_obj = m.FunctionSetAssignments(hrefs.fsa_href(index), **fsa)
+            fsa_programs = []
+            for prg in program_cfg.values():
+                program = adpt.DERProgramAdapter.fetch_by_property("description", prg)
+                if program:
+                    fsa_programs.append(program)
+            fsa_obj = adpt.FunctionSetAssignmentsAdapter.add(fsa_obj)
             
-            adpt.FunctionSetAssignmentsAdapter.add(fsa_obj)
+            if fsa_programs:
+                fsa_der_href = end_device.href + hrefs.SEP + "fsa" + hrefs.SEP + str(index)
+                fsa_obj.DERProgramListLink = m.DERProgramListLink(href=fsa_der_href, all=len(fsa_programs))
+                add_href(fsa_der_href, m.DERProgramList(href=fsa_der_href, DERProgram=fsa_programs, all=len(fsa_programs)))
+                
+            
+            
             
     for href, fsaptr in end_device_fsa.items():
         fsa_list = m.FunctionSetAssignmentsList(href)
