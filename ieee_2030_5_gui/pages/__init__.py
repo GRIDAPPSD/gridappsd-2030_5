@@ -23,6 +23,7 @@ class Pages(Enum):
     ENDDEVICES = PageContext('enddevices', 'End Devices', '/enddevices')
     PROGRAMS = PageContext('programs', 'DER Programs', '/programs')
     FSA = PageContext('fsa', 'Function Set Assignments', '/fsa')
+    DER = PageContext('der', 'DER', '/der')
     # LOGIN = 'login'
     # LOGOUT = 'logout'
     # SETTINGS = 'settings'
@@ -40,6 +41,7 @@ def show_global_header(page: PageContext):
 from .certs import show_certs
 from .controls import show_controls
 from .curves import show_curves
+from .der import show_der
 from .enddevices import show_enddevices
 from .fsa import show_fsa
 from .programs import show_programs
@@ -50,6 +52,7 @@ Pages.CURVES.value.module = show_curves
 Pages.ENDDEVICES.value.module = show_enddevices
 Pages.PROGRAMS.value.module = show_programs
 Pages.FSA.value.module = show_fsa
+Pages.DER.value.module = show_der
 
 # def load_pages():
 #     import glob

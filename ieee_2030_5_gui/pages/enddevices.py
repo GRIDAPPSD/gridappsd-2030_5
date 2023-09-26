@@ -1,6 +1,7 @@
 import logging
 from copy import deepcopy
-from typing import Dict, List
+from pprint import pformat
+from typing import Any, Dict, List
 
 from nicegui import ui
 
@@ -15,7 +16,17 @@ _log = logging.getLogger(__name__)
 
 enddevice_list: m.EndDeviceList = m.EndDeviceList()
 
-current_enddevice: m.EndDevice = m.EndDevice(enabled=True)
+default_enddevice: m.EndDevice = m.EndDevice(enabled=True, postRate=900)
+current_enddevice: m.EndDevice = m.EndDevice(enabled=True, postRate=900)
+
+class CurrentValueDict(dict):
+    def __setitem__(self, __key: Any, __value: Any) -> None:
+        return super().__setitem__(__key, __value)
+    
+    def __getitem__(self, __key: Any) -> Any:
+        return super().__getitem__(__key)
+
+current_enddevice = CurrentValueDict(current_enddevice.__dict__)
 
 
 # Readonly list of controls for the program.
@@ -31,28 +42,51 @@ def render_select():
     with ui.row():
         with ui.column():
             if not current_enddevice.href:
-                ui.select(end_device_hrefs, label="Programs", value=end_device_hrefs[0]).classes("w-64")
+                ui.select(end_device_hrefs, label="Programs", value=end_device_hrefs[0],
+                          on_change=lambda e: change_select(e.value)).classes("w-64")
             else:
-                ui.select(end_device_hrefs, label="Programs", value=current_enddevice.href).classes("w-64")
-                
+                ui.select(end_device_hrefs, label="Programs", value=current_enddevice.href,
+                          on_change=lambda e: change_select(e.value)).classes("w-64")
+
+def change_select(selected_value: str):
+    global current_enddevice
+    
+    if selected_value in (None, "NEW"):
+        _log.info(selected_value)
+        current_enddevice = deepcopy(default_enddevice)
+    else:
+        current_enddevice = next(filter(lambda x: x.href == selected_value, enddevice_list.EndDevice))
+        _log.info(selected_value)
+        
+    _log.debug(pformat(current_enddevice.__dict__))
+    render_enddevice_form.refresh()
 
 @ui.refreshable
 def render_enddevice_form():
     
     with ui.row():
         with ui.column().classes("pr-20"):
-            deviceCategory = ui.select({v.value: v.name for i, v in enumerate(m.DeviceCategoryType)}, label="Device Category").classes("w-96") \
-                .bind_value(current_enddevice, "deviceCategory")
+            deviceCategory = ui.select({v.value: v.name for i, v in enumerate(m.DeviceCategoryType)}, 
+                                       label="Device Category").classes("w-96") \
+                .bind_value(current_enddevice, "deviceCategory", 
+                            #forward=lambda x: x,
+                            backward=lambda x: m.DeviceCategoryType(current_enddevice.deviceCategory).value)
+                #.bind_value(current_enddevice, "deviceCategory")
             enabled = ui.checkbox("Enabled").bind_value(current_enddevice, "enabled")
             postRate = ui.number("postRate").bind_value(current_enddevice, "postRate")
-            
         
-        if current_enddevice.lFDI:
-            with ui.column():
-                ui.label("lFDI")
-                ui.label(current_enddevice.lFDI)
-                ui.label("sFDI")
-                ui.label(current_enddevice.sFDI)
+        with ui.column():
+            lfdi = ui.label(f"lFDI: {current_enddevice.lFDI}").bind_visibility(current_enddevice, 
+                                                                        forward=lambda x: current_enddevice.href is None,
+                                                                        backward=lambda x: current_enddevice.href is not None)
+            
+            sfdi = ui.label(f"sFDI: {current_enddevice.sFDI}").bind_visibility(current_enddevice, 
+                                                                        forward=lambda x: current_enddevice.href is None,
+                                                                        backward=lambda x: current_enddevice.href is not None)
+            
+        # TODO deal with function set url here
+        # ui.select(names, multiple=True, value=names[:2], label='with chips') \
+        #   .classes('w-64').props('use-chips')
             
 def revert_changes():
     pass

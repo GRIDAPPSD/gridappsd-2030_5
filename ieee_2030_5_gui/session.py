@@ -46,16 +46,34 @@ def endpoint(endpoint: str) -> str:
     endpoint = urllib.parse.quote(endpoint)
     return f"{base_url}/{endpoint}"
 
+def get_der_list() -> m.DERList:
+    href = endpoint('der')
+    list_params = list_parameters()
+    return xml_to_dataclass(backend_session.get(href, params=list_params).text)
+
+def send_der(item: m.DER) -> m.DER:
+    item_xml = dataclass_to_xml(item)
+        
+    if item.href:
+        _log.debug("PUTTING data")
+        response = backend_session.put(endpoint('der'), data=item_xml)
+    else:
+        _log.debug("POSTING data")
+        response = backend_session.post(endpoint('der'), data=item_xml)
+    
+    _log.debug(response.text)
+    
+    return xml_to_dataclass(response.text)
 
 def get_enddevice_list() -> m.EndDeviceList:
     href = endpoint('enddevice')
     list_params = list_parameters()
     return xml_to_dataclass(backend_session.get(href, params=list_params).text)
 
-def send_enddevice(enddevice: m.EndDevice) -> m.EndDevice:
-    item_xml = dataclass_to_xml(enddevice)
+def send_enddevice(item: m.EndDevice) -> m.EndDevice:
+    item_xml = dataclass_to_xml(item)
         
-    if enddevice.href:
+    if item.href:
         _log.debug("PUTTING data")
         response = backend_session.put(endpoint('enddevices'), data=item_xml)
     else:

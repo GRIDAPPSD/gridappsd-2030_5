@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 #from fastapi import FastAPI
 from nicegui import ui
 
-from ieee_2030_5_gui.pages import Pages, show_global_header
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 _log = logging.getLogger(__name__)
@@ -25,20 +24,12 @@ _log = logging.getLogger(__name__)
 # __all__ = [
 #     "run_gui"
 # ]
-
-def initialize_app():
+def setup_environment():
+    """Creates the os.environ for the application.
     
-    show_global_header(Pages.HOME)
-    
-    ui.markdown("""
-
-# Welcome to the IEEE 2030.5 Admin GUI
-
-This is a work in progress""")
-    
-if __name__ in {"__main__", "__mp_main__"}:
-    # out_file = open(sys.stdout.fileno(), 'wb', 0)
-    # sys.stdout = io.TextIOWrapper(out_file, write_through=True)
+    This is done using the .env file in same directory as this file or from
+    the command line parameters or from the environmental variables already existing.
+    """
     from pathlib import Path
 
     PREFIX = "2030_5"
@@ -62,7 +53,35 @@ if __name__ in {"__main__", "__mp_main__"}:
         if os.getenv(x) is None or os.getenv(x).strip() == "":
             sys.stderr.write(f'Missing {x} in .env file\n')
             sys.exit(1)
-            
+    
+    paths = [
+        f"{PREFIX}_CLIENT_KEY",
+        f"{PREFIX}_CLIENT_CERT",
+        f"{PREFIX}_CA_CERT"
+    ]
+    
+    for x in paths:
+        os.environ[x] = Path(os.getenv(x)).expanduser().as_posix()
+
+def initialize_app():
+    
+    show_global_header(Pages.HOME)
+    
+    ui.markdown("""
+
+# Welcome to the IEEE 2030.5 Admin GUI
+
+This is a work in progress""")
+    
+if __name__ in {"__main__", "__mp_main__"}:
+    # out_file = open(sys.stdout.fileno(), 'wb', 0)
+    # sys.stdout = io.TextIOWrapper(out_file, write_through=True)
+    
+    # Must be done before importing the rest of the application.
+    setup_environment()
+
+    from ieee_2030_5_gui.pages import Pages, show_global_header            
+    
     logging.basicConfig(level=logging.DEBUG)
 
     initialize_app()
