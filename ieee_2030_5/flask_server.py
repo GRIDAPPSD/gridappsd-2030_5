@@ -98,6 +98,13 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             raise werkzeug.exceptions.Forbidden()
 
         try:
+            # Short circuit the connection from the client and utilize http rather
+            # than x509 certificates.
+            if self.config.lfdi_client:
+                environ['ieee_2030_5_lfdi'] = self.config.lfdi_client
+                environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(self.config.lfdi_client)
+                return environ
+            
             # For admin use the admin peer even though it's not what is sent in to the client.
             # This allows admin to login from any api, though not necessarily secure this
             # allows a way to have the admin be boxed off.
@@ -123,9 +130,13 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
                 f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}"
             )
             if not PeerCertWSGIRequestHandler.is_admin(environ['PATH_INFO']):
-                found_device_id = self.tlsrepo.find_device_id_from_sfdi(
-                    environ['ieee_2030_5_sfdi'])
-                assert found_device_id, "Unknown device found."
+                # TODO Currently if we are in full file mode there isn't a way to verify that the
+                # device is known.
+                if PeerCertWSGIRequestHandler.config.lfdi_mode == "lfdi_mode_from_cert_fingerprint":
+                    found_device_id = self.tlsrepo.find_device_id_from_sfdi(
+                        environ['ieee_2030_5_sfdi'])
+                    assert found_device_id, "Unknown device found."
+                
         except OpenSSL.crypto.Error:
             # Only if we have a debug_device do we want to expose this device through the admin page.
             # if self.debug_device:
@@ -399,7 +410,13 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs):
     tls_repository = tlsrepo
     
     app = __build_app__(config, tlsrepo)
-    ssl_context = __build_ssl_context__(tlsrepo)
+    
+    ssl_context = None
+    # If lfd_client is specified then we are running in http mode so we don'
+    # establish an sslcontext.
+    if not config.lfdi_client:
+        ssl_context = __build_ssl_context__(tlsrepo)
+        
 
     try:
         host, port = config.server_hostname.split(":")
@@ -407,9 +424,6 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs):
         # host and port not available
         host = config.server_hostname
         port = 8443
-
-    if config.http_port is not None:
-        http_app = __build_http_app__(config=config)
 
     PeerCertWSGIRequestHandler.config = config
     PeerCertWSGIRequestHandler.tlsrepo = tlsrepo

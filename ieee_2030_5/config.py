@@ -5,12 +5,12 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, TypeVar, Union
 
 import yaml
 from dataclasses_json import dataclass_json
 
-__all__ = ["ServerConfiguration"]
+__all__ = ["ServerConfiguration", "ReturnValue"]
 
 #from ieee_2030_5.adapters import DERControlAdapter
 
@@ -26,9 +26,31 @@ from ieee_2030_5.types_ import Lfdi
 
 _log = logging.getLogger(__name__)
 
+D = TypeVar("D")
+@dataclass
+class ReturnValue:
+    success: bool
+    an_object: D
+    was_update: bool
+    
+    def get(self, datatype: D) -> D:
+        return self.an_object
+    
+
 class InvalidConfigFile(Exception):
     pass
 
+@dataclass
+class FSAConfiguration:
+    description: str
+    programs: List[ProgramConfiguration] = field(default_factory=list)
+    
+@dataclass
+class DERConfiguration:
+    #capabilities: 
+    modesSupported: str
+    type: int
+    
 
 @dataclass
 class DeviceConfiguration:
@@ -36,6 +58,9 @@ class DeviceConfiguration:
     post_rate: int = 900
     pin: int = None
     poll_rate: int = 900
+    fsas: List[str] = field(default_factory=list)
+    programs: List[str] = field(default_factory=list)
+    ders: List[str] = field(default_factory=list)
     
 
     @classmethod
@@ -47,7 +72,7 @@ class DeviceConfiguration:
 
 
 @dataclass
-class DERCurveConfiguration(m.DERCurve):
+class CurveConfiguration:
 
     @classmethod
     def from_dict(cls, env):
@@ -58,7 +83,7 @@ class DERCurveConfiguration(m.DERCurve):
 
 
 @dataclass
-class DERControlBaseConfiguration(m.DERControlBase):
+class ControlBaseConfiguration:
 
     @classmethod
     def from_dict(cls, env):
@@ -69,7 +94,7 @@ class DERControlBaseConfiguration(m.DERControlBase):
 
 
 @dataclass
-class DERControlConfiguration(m.DERControl):
+class ControlConfiguration:
     description: str = None
     base: Dict = field(default_factory=dict)
 
@@ -87,7 +112,7 @@ class DERControlConfiguration(m.DERControl):
 
 
 @dataclass
-class DERProgramConfiguration(m.DERProgram):
+class ProgramConfiguration:
 
     default_control: str = None
     controls: List[str] = field(default_factory=list)
@@ -145,15 +170,15 @@ class ProgramList:
 class ServerConfiguration:
     openssl_cnf: str
 
-    devices: List[DeviceConfiguration]
 
     tls_repository: str
     openssl_cnf: str
 
     server: str
-    https_port: int
-    http_port: int = None
+    port: int
+    ui_port: int = None
     
+    cleanse_storage: bool = True
     storage_path: str = None
 
     log_event_list_poll_rate: int = 900
@@ -162,6 +187,13 @@ class ServerConfiguration:
     end_device_list_poll_rate: int = 86400  # daily check-in
 
     generate_admin_cert: bool = False
+    lfdi_client: str = None
+    
+    fsa: List[FSAConfiguration] = field(default_factory=list)
+    programs: List[ProgramConfiguration] = field(default_factory=list)
+    devices: List[DeviceConfiguration] = field(default_factory=list)
+    ders: List[DERConfiguration] = field(default_factory=list)
+    curves: List[CurveConfiguration] = field(default_factory=list)
 
     server_mode: Union[
         Literal["enddevices_create_on_start"],
@@ -192,8 +224,8 @@ class ServerConfiguration:
     @property
     def server_hostname(self) -> str:
         server = self.server
-        if self.https_port:
-            server = server + f":{self.https_port}"
+        if self.port:
+            server = server + f":{self.port}"
             
         return server
 

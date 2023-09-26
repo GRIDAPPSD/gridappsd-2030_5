@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import inspect
+from pprint import pprint
 import logging
 import typing
+from copy import deepcopy
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import (Any, Dict, Generic, List, Optional, Protocol, Type,
-                    TypeVar, get_args, get_origin)
+from typing import (Any, ClassVar, Dict, Generic, List, Optional, Protocol,
+                    Type, TypeVar, Union, get_args, get_origin)
 
 import yaml
 from blinker import Signal
@@ -26,7 +27,12 @@ load_event = Signal("load-store-event")
 store_event = Signal("store-data-event")
 
 def __get_store__(store_name: str) -> Path:
-    store_path = Path("data_store") 
+    if cfg.ServerConfiguration.storage_path is None:
+        cfg.ServerConfiguration.storage_path = Path("data_store")
+    elif isinstance(cfg.ServerConfiguration.storage_path, str):
+        cfg.ServerConfiguration.storage_path = Path(cfg.ServerConfiguration.storage_path)
+    
+    store_path = cfg.ServerConfiguration.storage_path
     store_path.mkdir(parents=True, exist_ok=True)
     store_path = store_path / f"{store_name}.yml"
     
@@ -109,6 +115,55 @@ ready_signal = Signal("ready-signal")
 T = TypeVar('T')
 C = TypeVar('C')
 D = TypeVar('D')
+
+class ListAdpater:
+    def __init__(self):        
+        self._list_urls = []
+        self._list_containers: Dict[str, List] = {}
+        self._types: Dict[str, D] = {}
+        load_event.send(self)
+        # if "generic_type" not in kwargs:
+        #     raise ValueError("Missing generic_type parameter")
+        # self.uri = uri
+        # self._generic_type: Type = kwargs['generic_type']
+        # if isinstance(container, Type):
+        #     self._container = container()
+        # else:
+        #     self._container = container
+        
+        # setattr(self._container, T.__name__, [])
+    @property
+    def generic_type_name(self):
+        return self.__class__.__name__
+    
+    def initialize_uri(self, uri: str, obj: D):
+        if self._list_containers.get(uri) and self._types.get(uri) != obj:
+            _log.error("Must initialize before container has any items.")
+            raise ValueError("Must initialize before container has any items.")
+        self._types[uri] = obj
+        
+    
+    def append(self, uri: str, obj: D):
+        # if there is a type
+        expected_type = self._types.get(uri)
+        if expected_type:
+            assert isinstance(obj, expected_type)
+        
+        if uri not in self._list_containers:
+            self._list_containers[uri] = []
+        self._list_containers[uri].append(obj)
+        store_event.send(self)
+        
+    def remove(self, uri: str, index: int):
+        del self._list_containers[uri][index]
+        store_event.send(self)
+        
+    def render_container(self, uri: str, instance: object, prop: str):
+        setattr(instance, prop, deepcopy(self._list_containers[uri]))
+        
+    def print_container(self, uri: str):
+        pprint(self._list_containers[uri])
+        
 
 
 class Adapter(Generic[T]):

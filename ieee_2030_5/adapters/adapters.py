@@ -131,3 +131,31 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> ReturnValue:
         update = True
     
     return ReturnValue(True, mup, update)
+    
+        
+    
+    
+    
+    # def create(self, mup: m.MirrorUsagePoint) -> Tuple[ReturnCode, str]:
+    #     """Creates a MirrorUsagePoint and its associated usage point
+        
+    #     This method creates all of the sub elements of the usage point and
+    #     mirror usage points as well.
+    #     """
+        
+    #     before = len(self.__upt_container__)
+    #     upt = self.__upt_container__.create_or_replace(mup)
+    #     after = len(self.__upt_container__)
+    #     if after > before:
+    #         # TODO: Don't hard code here.
+    #         mup.href = upt.href.replace('upt', 'mup')
+    #         mup.postRate = BaseAdapter.server_config().usage_point_post_rate
+    #         self.__mirror_usage_points__.append(mup)
+    #         return ReturnCode.CREATED.value, mup.href
+    #     else:
+    #         for i, o in enumerate(self.__mirror_usage_points__):
+    #             if o.mRID == mup.mRID:
+    #                 mup.href = o.href
+    #                 self.__mirror_usage_points__[i] = mup
+    #                 break
+    #         return ReturnCode.NO_CONTENT.value, mup.href
