@@ -175,8 +175,6 @@ class Adapter(Generic[T]):
         self._href_prefix: str = url_prefix
         self._current_index: int  = -1
         self._item_list: Dict[int, T] = {}
-        self._child_prefix: Dict[Type, str] = {}
-        self._child_map: Dict[int, Dict[str, List[C]]] = {}
         _log.debug(f"Intializing adapter {self.generic_type_name}")
         load_event.send(self)
     
@@ -198,8 +196,6 @@ class Adapter(Generic[T]):
     def clear(self) -> None:
         self._current_index = -1
         self._item_list: Dict[int, T] = {}
-        self._child_prefix: Dict[Type, str] = {}
-        self._child_map: Dict[int, Dict[str, List[C]]] = {}
         store_event.send(self)
         
     def fetch_by_mrid(self, mrid: str) -> Optional[T]:
@@ -222,87 +218,6 @@ class Adapter(Generic[T]):
             else:
                 if getattr(under_test, prop) == prop_value:
                     return obj
-            
-            
-    def fetch_child_names(self) -> List[str]:
-        return list(self._child_prefix.keys())
-    
-    def add_container(self, child_type: Type, href_prefix: str):
-        self._child_prefix[child_type] = href_prefix
-        
-    def remove_child(self, parent: T, name: str, child: Any):
-        found_index = self.fetch_index(parent)
-        self._child_map[found_index][name].remove(child)
-        
-    def remove_child_by_mrid(self, parent: T, name: str, mRID: str):
-        
-        found_index = self.fetch_index(parent)
-        
-        indexes = [index for index, x in enumerate(self._child_map[found_index][name]) if x.mRID == mRID]
-        for index in sorted(indexes, reverse=True):
-            self._child_map[found_index][name].pop(index)
-        
-    def add_replace_child(self, parent: T, name: str, child: Any, href: str = None):
-        
-        # Make sure parent is in the Adapter by looking for it's index.
-        found_index = self.fetch_index(parent)
-        
-        # Deal with missing indexes
-        if found_index not in self._child_map:
-            self._child_map[found_index] = {}
-            
-        if name not in self._child_map[found_index]:
-            self._child_map[found_index][name] = []
-            
-        if len(self._child_map[found_index][name]) > 0:
-            if not isinstance(child, type(self._child_map[found_index][name][0])):
-                raise ValueError(f"Children can only have single types {type(child)} != {type(self._child_map[found_index][name][0])}")
-        if not child.href:
-            if href:
-                child.href = href
-            else:
-                child.href = hrefs.SEP.join([parent.href, name, str(len(self._child_map[found_index][name]))])
-        
-        # Replace based upon resource href
-        for index, c in enumerate(self._child_map[found_index][name]):
-            if c.href == child.href:
-                _log.debug(f"Replacing child {child.href}")
-                self._child_map[found_index][name][index] = child
-                return
-            
-        self._child_map[found_index][name].append(child)
-        
-    def fetch_children_by_parent_index(self, parent_index: int, child_type: Type) -> List[Type]:
-        if child_type not in self._child_map[parent_index]:
-            raise KeyError(f"No child object of type {child_type}")
-        
-        return self._child_map[parent_index][child_type]
-    
-    def fetch_children(self, parent: T, name: str, container: Optional[Type] = None) -> List[Type]:
-        found_index = self.fetch_index(parent)
-        # Should end with List if container is not None
-        if container is not None:
-            if not container.__class__.__name__.endswith("List"):
-                raise ValueError(f"Invalid container, type must end in List")
-        
-        try:
-            children = self._child_map[found_index][name]
-        except KeyError:
-            children = []
-        
-        retval = children
-        
-        if container is not None:
-            prop = container.__class__.__name__[:container.__class__.__name__.find("List")]
-            setattr(container, prop, children)
-            setattr(container, "results", len(children))
-            setattr(container, "all", len(children))
-            retval = container
-            
-        return retval
-                
-    def fetch_child(self, parent: T, name: str, index: int = 0) -> Type:
-        return self.fetch_children(parent, name)[index]
             
     def add(self, item: T) -> T:
         if not isinstance(item, self._generic_type):
@@ -381,26 +296,6 @@ class Adapter(Generic[T]):
     
     def size(self) -> int:
         return len(self._item_list)
-    
-    def size_children(self, parent: T, name: str) -> int:
-        return len(self.fetch_children(parent, name))
-    
-    def fetch_child_index_by_mrid(self, parent: T, name: str, mRID: str) -> int:
-        for index, child in enumerate(self.fetch_children(parent, name)):
-            if child.mRID == mRID:
-                return index
-        
-        raise KeyError("mRID not found")
-    
-    def replace_child(self, parent: T, name: str, index: int, child: Any):
-        children = self.fetch_children(parent, name)
-        if not type(child) == type(children[index]):
-            return ValueError(f"Children should be  of the same type {type(child)} is not {type(children[index])}")
-        parent_index = self.fetch_index(parent)
-        if not child.href:
-            child.href = children[index].href
-        self._child_map[parent_index][name][index] = child
-    
     
         
 from ieee_2030_5.adapters.adapters import (DERAdapter, 
