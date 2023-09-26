@@ -36,7 +36,9 @@ tsa_policy3 = 1.2.3.4.5.7
 default_ca      = CA_default            # The default ca section
 
 [ CA_default ]
-dir             = $ENV::HOME/tls             # Where everything is kept
+#dir             = $ENV::HOME/tls             # Where everything is kept
+dir = REPLACE_WITH_REPO_PATH
+
 certs           = $dir/certs            # Where the issued certs are kept
 database        = $dir/index.txt        # database index file.
                                         # several certs with same subject.

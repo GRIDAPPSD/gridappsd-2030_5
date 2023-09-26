@@ -90,7 +90,7 @@ class TLSRepository:
         self._devices: Dict[str, str] = {}
         
         new_contents = openssl_cnffile_template.read_text().replace(
-            "dir             = /home/gridappsd/tls", f"dir = {repo_dir}")
+            "dir = REPLACE_WITH_REPO_PATH", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
         self._ca_key = self._private_dir / f"ca.{PRIVATE_EXTENTION}"
         self._ca_cert = self._certs_dir / f"ca.{CERTIFICATE_EXTENSION}"
