@@ -69,6 +69,9 @@ class HrefParser:
     def count(self) -> int:
         return len(self._split)
     
+    def join(self, how_many: int) -> str:
+        return SEP.join([str(x) for x in self._split[:how_many]])
+    
     def startswith(self, value: str) -> bool:
         return self.href.startswith(value)
     
