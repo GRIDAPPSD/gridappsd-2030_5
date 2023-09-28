@@ -368,15 +368,6 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         clients = tlsrepo.client_list
         return render_template("admin/clients.html", registered=clients, connected=[])
 
-    @app.route("/admin/groups")
-    def admin_groups():
-        groups = get_groups()
-        return render_template("admin/groups.html", groups=groups)
-
-    @app.route("/admin/aggregators")
-    def admin_aggregators():
-        return Response("<h1>Aggregators</h1>")
-
     @app.route("/admin/routes")
     def admin_routes():
         routes = '<ul>'
