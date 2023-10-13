@@ -14,37 +14,43 @@ from xsdata.formats.dataclass.parsers.handlers import LxmlEventHandler
 from ieee_2030_5.models.sep import EndDevice, EndDeviceList
 
 __xml_context__ = XmlContext()
-__parser_config__ = ParserConfig(fail_on_unknown_attributes=True,
-                                 fail_on_unknown_properties=True)
-__xml_parser__ = XmlParser(config=__parser_config__, context=__xml_context__, handler=LxmlEventHandler)
+__parser_config__ = ParserConfig(fail_on_unknown_attributes=True, fail_on_unknown_properties=True)
+__xml_parser__ = XmlParser(config=__parser_config__,
+                           context=__xml_context__,
+                           handler=LxmlEventHandler)
 __config__ = SerializerConfig(xml_declaration=False, pretty_print=True)
 __serializer__ = XmlSerializer(config=__config__)
 __ns_map__ = {None: "urn:ieee:std:2030.5:ns"}
 
-
 import ieee_2030_5.types_ as t
 import ieee_2030_5.utils as tls
 
+
 class PrivateKeyDeosntExist(Exception):
+
     def __init__(self, private_key_path: Path):
         super().__init__()
         self.pk_path = private_key_path
-        
+
     def __str__(self) -> str:
         return f"The path {self.pk_path} does not exist!"
 
+
 class CertExistsError(Exception):
+
     def __init__(self, cert_path: Path):
         super().__init__()
         self.cert_path = cert_path
-        
+
     def __str__(self) -> str:
         return f"The path {self.cert_path} already exists!"
-    
+
+
 class CADoesNotExist(Exception):
+
     def __str__(self) -> str:
         return "The CA certificate does not exist!"
-    
+
 
 def serialize_dataclass(obj: dataclass) -> str:
     """
@@ -59,21 +65,19 @@ def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:
     Parse the xml passed and return result from loaded classes.
     """
     parsed = __xml_parser__.from_string(xml, type)
-    
+
     # The xml parser from string seems to double decode the lfDI which
     # probably means I am doing something wrong.  However, this fixes
     # the issue and it is correct after we encode the lFDI.  I will
-    # do the same with other entities as needed.    
+    # do the same with other entities as needed.
     if isinstance(parsed, EndDevice) and parsed.lFDI:
         parsed.lFDI = base64.b16encode(parsed.lFDI)
     elif isinstance(parsed, EndDeviceList):
         for ed in parsed.EndDevice:
             if ed.lFDI:
                 ed.lFDI = base64.b16encode(ed.lFDI)
-            
+
     return parsed
-    
-        
 
 
 def dataclass_to_xml(dc: dataclass) -> str:
@@ -109,6 +113,7 @@ def get_sfdi_from_lfdi(lfdi: t.Lfdi) -> int:
     """
     from ieee_2030_5.certs import sfdi_from_lfdi
     return sfdi_from_lfdi(lfdi)
+
 
 def uuid_2030_5() -> str:
     return str(uuid.uuid4()).replace('-', '').upper()
@@ -192,7 +197,7 @@ class TLSWrap:
         Returns:
 
         """
-        
+
     @staticmethod
     def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
                                        combined_file: Path):
@@ -207,12 +212,9 @@ class TLSWrap:
 
         """
         raise NotImplementedError()
-    
+
 
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
 
-__all__ = [
-    'OpensslWrapper',
-    'CryptographyWrapper'
-]
+__all__ = ['OpensslWrapper', 'CryptographyWrapper']
