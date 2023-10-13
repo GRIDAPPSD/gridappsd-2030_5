@@ -28,6 +28,7 @@ DER_AVAILABILITY = "dera"
 # DER Status
 DER_STATUS = "ders"
 DER_CONTROL_ACTIVE = DERCA
+DER_CAPABILITY = "dercap"
 # Settings
 DER_SETTINGS = "derg"
 END_DEVICE_REGISTRATION = "rg"
@@ -58,23 +59,30 @@ MATCH_REG = "[a-zA-Z0-9_]*"
 # Used as a sentinal value when we only want the href of the root
 NO_INDEX = -1
 
+
 class HrefParser:
+
     def __init__(self, href: str):
         self.href = href
         self._split = href.split(SEP)
-    
+
     def has_index(self) -> bool:
+        """This function returns true if there is an index on the primary type.
+        
+        Ex: /edev_12_dstat has an index of 12 so this will return true
+        Ex: /edev has no index so this will return false
+        """
         return len(self._split) > 1
-    
+
     def count(self) -> int:
         return len(self._split)
-    
+
     def join(self, how_many: int) -> str:
         return SEP.join([str(x) for x in self._split[:how_many]])
-    
+
     def startswith(self, value: str) -> bool:
         return self.href.startswith(value)
-    
+
     def at(self, index: int) -> Union[str, int, None]:
         try:
             intvalue = int(self._split[index])
@@ -84,118 +92,133 @@ class HrefParser:
         except IndexError:
             return None
 
+
 class EndDeviceHref:
+
     def __init__(self, index: int):
         if index is None:
             raise ValueError("index cannot be None")
         self.index = index
-    
+
     @staticmethod
     def parse(href: str) -> EndDeviceHref:
         index = int(href.split(SEP)[1])
         return EndDeviceHref(index)
-        
+
     def __str__(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index)])
-    
+
     @property
     def configuration(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), "cfg"])
-    
+
     @property
     def der_list(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), DER])
-    
+
     @property
     def device_information(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_INFORMATION])
-    
+
     @property
     def device_status(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_STATUS])
-    
+
     @property
     def device_power_status(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_POWER_STATUS])
-    
+
     @property
     def registration(self) -> str:
-        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_REGISTRATION]) 
-    
+        return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_REGISTRATION])
+
     @property
     def function_set_assignments(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_FSA])
-    
+
     @property
     def log_event_list(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_LOG_EVENT_LIST])
-    
+
+
 class DeviceCapabilityHref:
+
     def __init__(self, index: int = None, enddevice: EndDeviceHref = None):
         if index is None and enddevice is None:
             raise ValueError(f"index and enddevice cannot both be None")
         elif index is not None and enddevice is not None:
             if enddevice.index != index:
                 raise ValueError(f"index and enddevice.index must match if both are specified")
-        
+
         if enddevice is not None:
             index = enddevice.index
-            
-        self.index = index    
-    
+
+        self.index = index
+
     def __str__(self) -> str:
         return SEP.join([DEFAULT_DCAP_ROOT, str(self.index)])
-    
+
 
 class DERSubType(Enum):
-    Capability = "dercap"
+    Capability = DER_CAPABILITY
     Settings = DER_SETTINGS
     Status = DER_STATUS
     Availability = DER_AVAILABILITY
     CurrentProgram = DER_PROGRAM
     None_Available = NO_INDEX
 
+
 class FSASubType(Enum):
     DERProgram = "derp"
-    
+
+
 class DERProgramSubType(Enum):
     NoLink = 0
     ActiveDERControlListLink = 1
     DefaultDERControlLink = 2
     DERControlListLink = 3
-    DERCurveListLink= 4
+    DERCurveListLink = 4
     DERControlReplyTo = 5
     DERControl = 6
 
+
 class DERHref:
+
     def __init__(self, root: str) -> None:
-        """Constructs a DERHref.  The root will be appended onto for 
-        the different references for a der.
+        """Constructs a DERHref.
+        
+        The root should be a single instance not a list.  The properties
+        on this object will be the href of the link to the resourse.
         """
         self.root = root
+
     @property
     def der_availability(self) -> str:
         return SEP.join([self.root, "DER_AVAILABILITY"])
+
     @property
     def der_status(self) -> str:
         return SEP.join([self.root, DER_STATUS])
+
     @property
-    def der_capability(self) ->str:
-        return SEP.join([self.root, "dercap"])
+    def der_capability(self) -> str:
+        return SEP.join([self.root, DER_CAPABILITY])
+
     @property
     def der_settings(self) -> str:
         return SEP.join([self.root, DER_SETTINGS])
+
     @property
     def der_current_program(self) -> str:
         return SEP.join([self.root, DER_PROGRAM])
-    
+
+
 class DERProgramHref(NamedTuple):
     root: str
     index: int
     derp_subtype: DERProgramSubType = DERProgramSubType.NoLink
     derp_subtype_index: int = NO_INDEX
-    
-    
+
     @staticmethod
     def parse(href: str) -> DERProgramHref:
         parsed = href.split(SEP)
@@ -212,23 +235,27 @@ class DERProgramHref(NamedTuple):
             if len(parsed) == 4:
                 return DERProgramHref(parsed[0], int(parsed[1]), mapped[parsed[2]], int(parsed[3]))
             return DERProgramHref(parsed[0], int(parsed[1]), mapped[parsed[2]])
-    
+
+
 def der_program_parse(href: str) -> DERProgramHref:
     return DERProgramHref.parse(href)
-    
-def der_program_href(index: int = NO_INDEX, sub: DERProgramSubType = DERProgramSubType.NoLink, subindex: int = NO_INDEX) -> str:
+
+
+def der_program_href(index: int = NO_INDEX,
+                     sub: DERProgramSubType = DERProgramSubType.NoLink,
+                     subindex: int = NO_INDEX) -> str:
     if index == NO_INDEX:
         return DEFAULT_DERP_ROOT
-    
+
     if sub == DERProgramSubType.NoLink:
         return SEP.join([DEFAULT_DERP_ROOT, str(index)])
-    
+
     if sub == DERProgramSubType.ActiveDERControlListLink:
         if subindex == NO_INDEX:
             return SEP.join([DEFAULT_DERP_ROOT, str(index), DER_CONTROL_ACTIVE])
         else:
             return SEP.join([DEFAULT_DERP_ROOT, str(index), DER_CONTROL_ACTIVE, str(subindex)])
-    
+
     if sub == DERProgramSubType.DefaultDERControlLink:
         if subindex == NO_INDEX:
             return SEP.join([DEFAULT_DERP_ROOT, str(index), DDERC])
@@ -237,19 +264,19 @@ def der_program_href(index: int = NO_INDEX, sub: DERProgramSubType = DERProgramS
 
     if sub == DERProgramSubType.DERCurveListLink:
         if subindex == NO_INDEX:
-            return SEP.join([DEFAULT_DERP_ROOT, str(index),  CURVE])
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), CURVE])
         else:
             return SEP.join([DEFAULT_DERP_ROOT, str(index), CURVE, str(subindex)])
-        
+
     if sub == DERProgramSubType.DERControlListLink:
         if subindex == NO_INDEX:
-            return SEP.join([DEFAULT_DERP_ROOT, str(index),  DERC])
+            return SEP.join([DEFAULT_DERP_ROOT, str(index), DERC])
         else:
             return SEP.join([DEFAULT_DERP_ROOT, str(index), DERC, str(subindex)])
-        
+
     if sub == DERProgramSubType.DERControlReplyTo:
         return DEFAULT_RSPS_ROOT
-        
+
 
 @lru_cache()
 def get_server_config_href() -> str:
@@ -260,15 +287,17 @@ def get_server_config_href() -> str:
 def get_enddevice_list_href() -> str:
     return DEFAULT_EDEV_ROOT
 
+
 @lru_cache()
 def curve_href(index: int = NO_INDEX) -> str:
     if index == NO_INDEX:
         return DEFAULT_CURVE_ROOT
-    
+
     return SEP.join([DEFAULT_CURVE_ROOT, str(index)])
 
+
 @lru_cache()
-def fsa_href(index: int = NO_INDEX, edev_index: int=NO_INDEX):
+def fsa_href(index: int = NO_INDEX, edev_index: int = NO_INDEX):
     if index == NO_INDEX and edev_index == NO_INDEX:
         return DEFAULT_FSA_ROOT
     elif index != NO_INDEX and edev_index == NO_INDEX:
@@ -278,8 +307,10 @@ def fsa_href(index: int = NO_INDEX, edev_index: int=NO_INDEX):
     else:
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(index)])
 
+
 def derp_href(edev_index: int, fsa_index: int) -> str:
     return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), FSA, str(fsa_index), DER_PROGRAM])
+
 
 def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int = NO_INDEX):
     if index == NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
@@ -294,7 +325,8 @@ def der_href(index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int =
         return SEP.join([DEFAULT_EDEV_ROOT, int(edev_index), FSA, int(fsa_index)])
     else:
         raise ValueError(f"index={index}, fsa_index={fsa_index}, edev_index={edev_index}")
-    
+
+
 def edev_der_href(edev_index: int, der_index: int = NO_INDEX) -> str:
     if der_index == NO_INDEX:
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER])
@@ -310,7 +342,6 @@ class EDevSubType(Enum):
     LogEventList = END_DEVICE_LOG_EVENT_LIST
     DeviceInformation = END_DEVICE_INFORMATION
     DER = DER
-    
 
 
 @dataclass
@@ -319,63 +350,70 @@ class EdevHref:
     edev_subtype: EDevSubType = EDevSubType.None_Available
     edev_subtype_index: int = NO_INDEX
     edev_der_subtype: DERSubType = DERSubType.None_Available
-    
+
     def __str__(self) -> str:
         value = "/edev"
         if self.edev_index != NO_INDEX:
             value = f"{value}{SEP}{self.edev_index}"
-        
+
         if self.edev_subtype != EDevSubType.None_Available:
             value = f"{value}{SEP}{self.edev_subtype.value}"
-            
+
         if self.edev_subtype_index != NO_INDEX:
             value = f"{value}{SEP}{self.edev_subtype_index}"
-            
+
         if self.edev_der_subtype != DERSubType.None_Available:
             value = f"{value}{SEP}{self.edev_der_subtype.value}"
-        
+
         return value
-           
-    
+
     def parse(path: str) -> EdevHref:
         split_pth = path.split(SEP)
-        
+
         if split_pth[0] != EDEV and split_pth[0][1:] != EDEV:
             raise ValueError(f"Must start with {EDEV}")
-    
+
         if len(split_pth) == 1:
             return EdevHref(NO_INDEX)
         elif len(split_pth) == 2:
             return EdevHref(int(split_pth[1]))
         elif len(split_pth) == 3:
-            return EdevHref(int(split_pth[1]), edev_subtype=EDevSubType(split_pth[2]))        
+            return EdevHref(int(split_pth[1]), edev_subtype=EDevSubType(split_pth[2]))
         elif len(split_pth) == 4:
-            return EdevHref(int(split_pth[1]), edev_subtype=EDevSubType(split_pth[2]), edev_subtype_index=int(split_pth[3]))
+            return EdevHref(int(split_pth[1]),
+                            edev_subtype=EDevSubType(split_pth[2]),
+                            edev_subtype_index=int(split_pth[3]))
         elif len(split_pth) == 5:
-            return EdevHref(int(split_pth[1]), edev_subtype=EDevSubType(split_pth[2]), edev_subtype_index=int(split_pth[3]), edev_der_subtype=DERSubType(split_pth[4]))
+            return EdevHref(int(split_pth[1]),
+                            edev_subtype=EDevSubType(split_pth[2]),
+                            edev_subtype_index=int(split_pth[3]),
+                            edev_der_subtype=DERSubType(split_pth[4]))
         else:
             raise ValueError("Out of bounds parsing.")
-        
+
     def __eq__(self, other: object) -> bool:
         return other.edev_index == self.edev_index and other.edev_subtype == self.edev_subtype, \
             other.edev_subtype_index == self.edev_subtype_index and other.edev_der_subtype == self.edev_der_subtype
-        
+
+
 class FSAHref(NamedTuple):
     fsa_index: NO_INDEX
     fsa_sub: FSASubType = None
-    
+
+
 def fsa_parse(path: str) -> FSAHref:
     split_pth = path.split(SEP)
-    
+
     if len(split_pth) == 1:
         return FSAHref(NO_INDEX)
     elif len(split_pth) == 2:
         return FSAHref(int(split_pth[1]))
     elif len(split_pth) == 3:
         return FSAHref(int(split_pth[1]), fsa_sub=split_pth[2])
-    
+
     raise ValueError("Invalid parsing path.")
-    
+
+
 def der_sub_href(edev_index: int, index: int = NO_INDEX, subtype: DERSubType = None):
     if subtype is None and index == NO_INDEX:
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER])
@@ -383,8 +421,9 @@ def der_sub_href(edev_index: int, index: int = NO_INDEX, subtype: DERSubType = N
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER, str(index)])
     else:
         return SEP.join([DEFAULT_EDEV_ROOT, str(edev_index), DER, str(index), subtype.value])
-    
-@lru_cache()    
+
+
+@lru_cache()
 def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX):
     """Mirror Usage Point hrefs
     
@@ -397,23 +436,25 @@ def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX):
         ret = DEFAULT_MUP_ROOT
     else:
         ret = SEP.join([DEFAULT_MUP_ROOT, str(mirror_usage_point_index)])
-    
+
     return ret
 
+
 class ParsedUsagePointHref:
+
     def __init__(self, href: str):
         self._href = href
         self._split = href.split(SEP)
-        
+
     def has_usage_point_index(self) -> bool:
         return self.usage_point_index is not None
-    
+
     def has_extra(self) -> bool:
         return self.has_meter_reading_list() or \
                 self.has_reading_list() or \
                 self.has_reading_set_list() or \
                 self.has_reading_set_reading_list()
-    
+
     def has_meter_reading_list(self) -> bool:
         try:
             if retval := self._split[2] == "mr":
@@ -421,7 +462,7 @@ class ParsedUsagePointHref:
             return retval
         except IndexError:
             return False
-    
+
     def has_reading_set_list(self) -> bool:
         try:
             if retval := self._split[4] == "rs":
@@ -429,7 +470,7 @@ class ParsedUsagePointHref:
             return retval
         except IndexError:
             return False
-    
+
     def has_reading_set_reading_list(self) -> bool:
         try:
             if retval := self._split[6] == "r":
@@ -437,15 +478,15 @@ class ParsedUsagePointHref:
             return retval
         except IndexError:
             return False
-    
+
     def has_reading_list(self) -> bool:
         try:
-            if retval:= self._split[4] == "r":
+            if retval := self._split[4] == "r":
                 ...
             return retval
         except IndexError:
             return False
-    
+
     @property
     def usage_point_index(self) -> Optional[int]:
         try:
@@ -453,7 +494,7 @@ class ParsedUsagePointHref:
         except IndexError:
             pass
         return None
-    
+
     @property
     def meter_reading_index(self) -> Optional[int]:
         try:
@@ -461,7 +502,7 @@ class ParsedUsagePointHref:
         except IndexError:
             pass
         return None
-    
+
     @property
     def reading_set_index(self) -> Optional[int]:
         try:
@@ -470,7 +511,7 @@ class ParsedUsagePointHref:
         except IndexError:
             pass
         return None
-    
+
     @property
     def reading_set_reading_index(self) -> Optional[int]:
         try:
@@ -479,7 +520,7 @@ class ParsedUsagePointHref:
         except IndexError:
             pass
         return None
-    
+
     @property
     def reading_index(self) -> Optional[int]:
         try:
@@ -487,69 +528,81 @@ class ParsedUsagePointHref:
                 return int(self._split[5])
         except IndexError:
             pass
-        
+
         return None
 
+
 class UsagePointHref:
+
     def __init__(self, href: str = None, root: str = '/upt'):
         self._href = href
         self._root = root
-    
+
     def is_root(self) -> bool:
         return self._href == self._root
-    
-    
-        
+
     def value(self) -> str:
         return self._root
-    
+
     def usage_point(self, usage_point_index: int):
         return SEP.join([self._root, str(usage_point_index)])
-    
+
     def meterreading_list(self, usage_point_index: int) -> str:
         return SEP.join([self._root, str(usage_point_index), "mr"])
-    
+
     def meterreading(self, usage_point_index: int, meter_reading_index: int) -> str:
         return SEP.join([self.meterreading_list(usage_point_index), str(meter_reading_index)])
-    
+
     def readingset_list(self, usage_point_index: int, meter_reading_index: int) -> str:
         return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "rs"])
-    
+
     def readingtype(self, usage_point_index: int, meter_reading_index: int) -> str:
         return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "rt"])
-    
-    def readingset(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int) -> str:
-        return SEP.join([self.readingset_list(usage_point_index, meter_reading_index), str(reading_set_index)])
-    
-    def readingsetreading_list(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int):
-        return SEP.join([self.readingset(usage_point_index, meter_reading_index, reading_set_index), "r"])
-    
-    def readingsetreading(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int, reading_index: int):
-        return SEP.join([self.readingsetreading_list(usage_point_index, meter_reading_index, reading_set_index), str(reading_index)])
-        
-    def reading_list(self, usage_point_index: int,  meter_reading_index: int) -> str:
+
+    def readingset(self, usage_point_index: int, meter_reading_index: int,
+                   reading_set_index: int) -> str:
+        return SEP.join(
+            [self.readingset_list(usage_point_index, meter_reading_index),
+             str(reading_set_index)])
+
+    def readingsetreading_list(self, usage_point_index: int, meter_reading_index: int,
+                               reading_set_index: int):
+        return SEP.join(
+            [self.readingset(usage_point_index, meter_reading_index, reading_set_index), "r"])
+
+    def readingsetreading(self, usage_point_index: int, meter_reading_index: int,
+                          reading_set_index: int, reading_index: int):
+        return SEP.join([
+            self.readingsetreading_list(usage_point_index, meter_reading_index, reading_set_index),
+            str(reading_index)
+        ])
+
+    def reading_list(self, usage_point_index: int, meter_reading_index: int) -> str:
         return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "r"])
-    
-    def reading(self, usage_point_index: int,  meter_reading_index: int, reading_index: int) -> str:
-        return SEP.join([self.reading_list(usage_point_index, meter_reading_index), str(reading_index)])
-        
+
+    def reading(self, usage_point_index: int, meter_reading_index: int, reading_index: int) -> str:
+        return SEP.join(
+            [self.reading_list(usage_point_index, meter_reading_index),
+             str(reading_index)])
+
+
 @dataclass
 class MirrorUsagePointHref:
     mirror_usage_point_index: int = NO_INDEX
-    meter_reading_list_index: int= NO_INDEX
-    meter_reading_index: int= NO_INDEX
-    reading_set_index: int= NO_INDEX
-    reading_index: int= NO_INDEX
-    
+    meter_reading_list_index: int = NO_INDEX
+    meter_reading_index: int = NO_INDEX
+    reading_set_index: int = NO_INDEX
+    reading_index: int = NO_INDEX
+
     @staticmethod
     def parse(href: str) -> MirrorUsagePointHref:
         items = href.split(SEP)
         if len(items) == 1:
             return MirrorUsagePointHref()
-        
+
         if len(items) == 2:
             return MirrorUsagePointHref(items[1])
-            
+
 
 def usage_point_href(usage_point_index: int | str = NO_INDEX,
                      meter_reading_list: bool = False,
@@ -578,23 +631,21 @@ def usage_point_href(usage_point_index: int | str = NO_INDEX,
         base_upt = usage_point_index
     else:
         base_upt = DEFAULT_UPT_ROOT
-        
+
     if usage_point_index == NO_INDEX:
-        ret = base_upt        
+        ret = base_upt
     else:
         if isinstance(usage_point_index, str):
             arr = [base_upt]
         else:
             arr = [DEFAULT_UPT_ROOT, str(usage_point_index)]
-            
+
         if meter_reading_list:
             if meter_reading_list_index == NO_INDEX:
                 arr.extend(["mr"])
             else:
                 arr.extend(["mr", str(meter_reading_list_index)])
-                
-                
-        
+
         ret = SEP.join(arr)
     return ret
 
