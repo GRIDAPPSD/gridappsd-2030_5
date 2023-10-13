@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 from pprint import pprint
 import logging
@@ -144,83 +145,126 @@ D = TypeVar('D')
 
 
 class GenericListAdapter:
+    """
+    A generic list adapter class for storing and retrieving lists of objects of a specific type. The adapter is
+    initialized with an empty list of URLs and an empty dictionary of list containers. The adapter provides methods for
+    adding URLs to the list, retrieving lists of objects from the adapter, and registering types for use with the
+    adapter. The adapter also provides a `load_event` signal that is emitted when the adapter is loaded.
+
+    :ivar _list_urls: A list of URLs for the adapter
+    :vartype _list_urls: list
+    :ivar _list_containers: A dictionary of list containers, indexed by URL
+    :vartype _list_containers: dict
+    :ivar _types: A dictionary of types registered with the adapter, indexed by type name
+    :vartype _types: dict
+    """
 
     def __init__(self):
         self._list_urls = []
-        self._list_containers: Dict[str, List[D]] = {}
+        self._container_dict: Dict[str, Dict[int, D]] = {}
         self._types: Dict[str, D] = {}
-        load_event.send(self)
-        # if "generic_type" not in kwargs:
-        #     raise ValueError("Missing generic_type parameter")
-        # self.uri = uri
-        # self._generic_type: Type = kwargs['generic_type']
-        # if isinstance(container, Type):
-        #     self._container = container()
-        # else:
-        #     self._container = container
-
-        # setattr(self._container, T.__name__, [])
+        if not os.environ.get('IEEE_ADAPTER_IGNORE_INITIAL_LOAD'):
+            _log.debug(f"Intializing adapter {self.__class__.__name__}")
+            load_event.send(self)
+        else:
+            _log.debug(
+                f"Skip loading initial store due to IEEE_ADAPTER_IGNORE_INITIAL_LOAD being set")
 
     def count(self) -> int:
         count_of = 0
-        for v in self._list_containers.values():
+        for v in self._container_dict.values():
             count_of += len(v)
         return count_of
 
-    def get_type(self, uri: str) -> D:
-        return type(self._types.get(uri))
+    def get_type(self, list_uri: str) -> D:
+        return type(self._types.get(list_uri))
 
-    def initialize_uri(self, uri: str, obj: D):
-        if self._list_containers.get(uri) and self._types.get(uri) != obj:
+    def initialize_uri(self, list_uri: str, obj: D):
+        if self._container_dict.get(list_uri) and self._types.get(list_uri) != obj:
             _log.error("Must initialize before container has any items.")
             raise ValueError("Must initialize before container has any items.")
-        self._types[uri] = obj
+        self._types[list_uri] = obj
 
-    def append(self, uri: str, obj: D):
+    def add(self, list_uri: str, obj: D):
+        """
+        Appends an object to a list container in the adapter. If the list container does not exist, it is created. If the
+        list container exists but has not been initialized with a type, the type of the object is used to initialize the
+        list container. If the list container exists and has been initialized with a type, the type of the object is checked
+        against the initialized type, and an assertion error is raised if they do not match.
+
+        :param list_uri: The URI of the list container
+        :type list_uri: str
+        :param obj: The object to append to the list container
+        :type obj: Generic[D]
+        :raises AssertionError: If the type of the object does not match the initialized type of the list container
+        """
         # if there is a type
-        expected_type = self._types.get(uri)
+        expected_type = self._types.get(list_uri)
         if expected_type:
-            assert isinstance(obj, type(expected_type))
+            if not isinstance(obj, type(expected_type)):
+                raise ValueError(f"Object {obj} is not of type {type(expected_type)}")
         else:
-            self.initialize_uri(uri, obj)
+            self.initialize_uri(list_uri, obj)
 
-        if uri not in self._list_containers:
-            self._list_containers[uri] = []
-        self._list_containers[uri].append(obj)
+        if list_uri not in self._container_dict:
+            self._container_dict[list_uri] = {}
+        self._container_dict[list_uri][len(self._container_dict[list_uri])] = obj
         store_event.send(self)
 
-    def get_item_by_prop(self, uri: str, prop: str, value: Any) -> D:
-        _list = self._list_containers[uri]
-        for item in _list:
+    def get_item_by_prop(self, list_uri: str, prop: str, value: Any) -> D:
+        for item in self._container_dict[list_uri].values():
             if getattr(item, prop) == value:
                 return item
-        raise NotFoundError(f"Uri {uri} does not contain {prop} == {value}")
+        raise NotFoundError(f"Uri {list_uri} does not contain {prop} == {value}")
 
-    def has_list(self, uri: str) -> bool:
-        return uri in self._list_containers
+    def has_list(self, list_uri: str) -> bool:
+        return list_uri in self._container_dict
 
-    def get_list(self, uri: str, order_prop: Optional[str] = None):
-        return self._list_containers[uri]
+    def get(self, list_uri: str, key: int) -> D:
+        if list_uri not in self._container_dict:
+            raise KeyError(f"List {list_uri} not found in adapter")
 
-    def remove(self, uri: str, index: int):
-        del self._list_containers[uri][index]
+        try:
+            return self._container_dict[list_uri][key]
+        except KeyError:
+            raise NotFoundError(f"Key {key} not found in list {list_uri}")
+
+    def get_values(self, list_uri: str, sort_by: Optional[str] = None):
+        cpy = deepcopy(list(self._container_dict[list_uri].values()))
+        return sorted(cpy, key=lambda x: getattr(x, sort_by))
+
+    def remove(self, list_uri: str, index: int):
+        del self._container_dict[list_uri][index]
         store_event.send(self)
 
-    def render_container(self, uri: str, instance: object, prop: str):
-        setattr(instance, prop, deepcopy(self._list_containers[uri]))
+    def render_container(self, list_uri: str, instance: object, prop: str):
+        setattr(instance, prop, deepcopy(self._container_dict[list_uri]))
 
-    def print_container(self, uri: str):
-        pprint(self._list_containers[uri])
+    def print_container(self, list_uri: str):
+        pprint(self._container_dict[list_uri])
 
     def clear_all(self):
-        self._list_containers.clear()
+        self._container_dict.clear()
 
-    def clear(self, uri: str):
-        if uri in self._list_containers:
-            self._list_containers[uri].clear()
+    def clear(self, list_uri: str):
+        if list_uri in self._container_dict:
+            self._container_dict[list_uri].clear()
 
 
 class Adapter(Generic[T]):
+    """
+    A generic adapter class for storing and retrieving objects of a specific type. The adapter is initialized with a
+    URL prefix and a generic type parameter. The adapter maintains an internal dictionary of objects, indexed by an
+    integer ID. The adapter provides methods for adding, updating, and deleting objects, as well as retrieving objects
+    by ID or by a custom filter function. The adapter also provides a `count` property that returns the number of
+    objects currently stored in the adapter.
+
+    :param url_prefix: The URL prefix for the adapter
+    :type url_prefix: str
+    :param kwargs: Additional keyword arguments
+    :type kwargs: dict
+    :raises ValueError: If the `generic_type` parameter is missing from `kwargs`
+    """
 
     def __init__(self, url_prefix: str, **kwargs):
         if "generic_type" not in kwargs:
@@ -229,8 +273,12 @@ class Adapter(Generic[T]):
         self._href_prefix: str = url_prefix
         self._current_index: int = -1
         self._item_list: Dict[int, T] = {}
-        _log.debug(f"Intializing adapter {self.generic_type_name}")
-        load_event.send(self)
+        if not os.environ.get('IEEE_ADAPTER_IGNORE_INITIAL_LOAD'):
+            _log.debug(f"Intializing adapter {self.generic_type_name}")
+            load_event.send(self)
+        else:
+            _log.debug(
+                f"Skip loading initial store due to IEEE_ADAPTER_IGNORE_INITIAL_LOAD being set")
 
     @property
     def count(self) -> int:
@@ -360,6 +408,12 @@ class Adapter(Generic[T]):
 
     def size(self) -> int:
         return len(self._item_list)
+
+    def __len__(self) -> int:
+        return len(self._item_list)
+
+    def store(self):
+        store_event.send(self)
 
 
 from ieee_2030_5.adapters.adapters import (DERAdapter, DERControlAdapter, DERCurveAdapter,

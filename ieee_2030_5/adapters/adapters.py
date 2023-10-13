@@ -1,4 +1,5 @@
-from typing import Dict, Union
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Union
 from ieee_2030_5.data.indexer import add_href
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
@@ -144,7 +145,44 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> ReturnValue:
     return ReturnValue(True, mup, update)
 
 
-class _TimeAdapter(Thread):
+@dataclass
+class TimerSpec:
+    trigger_after_seconds: int
+    fn: Callable
+    args: List = field(default_factory=list)
+    kwargs: Dict = field(default_factory=dict)
+    enabled: bool = True
+    trigger_count: int = 0
+    last_trigger_time: int = int(time.mktime(datetime.utcnow().timetuple()))
+
+    def disable(self):
+        self.enabled = False
+
+    def enable(self):
+        self.enabled = True
+
+    def reset_count(self):
+        self.trigger_count = 0
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TimerSpec):
+            raise NotImplementedError(
+                f"Comparison between {self.__class__.__name__} and {type(other)} not implemented")
+        return self.fn is other.fn
+
+    def trigger(self, current_time: int):
+        if self.last_trigger_time + self.trigger_after_seconds < current_time:
+            if self.args and self.kwargs:
+                self.fn(args=self.args, kwargs=self.kwargs)
+            elif self.args:
+                self.fn(args=self.args)
+            else:
+                self.fn()
+            self.trigger_count += 1
+            self.last_trigger_time = current_time
+
+
+class _TimeAdapter(gevent.Greenlet):
     tick = Signal("tick")
     event_started = Signal("event_started")
     event_ended = Signal("event_endend")
