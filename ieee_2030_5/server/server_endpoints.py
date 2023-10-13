@@ -22,11 +22,9 @@ from ieee_2030_5.data.indexer import get_href, get_href_filtered
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.dcapfs import Dcap
 from ieee_2030_5.server.derfs import DERProgramRequests, DERRequests
-from ieee_2030_5.server.enddevicesfs import (EDevRequests, FSARequests,
-                                             SDevRequests)
+from ieee_2030_5.server.enddevicesfs import (EDevRequests, FSARequests, SDevRequests)
 # module level instance of hrefs class.
-from ieee_2030_5.server.meteringfs import (MirrorUsagePointRequest,
-                                           UsagePointRequest)
+from ieee_2030_5.server.meteringfs import (MirrorUsagePointRequest, UsagePointRequest)
 from ieee_2030_5.server.timefs import TimeRequest
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import TimeOffsetType, format_time
@@ -46,12 +44,6 @@ class Admin(RequestOp):
         if not self.is_admin_client:
             raise Forbidden()
         return Response(json.dumps({'abc': 'def'}), headers={'Content-Type': 'application/json'})
-
-
-
-
-
-
 
 
 class ServerList(RequestOp):
@@ -82,7 +74,7 @@ class RegexConverter(BaseConverter):
 class ServerEndpoints:
 
     def __init__(self, app: Flask, tls_repo: TLSRepository, config: ServerConfiguration):
-        
+
         self.config = config
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
@@ -121,7 +113,7 @@ class ServerEndpoints:
         app.add_url_rule(f"/<regex('{hrefs.CURVE}{hrefs.MATCH_REG}'):path>",
                          view_func=self._curves,
                          methods=["GET"])
-        
+
         app.add_url_rule(f"/<regex('{hrefs.FSA}{hrefs.MATCH_REG}'):path>",
                          view_func=self._fsa,
                          methods=["GET"])
@@ -175,7 +167,7 @@ class ServerEndpoints:
     #
     # def _admin(self) -> Response:
     #     return Admin(server_endpoints=self).execute()
-    
+
     def _fsa(self, path) -> Response:
         return FSARequests(server_endpoints=self).execute()
 
@@ -184,7 +176,7 @@ class ServerEndpoints:
 
     def _mup(self, path) -> Response:
         return MirrorUsagePointRequest(server_endpoints=self).execute()
-    
+
     # Needs to be before der
     def _derp(self, path) -> Response:
         return DERProgramRequests(server_endpoints=self).execute()
@@ -208,8 +200,7 @@ class ServerEndpoints:
     def _tm(self) -> Response:
         return TimeRequest(server_endpoints=self).execute()
 
-
     def _curves(self, path) -> Response:
-        pth = request.environ['PATH_INFO']
-        obj = get_href(pth)
+        _list = adpt.ListAdapter.get_list(request.path)
+        obj = m.DERCurveList(href=path, DERCurve=_list, all=len(_list))
         return RequestOp(server_endpoints=self).build_response_from_dataclass(obj)

@@ -15,6 +15,7 @@ from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
 _log = logging.getLogger(__name__)
 
+
 class EDevRequests(RequestOp):
     """
     Class supporting end devices and any of the subordinate calls to it.
@@ -22,23 +23,21 @@ class EDevRequests(RequestOp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
+
     def put(self) -> Response:
         parsed = hrefs.EdevHref.parse(request.path)
-        
+
         mysubobj = xml_to_dataclass(request.data.decode('utf-8'))
-        
+
         if get_href(request.path):
             response_status = 204
         else:
             response_status = 201
-        
+
         add_href(request.path, mysubobj)
-        
+
         return Response(status=response_status)
-                                              
-                        
-        
+
     def post(self, path: Optional[str] = None) -> Response:
         """
         Handle post request to /edev
@@ -92,15 +91,15 @@ class EDevRequests(RequestOp):
             /edev/0/der
 
         """
-        
+
         start = int(request.args.get("s", 0))
         limit = int(request.args.get("l", 1))
         after = int(request.args.get("a", 0))
-        
+
         edev_href = hrefs.HrefParser(request.path)
 
         ed = adpt.EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
-        
+
         # /edev_0_dstat
         if edev_href.count() > 2:
             retval = get_href(request.path)
@@ -108,7 +107,23 @@ class EDevRequests(RequestOp):
             retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
         else:
             retval = get_href(request.path)
-            
+
+        if adpt.ListAdapter.has_list(request.path):
+            item_type = adpt.ListAdapter.get_type(request.path)
+            should_change_item = False
+            if item_type.__name__ == "DERWithDescription":
+                item_type = m.DER
+                should_change_item = True
+            _list = adpt.ListAdapter.get_list(request.path)
+            new_obj = eval(f'm.{item_type.__name__ + "List"}()')
+            new_obj.href = request.path
+            new_obj.all = len(_list)
+            if should_change_item:
+                setattr(new_obj, item_type.__name__, [x.wrapped() for x in _list[start:limit]])
+            else:
+                setattr(new_obj, item_type.__name__, _list[start:limit])
+            retval = new_obj
+
         return self.build_response_from_dataclass(retval)
 
 
@@ -131,24 +146,27 @@ class SDevRequests(RequestOp):
         end_device = self._end_devices.get_end_device_list(self.lfdi).EndDevice[0]
         return self.build_response_from_dataclass(end_device)
 
+
 class FSARequests(RequestOp):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
+
     def get(self):
         """ Retrieve a FSA or Program List
         """
-        
+
         fsa_href = hrefs.fsa_parse(request.path)
-        
+
         if fsa_href.fsa_index == hrefs.NO_INDEX:
-            retval = adpt.FunctionSetAssignmentsAdapter.fetch_all(m.FunctionSetAssignmentsList(), "FunctionSetAssignments")
+            retval = adpt.FunctionSetAssignmentsAdapter.fetch_all(m.FunctionSetAssignmentsList(),
+                                                                  "FunctionSetAssignments")
         elif fsa_href.fsa_sub == hrefs.FSASubType.DERProgram.value:
             fsa = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
-            retval = adpt.FunctionSetAssignmentsAdapter.fetch_children(fsa, "fsa", m.DERProgramList())
+            retval = adpt.FunctionSetAssignmentsAdapter.fetch_children(
+                fsa, "fsa", m.DERProgramList())
             # retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
         else:
             retval = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
-  
-            
+
         return self.build_response_from_dataclass(retval)
