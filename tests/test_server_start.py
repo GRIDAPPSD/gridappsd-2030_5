@@ -9,9 +9,9 @@ def test_starting_server_using_fixture(server_startup):
 
     assert tls_repo
     assert server_config
-        
+
     ed_config = server_config.devices[0]
-    
+
     server_host, server_port = server_config.server_hostname.split(":")
     cert_file, key_file = tls_repo.get_file_pair(ed_config.id)
     client = IEEE2030_5_Client(cafile=tls_repo.ca_cert_file,
@@ -23,3 +23,7 @@ def test_starting_server_using_fixture(server_startup):
     dcap = client.device_capability()
     assert dcap.pollRate > 0
     client.disconnect()
+
+
+def test_first_enddevice_using_fixture(first_client: IEEE2030_5_Client):
+    assert first_client

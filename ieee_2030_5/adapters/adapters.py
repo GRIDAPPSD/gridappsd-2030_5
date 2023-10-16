@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import threading
 from typing import Callable, Dict, List, Union
 from ieee_2030_5.data.indexer import add_href
 import ieee_2030_5.hrefs as hrefs
@@ -6,9 +7,7 @@ import ieee_2030_5.models as m
 from ieee_2030_5.adapters import Adapter, GenericListAdapter
 from ieee_2030_5.config import ReturnValue
 
-import gevent
 from datetime import datetime
-from threading import Thread
 import time
 
 from blinker import Signal
@@ -182,7 +181,7 @@ class TimerSpec:
             self.last_trigger_time = current_time
 
 
-class _TimeAdapter(gevent.Greenlet):
+class _TimeAdapter(threading.Thread):
     tick = Signal("tick")
     event_started = Signal("event_started")
     event_ended = Signal("event_endend")

@@ -185,7 +185,7 @@ class GenericListAdapter:
             raise ValueError("Must initialize before container has any items.")
         self._types[list_uri] = obj
 
-    def add(self, list_uri: str, obj: D):
+    def append(self, list_uri: str, obj: D):
         """
         Appends an object to a list container in the adapter. If the list container does not exist, it is created. If the
         list container exists but has not been initialized with a type, the type of the object is used to initialize the
@@ -220,6 +220,11 @@ class GenericListAdapter:
     def has_list(self, list_uri: str) -> bool:
         return list_uri in self._container_dict
 
+    def get_list(self, list_uri: str, sort_by: Optional[str] = None) -> List[D]:
+        if list_uri not in self._container_dict:
+            raise KeyError(f"List {list_uri} not found in adapter")
+        return self.get_values(list_uri, sort_by)
+
     def get(self, list_uri: str, key: int) -> D:
         if list_uri not in self._container_dict:
             raise KeyError(f"List {list_uri} not found in adapter")
@@ -229,7 +234,18 @@ class GenericListAdapter:
         except KeyError:
             raise NotFoundError(f"Key {key} not found in list {list_uri}")
 
-    def get_values(self, list_uri: str, sort_by: Optional[str] = None):
+    def set(self, list_uri: str, key: int, value: D, overwrite: bool = True) -> D:
+        if list_uri not in self._container_dict:
+            raise KeyError(f"List {list_uri} not found in adapter")
+
+        if key in self._container_dict[list_uri] and not overwrite:
+            raise AlreadyExists(
+                f"Key {key} already exists in list {list_uri} but overwrite not set to True")
+
+        self._container_dict[list_uri][key] = value
+        store_event.send(self)
+
+    def get_values(self, list_uri: str, sort_by: Optional[str] = None) -> List[D]:
         cpy = deepcopy(list(self._container_dict[list_uri].values()))
         return sorted(cpy, key=lambda x: getattr(x, sort_by))
 

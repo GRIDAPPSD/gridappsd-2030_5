@@ -117,7 +117,7 @@ def test_generic_list(ignore_adapter_load):
     foo_href = "/foo"
     me = GenericListAdapter()
     for foo in foo_list:
-        me.add(foo_href, foo)
+        me.append(foo_href, foo)
 
     assert len(foo_list) == me.count()
     assert foo_list[0] == me.get(foo_href, 0)
@@ -125,7 +125,7 @@ def test_generic_list(ignore_adapter_load):
     assert foo_list[2] == me.get(foo_href, 2)
 
     with pytest.raises(ValueError):
-        me.add(foo_href, Bar("a", 1))
+        me.append(foo_href, Bar("a", 1))
 
     me.remove(foo_href, 1)
     assert len(foo_list) - 1 == me.count()

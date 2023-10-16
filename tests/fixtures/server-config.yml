@@ -3,8 +3,6 @@ server: localhost
 # http_port: 8080
 port: 8888
 
-cleanse_storage: true
-
 tls_repository: "~/tls_testing"
 openssl_cnf: "openssl.cnf"
 
@@ -31,7 +29,10 @@ device_capability_poll_rate: 60
 # Directory containing data files for the platform.
 # This directory will be created if it does not exist.
 storage_path: data_store
+cleanse_storage: true
 
 devices:
   - id: dev5
+    pin: 111115
   - id: dev6
+    pin: 111115

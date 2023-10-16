@@ -37,36 +37,56 @@ def create_device_capability(end_device_index: int) -> m.DeviceCapability:
 
 
 def add_enddevice(device: m.EndDevice) -> m.EndDevice:
-    """ Add an enddevice to the enddevice adapter and the device capability adapter.
+    """Populates links to EndDevice resources and adds it to the EndDeviceAdapter.
     
-    All links are filled out to the end device.
+    If the link is to a single writable (by the client) resource then create the link
+    and the resource with default data.  Otherwise, the link will be to a list.  It is
+    expected that the list will be populated at a later point in time in the code execution.
+    
+    The enddevice is added to the enddevice adapter, and the following links are created and added to the enddevice:
+
+    - `DERListLink`: A link to the DER list for the enddevice
+    - `FunctionSetAssignmentsListLink`: A link to the function set assignments list for the enddevice
+    - `LogEventListLink`: A link to the log event list for the enddevice
+    - `RegistrationLink`: A link to the registration for the enddevice
+    - `ConfigurationLink`: A link to the configuration for the enddevice
+    - `DeviceInformationLink`: A link to the device information for the enddevice
+    - `DeviceStatusLink`: A link to the device status for the enddevice
+    - `PowerStatusLink`: A link to the power status for the enddevice
+
+    :param device: The enddevice to add
+    :type device: m.EndDevice
+    :return: The enddevice object that was added to the adapter
+    :rtype: m.EndDevice
     """
+
+    # After adding to the adapter the device will have an href associated with the Adapter Type.
     device = adpt.EndDeviceAdapter.add(device)
-    device = update_enddevice_links(device)
-    # Retrieve the index
-    index = int(device.href.split(hrefs.SEP)[1])
 
-    _log.debug(f"Added {device.href}")
+    # Create a link object that holds references for linking other objects to the end device.
+    ed_href = hrefs.EndDeviceHref(edev_href=device.href)
 
-
-def update_enddevice_links(device: m.EndDevice) -> m.EndDevice:
-    index = int(device.href.split(hrefs.SEP)[1])
-    ed_href = hrefs.EndDeviceHref(index)
+    # These links are to list entries not a single element.  These hrefs should
+    # be used with the new apt.ListAdapter.
     device.DERListLink = m.DERListLink(href=ed_href.der_list)
-    device.ConfigurationLink = m.ConfigurationLink(href=ed_href.configuration)
-    add_href(ed_href.configuration, m.Configuration(href=ed_href.configuration))
-    device.DeviceInformationLink = m.DeviceInformationLink(href=ed_href.device_information)
-    add_href(ed_href.device_information, m.DeviceInformation(href=ed_href.device_information))
-    device.DeviceStatusLink = m.DeviceStatusLink(href=ed_href.device_status)
-    add_href(ed_href.device_status, m.DeviceStatus(href=ed_href.device_status))
     device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
         href=ed_href.function_set_assignments)
+    device.LogEventListLink = m.LogEventListLink(href=ed_href.log_event_list)
+    device.RegistrationLink = m.RegistrationLink(href=ed_href.registration)
+
+    # Store objects in the href cache for retrieval.
+    device.ConfigurationLink = m.ConfigurationLink(href=ed_href.configuration)
+    add_href(ed_href.configuration, m.Configuration(href=ed_href.configuration))
+
+    device.DeviceInformationLink = m.DeviceInformationLink(href=ed_href.device_information)
+    add_href(ed_href.device_information, m.DeviceInformation(href=ed_href.device_information))
+
+    device.DeviceStatusLink = m.DeviceStatusLink(href=ed_href.device_status)
+    add_href(ed_href.device_status, m.DeviceStatus(href=ed_href.device_status))
+
     device.PowerStatusLink = m.PowerStatusLink(href=ed_href.device_power_status)
     add_href(ed_href.device_power_status, m.PowerStatus(href=ed_href.device_power_status))
-    device.LogEventListLink = m.LogEventListLink(href=ed_href.log_event_list)
-    add_href(ed_href.log_event_list, m.LogEventList(href=ed_href.log_event_list))
-    device.RegistrationLink = m.RegistrationLink(href=ed_href.registration)
-    adpt.EndDeviceAdapter.put(index, device)
+
     return device
 
 
@@ -192,7 +212,6 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                                 str(index)]),
                            **curve_cfg)
         adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
-        add_href(curve.href, curve)
 
     for index, cfg_device in enumerate(config.devices):
 
@@ -218,19 +237,41 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                  pollRate=cfg_device.poll_rate)
             adpt.RegistrationAdapter.add(reg)
             add_href(reg.href, reg)
-            if cfg_device.fsas is not None:
+            if cfg_device.fsas:
                 end_device_fsa[ed_href.function_set_assignments] = cfg_device.fsas
-            if cfg_device.ders is not None:
+            if cfg_device.ders:
+                # TODO DERS HERE!
+                raise ValueError("DERS not implemented")
                 # Create references from the main der list to the ed specific list.
                 for der_description in cfg_device.ders:
                     der_item = adpt.ListAdapter.get_item_by_prop(hrefs.DEFAULT_DER_ROOT,
                                                                  "description", der_description)
                     adpt.ListAdapter.append(ed_href.der_list, der_item)
-                add_href(
-                    ed_href.der_list,
-                    m.DERList(href=ed_href.der_list,
-                              all=len(cfg_device.ders),
-                              DER=adpt.ListAdapter.get_list(ed_href.der_list)))
+
+                # add_href(
+                #     ed_href.der_list
+                #     m.DERList(href=ed_href.der_list,
+                #               all=len(cfg_device.ders),
+                #               DER=adpt.ListAdapter.get_list(ed_href.der_list))
+            else:
+
+                # der_href will manage the url links to other lists/resources for the DER.
+                der_href = hrefs.DERHref(ed_href.der_list)
+
+                # Create a reference to the default der list. Add an entry for the end device as
+                # a DER object.  Note these are all available for the client to read/write via
+                # GET/PUT to/from the server.
+                der_list = m.DERList(
+                    href=ed_href.der_list,
+                    all=1,
+                    DER=[
+                        m.DER(href=der_href.root,
+                              DERStatusLink=m.DERStatusLink(der_href.der_status),
+                              DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
+                              DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
+                              DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
+                    ])
+                adpt.ListAdapter.append(ed_href.der_list, der_list)
 
     for index, program_cfg in enumerate(config.programs):
         program = adpt.DERProgramAdapter.fetch_by_href(hrefs.der_program_href(index))
