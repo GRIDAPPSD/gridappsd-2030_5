@@ -104,6 +104,13 @@ def update_active_der_event_started(event: m.Event):
 
     program = adpt.DERProgramAdapter.fetch(href_parser.at(1))
 
+    control_list: m.DERControlList = get_href(program.DERControlListLink.href)
+    control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
+    control.EventStatus = event.EventStatus
+    add_href(control.href, control)
+    add_href(event.href, event)
+    add_href(control_list.href, control_list)
+
     activel: m.DERControlList = get_href(program.ActiveDERControlListLink.href)
 
     try:
@@ -128,6 +135,13 @@ def update_active_der_event_ended(event: m.Event):
     href_parser = hrefs.HrefParser(event.href)
 
     program = adpt.DERProgramAdapter.fetch(href_parser.at(1))
+
+    control_list: m.DERControlList = get_href(program.DERControlListLink.href)
+    control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
+    control.EventStatus = event.EventStatus
+    add_href(control.href, control)
+    add_href(event.href, event)
+    add_href(control_list.href, control_list)
 
     activel: m.DERControlList = get_href(program.ActiveDERControlListLink.href)
 
