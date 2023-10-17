@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 
+import inspect
 from pprint import pprint
 import logging
 import typing
@@ -47,7 +48,7 @@ def __get_store__(store_name: str) -> Path:
     return store_path
 
 
-def do_load_event(caller: Union[Adapter, GenericListAdapter]) -> None:
+def do_load_event(caller: Union[Adapter, ResourceListAdapter]) -> None:
     """Load an adaptor type from the data_store path.
 
 
@@ -56,7 +57,7 @@ def do_load_event(caller: Union[Adapter, GenericListAdapter]) -> None:
     if isinstance(caller, Adapter):
         _log.debug(f"Loading store {caller.generic_type_name}")
         store_file = __get_store__(caller.generic_type_name)
-    elif isinstance(caller, GenericListAdapter):
+    elif isinstance(caller, ResourceListAdapter):
         store_file = __get_store__(caller.__class__.__name__)
     else:
         raise ValueError(f"Invalid caller type {type(caller)}")
@@ -74,14 +75,14 @@ def do_load_event(caller: Union[Adapter, GenericListAdapter]) -> None:
     _log.debug(f"Loaded {caller.count} items from store")
 
 
-def do_save_event(caller: Union[Adapter, GenericListAdapter]) -> None:
+def do_save_event(caller: Union[Adapter, ResourceListAdapter]) -> None:
 
     store_file = None
     if isinstance(caller, Adapter):
         _log.debug(f"Loading store {caller.generic_type_name}")
         store_file = __get_store__(caller.generic_type_name)
         _log.debug(f"Storing: {caller.generic_type_name}")
-    elif isinstance(caller, GenericListAdapter):
+    elif isinstance(caller, ResourceListAdapter):
         store_file = __get_store__(caller.__class__.__name__)
     else:
         raise ValueError(f"Invalid caller type {type(caller)}")
@@ -144,7 +145,7 @@ C = TypeVar('C')
 D = TypeVar('D')
 
 
-class GenericListAdapter:
+class ResourceListAdapter:
     """
     A generic list adapter class for storing and retrieving lists of objects of a specific type. The adapter is
     initialized with an empty list of URLs and an empty dictionary of list containers. The adapter provides methods for
@@ -177,7 +178,7 @@ class GenericListAdapter:
         return count_of
 
     def get_type(self, list_uri: str) -> D:
-        return type(self._types.get(list_uri))
+        return self._types.get(list_uri)
 
     def initialize_uri(self, list_uri: str, obj: D):
         if self._container_dict.get(list_uri) and self._types.get(list_uri) != obj:
@@ -190,19 +191,36 @@ class GenericListAdapter:
         Appends an object to a list container in the adapter. If the list container does not exist, it is created. If the
         list container exists but has not been initialized with a type, the type of the object is used to initialize the
         list container. If the list container exists and has been initialized with a type, the type of the object is checked
-        against the initialized type, and an assertion error is raised if they do not match.
+        against the initialized type, and an astsertion error is raised if they do not match.
 
         :param list_uri: The URI of the list container
         :type list_uri: str
         :param obj: The object to append to the list container
-        :type obj: Generic[D]
+        :type obj: Generic[D] or DList container
         :raises AssertionError: If the type of the object does not match the initialized type of the list container
         """
-        # if there is a type
-        expected_type = self._types.get(list_uri)
+        cls = obj.__class__
+        if issubclass(cls, (m.List_type, m.SubscribableList)):
+            expected_type = eval(f'm.{cls.__name__[:cls.__name__.find("List")]}')
+
+            if self._types.get(list_uri) is not None:
+                raise ValueError(f"List for {list_uri} has already been initialized")
+
+            self._types[list_uri] = expected_type
+
+            # Recurse over the list appending to the end for each in the list
+            for ele in getattr(obj, expected_type.__name__):
+                self.append(list_uri, ele)
+
+            # Exit here as all of the sub-items have been added now.
+            return
+
+        else:    # if there is a type
+            expected_type = self._types.get(list_uri)
+
         if expected_type:
-            if not isinstance(obj, type(expected_type)):
-                raise ValueError(f"Object {obj} is not of type {type(expected_type)}")
+            if not isinstance(obj, expected_type):
+                raise ValueError(f"Object {obj} is not of type {expected_type.__name__}")
         else:
             self.initialize_uri(list_uri, obj)
 
@@ -220,10 +238,35 @@ class GenericListAdapter:
     def has_list(self, list_uri: str) -> bool:
         return list_uri in self._container_dict
 
-    def get_list(self, list_uri: str, sort_by: Optional[str] = None) -> List[D]:
+    def get_resource_list(self,
+                          list_uri: str,
+                          start: int = 0,
+                          after: int = 0,
+                          limit: int = 0) -> Union[m.List_type, m.SubscribableList]:
+        cls = self.get_type(list_uri)
+        if cls is None:
+            raise KeyError(f"Resource list {list_uri} not found in adapter")
+
+        thecontainerlist = list(self._container_dict[list_uri].values())
+        thelist = eval(f"m.{cls.__name__}List()")
+        thelist.all = len(thecontainerlist)
+        if start == after == limit == 0:
+            setattr(thelist, cls.__name__, thecontainerlist)
+        else:
+            raise NotImplemented("Only can get full lists at this point in time.")
+            posx = start + after
+            try:
+                setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
+            except:
+                setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
+        thelist.results = len(getattr(thelist, cls.__name__))
+        return thelist
+
+    def get_list(self, list_uri: str) -> D:
         if list_uri not in self._container_dict:
             raise KeyError(f"List {list_uri} not found in adapter")
-        return self.get_values(list_uri, sort_by)
+
+        return self._container_dict[list_uri]
 
     def get(self, list_uri: str, key: int) -> D:
         if list_uri not in self._container_dict:
@@ -246,8 +289,12 @@ class GenericListAdapter:
         store_event.send(self)
 
     def get_values(self, list_uri: str, sort_by: Optional[str] = None) -> List[D]:
+        raise ValueError("Hmmmmm refactoring.")
         cpy = deepcopy(list(self._container_dict[list_uri].values()))
-        return sorted(cpy, key=lambda x: getattr(x, sort_by))
+        if sort_by is not None:
+            return sorted(cpy, key=lambda x: getattr(x, sort_by))
+        else:
+            return cpy
 
     def remove(self, list_uri: str, index: int):
         del self._container_dict[list_uri][index]
@@ -452,7 +499,7 @@ def clear_all_adapters():
         obj = eval(adpt)
         if isinstance(obj, Adapter):
             obj.clear()
-        elif isinstance(obj, GenericListAdapter):
+        elif isinstance(obj, ResourceListAdapter):
             obj.clear_all()
 
 

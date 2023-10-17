@@ -27,6 +27,8 @@ if str(parent_path) not in sys.path:
 
 SERVER_CONFIG_FILE = Path(__file__).parent.joinpath("fixtures/server-config.yml")
 assert SERVER_CONFIG_FILE.exists()
+if Path("~/.ieee2030-5").expanduser().exists():
+    shutil.rmtree(Path("$HOME/.ieee2030-5").expanduser())
 
 TLS_REPO: TLSRepository
 SERVER_CFG: ServerConfiguration

@@ -115,6 +115,7 @@ class EDevRequests(RequestOp):
                 item_type = m.DER
                 should_change_item = True
             _list = adpt.ListAdapter.get_list(request.path)
+
             new_obj = eval(f'm.{item_type.__name__ + "List"}()')
             new_obj.href = request.path
             new_obj.all = len(_list)

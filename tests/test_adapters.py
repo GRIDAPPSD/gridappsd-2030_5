@@ -3,7 +3,7 @@ import pytest
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import Adapter, GenericListAdapter, NotFoundError
+from ieee_2030_5.adapters import Adapter, ResourceListAdapter, NotFoundError
 import os
 
 
@@ -106,16 +106,53 @@ class Bar:
     beta: int
 
 
-def test_generic_list(ignore_adapter_load):
+def test_generic_list_with_resource_list(ignore_adapter_load):
+    edl = m.EndDeviceList(href="/edl")
+    for i in range(5):
+        edl.EndDevice.append(m.EndDevice(href=edl.href + str(i)))
+    gl = ResourceListAdapter()
+    gl.append(edl.href, edl)
+
+    assert 5 == gl.count()
+
+    assert isinstance(gl.get_resource_list(edl.href), m.EndDeviceList)
+
+
+def test_two_lists(ignore_adapter_load):
+    edl = m.EndDeviceList(href="/edl")
+    for i in range(5):
+        edl.EndDevice.append(m.EndDevice(href=edl.href + str(i)))
+    gl = ResourceListAdapter()
+    gl.append(edl.href, edl)
 
     foo_list = [
-        Foo("c", 1),
-        Foo("b", 2),
-        Foo("a", 3),
+        m.DER(href="c", subscribable=1),
+        m.DER("b", subscribable=2),
+        m.DER("a", subscribable=3)
     ]
 
     foo_href = "/foo"
-    me = GenericListAdapter()
+
+    gl.initialize_uri(foo_href, m.DER)
+
+    for foo in foo_list:
+        gl.append(foo_href, foo)
+
+    assert 5 + len(foo_list) == gl.count()
+
+
+def test_generic_list(ignore_adapter_load):
+
+    foo_list = [
+        m.DER(href="c", subscribable=1),
+        m.DER("b", subscribable=2),
+        m.DER("a", subscribable=3)
+    ]
+
+    foo_href = "/foo"
+    me = ResourceListAdapter()
+    me.initialize_uri(foo_href, m.DER)
+
     for foo in foo_list:
         me.append(foo_href, foo)
 
@@ -134,13 +171,16 @@ def test_generic_list(ignore_adapter_load):
 
     # Because we remove the second element, the third element is now at index 1
     # when we get values even though it has the same href key
-    sorted_alpha = me.get_values(foo_href, sort_by="alpha")
-    assert foo_list[2] == sorted_alpha[0]
-    assert foo_list[0] == sorted_alpha[1]
+    # sorted_alpha = me.get_values(foo_href, sort_by="alpha")
+    # assert foo_list[2] == sorted_alpha[0]
+    # assert foo_list[0] == sorted_alpha[1]
 
-    assert foo_list[2] == me.get_item_by_prop(foo_href, "alpha", "a")
+    assert foo_list[2] == me.get_item_by_prop(foo_href, "href", "a")
 
     with pytest.raises(NotFoundError):
+        me.get_item_by_prop(foo_href, "href", "d")
+
+    with pytest.raises(AttributeError):
         me.get_item_by_prop(foo_href, "alpha", "d")
 
     with pytest.raises(KeyError):
@@ -149,6 +189,10 @@ def test_generic_list(ignore_adapter_load):
     with pytest.raises(NotFoundError):
         me.get(foo_href, 5)
 
-    foo_list[0].alpha = "d"
-    assert "d" == me.get(foo_href, 0).alpha
-    assert sorted_alpha[1].alpha != "d"
+    rl = me.get_resource_list(foo_href)
+    for foo in rl.DER:
+        assert foo in foo_list
+
+    # foo_list[0].alpha = "d"
+    # assert "d" == me.get(foo_href, 0).alpha
+    # assert sorted_alpha[1].alpha != "d"

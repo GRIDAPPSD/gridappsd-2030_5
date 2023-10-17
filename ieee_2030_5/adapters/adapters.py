@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Union
 from ieee_2030_5.data.indexer import add_href
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import Adapter, GenericListAdapter
+from ieee_2030_5.adapters import Adapter, ResourceListAdapter
 from ieee_2030_5.config import ReturnValue
 
 from datetime import datetime
@@ -34,7 +34,7 @@ MirrorMeterReadingAdapter = Adapter[m.MirrorMeterReading](url_prefix="/mr",
 MirrorReadingSetAdapter = Adapter[m.MirrorReadingSet](url_prefix="/rs",
                                                       generic_type=m.MirrorReadingSet)
 UsagePointAdapter = Adapter[m.UsagePoint](url_prefix="/upt", generic_type=m.UsagePoint)
-ListAdapter = GenericListAdapter()
+ListAdapter = ResourceListAdapter()
 
 
 def create_mirror_meter_reading(

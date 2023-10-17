@@ -230,11 +230,13 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             end_device = m.EndDevice(lFDI=tlsrepo.lfdi(cfg_device.id),
                                      sFDI=tlsrepo.sfdi(cfg_device.id),
                                      postRate=cfg_device.post_rate,
-                                     enabled=True)
+                                     enabled=True,
+                                     changedTime=adpt.TimeAdapter.current_tick)
             add_enddevice(end_device)
             reg = m.Registration(href=end_device.RegistrationLink.href,
                                  pIN=cfg_device.pin,
-                                 pollRate=cfg_device.poll_rate)
+                                 pollRate=cfg_device.poll_rate,
+                                 dateTimeRegistered=adpt.TimeAdapter.current_tick)
             adpt.RegistrationAdapter.add(reg)
             add_href(reg.href, reg)
             if cfg_device.fsas:
@@ -261,16 +263,13 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 # Create a reference to the default der list. Add an entry for the end device as
                 # a DER object.  Note these are all available for the client to read/write via
                 # GET/PUT to/from the server.
-                der_list = m.DERList(
-                    href=ed_href.der_list,
-                    all=1,
-                    DER=[
-                        m.DER(href=der_href.root,
-                              DERStatusLink=m.DERStatusLink(der_href.der_status),
-                              DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
-                              DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
-                              DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
-                    ])
+                der_list = m.DERList(DER=[
+                    m.DER(href=der_href.root,
+                          DERStatusLink=m.DERStatusLink(der_href.der_status),
+                          DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
+                          DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
+                          DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
+                ])
                 adpt.ListAdapter.append(ed_href.der_list, der_list)
 
     for index, program_cfg in enumerate(config.programs):
