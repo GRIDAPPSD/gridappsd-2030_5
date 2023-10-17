@@ -266,7 +266,7 @@ class ResourceListAdapter:
         if list_uri not in self._container_dict:
             raise KeyError(f"List {list_uri} not found in adapter")
 
-        return self._container_dict[list_uri]
+        return list(self._container_dict[list_uri].values())
 
     def get(self, list_uri: str, key: int) -> D:
         if list_uri not in self._container_dict:

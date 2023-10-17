@@ -243,12 +243,11 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             if cfg_device.fsas:
                 end_device_fsa[ed_href.function_set_assignments] = cfg_device.fsas
             if cfg_device.ders:
-                # TODO DERS HERE!
-                raise ValueError("DERS not implemented")
                 # Create references from the main der list to the ed specific list.
                 for der_description in cfg_device.ders:
-                    der_item = adpt.ListAdapter.get_item_by_prop(hrefs.DEFAULT_DER_ROOT,
-                                                                 "description", der_description)
+                    # der_item = adpt.ListAdapter.get_item_by_prop(hrefs.DEFAULT_DER_ROOT,
+                    #                                              "description", der_description)
+                    der_item = der_with_description[der_description]
                     adpt.ListAdapter.append(ed_href.der_list, der_item)
 
                 # add_href(
@@ -286,8 +285,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             program = adpt.DERProgramAdapter.add(program)
             for der in config.ders:
                 if der["program"] == program.description:
-                    der_obj = adpt.ListAdapter.get_item_by_prop(hrefs.DEFAULT_DER_ROOT,
-                                                                "description", der["description"])
+                    der_obj = der_with_description[der["description"]]
                     der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(program.href)
                     add_href(der_obj.href, der_obj)
 
