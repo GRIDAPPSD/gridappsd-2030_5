@@ -325,7 +325,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             program.DERControlListLink = m.DERControlListLink(href=der_control_list.href,
                                                               all=der_control_list.all)
 
-            active_control_list_href = program.href + hrefs.SEP + "dera"
+            active_control_list_href = program.href + hrefs.SEP + hrefs.DER_CONTROL_ACTIVE
             active_control_list = m.DERControlList(href=active_control_list_href,
                                                    all=0,
                                                    DERControl=[])
