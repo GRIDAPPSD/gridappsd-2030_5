@@ -15,7 +15,6 @@ _log = logging.getLogger(__name__)
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.models.wrapper import DERWithDescription
 
 
 def create_device_capability(end_device_index: int) -> m.DeviceCapability:
@@ -186,13 +185,14 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     if config.cleanse_storage:
         adpt.clear_all_adapters()
 
+    der_with_description = {}
     # Add DERs to the ListAdapter under the key hrefs.DEFAULT_DER_ROOT.
     # Add individual DER items to the href structure for retrieval.
     for index, cfg_der in enumerate(config.ders):
         program = cfg_der.pop("program", None)
         description = cfg_der.pop("description")
         der_href = hrefs.DERHref(hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, str(index)]))
-        der_obj = DERWithDescription(href=der_href.root, description=description, **cfg_der)
+        der_obj = m.DER(href=der_href.root, **cfg_der)
         der_obj.DERAvailabilityLink = m.DERAvailabilityLink(der_href.der_availability)
         add_href(der_href.der_availability, m.DERAvailability(href=der_href.der_availability))
         der_obj.DERCapabilityLink = m.DERCapabilityLink(der_href.der_capability)
@@ -201,6 +201,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         add_href(der_href.der_settings, m.DERSettings(href=der_href.der_settings))
         der_obj.DERStatusLink = m.DERStatusLink(der_href.der_status)
         add_href(der_href.der_status, m.DERStatus(href=der_href.der_status))
+        der_with_description[description] = der_obj
         adpt.ListAdapter.append(hrefs.DEFAULT_DER_ROOT, der_obj)
         cfg_der["program"] = program
         cfg_der["description"] = description

@@ -222,7 +222,7 @@ class ResourceListAdapter:
             if not isinstance(obj, expected_type):
                 raise ValueError(f"Object {obj} is not of type {expected_type.__name__}")
         else:
-            self.initialize_uri(list_uri, obj)
+            self.initialize_uri(list_uri, obj.__class__)
 
         if list_uri not in self._container_dict:
             self._container_dict[list_uri] = {}

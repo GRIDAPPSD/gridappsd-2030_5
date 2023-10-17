@@ -91,7 +91,7 @@ class EDevRequests(RequestOp):
             /edev/0/der
 
         """
-
+        # TODO start implementing these.
         start = int(request.args.get("s", 0))
         limit = int(request.args.get("l", 1))
         after = int(request.args.get("a", 0))
@@ -109,21 +109,7 @@ class EDevRequests(RequestOp):
             retval = get_href(request.path)
 
         if adpt.ListAdapter.has_list(request.path):
-            item_type = adpt.ListAdapter.get_type(request.path)
-            should_change_item = False
-            if item_type.__name__ == "DERWithDescription":
-                item_type = m.DER
-                should_change_item = True
-            _list = adpt.ListAdapter.get_list(request.path)
-
-            new_obj = eval(f'm.{item_type.__name__ + "List"}()')
-            new_obj.href = request.path
-            new_obj.all = len(_list)
-            if should_change_item:
-                setattr(new_obj, item_type.__name__, [x.wrapped() for x in _list[start:limit]])
-            else:
-                setattr(new_obj, item_type.__name__, _list[start:limit])
-            retval = new_obj
+            retval = adpt.ListAdapter.get_resource_list(request.path)
 
         return self.build_response_from_dataclass(retval)
 
