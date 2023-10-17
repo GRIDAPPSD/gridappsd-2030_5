@@ -34,5 +34,25 @@ cleanse_storage: true
 devices:
   - id: dev5
     pin: 111115
+    programs:
+      - Program 1
+
   - id: dev6
     pin: 111115
+
+programs:
+  - description: Program 1
+    DefaultDERControl:
+      setESDelay: 30
+      setGradW: 1000
+      
+      DERControlBase:
+        opModConnect: true
+        opModEnergize: true
+
+curves:
+  - description: Curve 1
+    curveType: opModVoltVar
+    CurveData:
+      - xvalue: 5
+        yvalue: 10

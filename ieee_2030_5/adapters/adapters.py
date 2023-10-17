@@ -119,7 +119,7 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> ReturnValue:
             meter_reading_list.MeterReading.append(reading)
 
         upt = UsagePointAdapter.add(
-            m.UsagePoint(href=upt_href,
+            m.UsagePoint(href=upt_href.usage_point(usage_point_index),
                          description=mup.description,
                          deviceLFDI=mup.deviceLFDI,
                          serviceCategoryKind=mup.serviceCategoryKind,
