@@ -308,10 +308,14 @@ class ResourceListAdapter:
 
     def clear_all(self):
         self._container_dict.clear()
+        self._list_urls.clear()
+        self._types.clear()
 
     def clear(self, list_uri: str):
         if list_uri in self._container_dict:
             self._container_dict[list_uri].clear()
+            self._list_urls[list_uri].clear()
+            self._types[list_uri].clear()
 
 
 class Adapter(Generic[T]):
