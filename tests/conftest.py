@@ -39,7 +39,7 @@ class ClientData:
     client: IEEE2030_5_Client
     dcap: m.DeviceCapability
     edev: m.EndDevice
-    ders: m.DERList
+    derlist: m.DERList
 
 
 @pytest.fixture
@@ -123,9 +123,9 @@ def server_config() -> ServerConfiguration:
 def first_client_data(first_client: IEEE2030_5_Client) -> ClientData:
     dcap: m.DeviceCapability = first_client.device_capability()
     edev: m.EndDevice = first_client.end_device()
-    derlist: m.DERList = first_client.ders()
+    derlist: m.DERList = first_client.der_list()
 
-    yield ClientData(client=first_client, dcap=dcap, edev=edev, ders=derlist)
+    yield ClientData(client=first_client, dcap=dcap, edev=edev, derlist=derlist)
 
 
 @pytest.fixture
