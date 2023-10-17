@@ -45,24 +45,20 @@ class Indexer:
         # If using a link, we need the true href to cache the object.
         if isinstance(href, Link):
             href = href.href
-        cached = self.__items__.get(href)
-        if cached and cached.item == item:
-            _log.debug(f"Item already cached {href}")
-        else:
-            added = format_datetime(datetime.utcnow())
-            serialized_item = pickle.dumps(
-                item)    # serialize_dataclass(item, serialization_type=SerializeType.JSON)
-            obj = Index(href,
-                        item,
-                        added=added,
-                        last_written=added,
-                        last_hash=hash(serialized_item))
-            # serialized_obj = serialize_dataclass(obj, serialization_type=SerializeType.JSON)
+        # cached = self.__items__.get(href)
+        # if cached and cached.item == item:
+        #     _log.debug(f"Item already cached {href}")
+        # else:
+        added = format_datetime(datetime.utcnow())
+        serialized_item = pickle.dumps(
+            item)    # serialize_dataclass(item, serialization_type=SerializeType.JSON)
+        obj = Index(href, item, added=added, last_written=added, last_hash=hash(serialized_item))
+        # serialized_obj = serialize_dataclass(obj, serialization_type=SerializeType.JSON)
 
-            # note storing Index object.
-            set_point(href, pickle.dumps(
-                obj))    # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
-            self.__items__[href] = obj
+        # note storing Index object.
+        set_point(href, pickle.dumps(
+            obj))    # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
+        self.__items__[href] = obj
 
     def get(self, href) -> dataclass:
         self.init()
