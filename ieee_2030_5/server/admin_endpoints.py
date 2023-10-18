@@ -413,7 +413,7 @@ class AdminEndpoints:
         if derid:
             retval: m.DER = deradpter.fetch(derid)
             if request.path.endswith('current_derp'):
-                derp_href = hrefs.DERProgramHref.parse(retval.CurrentDERProgramLink)
+                derp_href = hrefs.DERProgramHrefOld.parse(retval.CurrentDERProgramLink)
                 retval = DERProgramAdapter.fetch(derp_href.index)
         else:
             retval = deradpter.fetch_all(m.DERList())
@@ -486,16 +486,32 @@ class AdminEndpoints:
             return Response(dataclass_to_xml(program))
 
     def _admin_derp(self, index: int = -1) -> Response:
-        if request.method == 'GET' and index < 0:
-            return Response(dataclass_to_xml(DERProgramAdapter.fetch_all(m.DERProgramList())))
-        elif request.method == 'GET':
-            return Response(dataclass_to_xml(DERProgramAdapter.fetch_at(index)))
+
+        # Get all end devices
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+
+        if request.method == 'GET':
+            if index < 0:
+                retval = adpt.ListAdapter.get_resource_list(hrefs.DEFAULT_DERP_ROOT,
+                                                            start=start,
+                                                            after=after,
+                                                            limit=limit)
+                #return Response(dataclass_to_xml(DERProgramAdapter.fetch_all(m.DERProgramList())))
+            elif request.method == 'GET':
+                retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, index)
+
+            return Response(dataclass_to_xml(retval))
 
         if request.method == 'POST':
-            xml = request.data.decode('utf-8')
-            data = xml_to_dataclass(request.data.decode('utf-8'))
+            raise NotImplemented("POST not implemented")
+            # xml = request.data.decode('utf-8')
+            # data = xml_to_dataclass(request.data.decode('utf-8'))
 
-            response = DERProgramAdapter.create(data)
+            # if not isinstance(data, m.DERProgram):
+            #     raise BadRequest("Invalid DERProgram")
+            # response = DERProgramAdapter.create(data)
 
             return Response(headers={'Location': response.href}, status=response.statusint)
 
@@ -506,7 +522,8 @@ class AdminEndpoints:
         return Response(dataclass_to_xml(ctrl_list))
 
     def _admin_derp_derc(self, derp_index: int) -> Response:
-        derp = adpt.DERProgramAdapter.fetch(derp_index)
+        derp = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, derp_index)
+        # derp = adpt.DERProgramAdapter.fetch(derp_index)
 
         if request.method in ("PUT", "POST"):
 

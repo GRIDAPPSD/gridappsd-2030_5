@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from typing import List, NamedTuple, Optional, Union
+import ieee_2030_5.models as m
 
 EDEV = "edev"
 DCAP = "dcap"
@@ -106,6 +107,8 @@ class EndDeviceHref:
         if edev_href is not None:
             self.index = int(edev_href.split(SEP)[1])
 
+        self._root = SEP.join([DEFAULT_EDEV_ROOT, str(self.index)])
+
     @staticmethod
     def parse(href: str) -> EndDeviceHref:
         index = int(href.split(SEP)[1])
@@ -131,7 +134,7 @@ class EndDeviceHref:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_STATUS])
 
     @property
-    def device_power_status(self) -> str:
+    def power_status(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_POWER_STATUS])
 
     @property
@@ -146,23 +149,36 @@ class EndDeviceHref:
     def log_event_list(self) -> str:
         return SEP.join([DEFAULT_EDEV_ROOT, str(self.index), END_DEVICE_LOG_EVENT_LIST])
 
+    def fill_hrefs(self, enddevice: m.EndDevice) -> m.EndDevice:
+        enddevice.href = self._root
+        enddevice.ConfigurationLink = m.ConfigurationLink(self.configuration)
+        enddevice.DeviceInformationLink = m.DeviceInformationLink(self.device_information)
+        enddevice.DeviceStatusLink = m.DeviceStatusLink(self.device_status)
+        enddevice.PowerStatusLink = m.PowerStatusLink(self.power_status)
+        enddevice.RegistrationLink = m.RegistrationLink(self.registration)
+        enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+            self.function_set_assignments, all=0)
+        enddevice.LogEventListLink = m.LogEventListLink(self.log_event_list, all=0)
+        enddevice.DERListLink = m.DERListLink(self.der_list, all=0)
+        return enddevice
 
-class DeviceCapabilityHref:
 
-    def __init__(self, index: int = None, enddevice: EndDeviceHref = None):
-        if index is None and enddevice is None:
-            raise ValueError(f"index and enddevice cannot both be None")
-        elif index is not None and enddevice is not None:
-            if enddevice.index != index:
-                raise ValueError(f"index and enddevice.index must match if both are specified")
+# class DeviceCapabilityHref:
 
-        if enddevice is not None:
-            index = enddevice.index
+#     def __init__(self, index: int = None, enddevice: EndDeviceHref = None):
+#         if index is None and enddevice is None:
+#             raise ValueError(f"index and enddevice cannot both be None")
+#         elif index is not None and enddevice is not None:
+#             if enddevice.index != index:
+#                 raise ValueError(f"index and enddevice.index must match if both are specified")
 
-        self.index = index
+#         if enddevice is not None:
+#             index = enddevice.index
 
-    def __str__(self) -> str:
-        return SEP.join([DEFAULT_DCAP_ROOT, str(self.index)])
+#         self.index = index
+
+#     def __str__(self) -> str:
+#         return SEP.join([DEFAULT_DCAP_ROOT, str(self.index)])
 
 
 class DERSubType(Enum):
@@ -218,20 +234,99 @@ class DERHref:
     def der_current_program(self) -> str:
         return SEP.join([self.root, DER_PROGRAM])
 
+    def fill_hrefs(self, der: m.DER) -> m.DER:
+        der.href = self.root
+        der.DERAvailabilityLink = m.DERAvailabilityLink(self.der_availability)
+        der.DERStatusLink = m.DERStatusLink(self.der_status)
+        der.DERCapabilityLink = m.DERCapabilityLink(self.der_capability)
+        der.DERSettingsLink = m.DERSettings(self.der_settings)
+        der.DERProgramLink = m.DERProgramLink(self.der_current_program)
+        return der
 
-class DERProgramHref(NamedTuple):
+
+class DeviceCapabilityHref:
+
+    def __init__(self, end_device_index: str) -> None:
+        self._end_device_index = end_device_index
+        self.root = DEFAULT_DCAP_ROOT
+        #SEP.join([DEFAULT_EDEV_ROOT, self._end_device_index, DER, DER_CAPABILITY])
+        #m.DeviceCapability
+
+    @property
+    def enddevice_href(self) -> str:
+        return DEFAULT_EDEV_ROOT
+
+    @property
+    def mirror_usage_point_href(self) -> str:
+        return DEFAULT_MUP_ROOT
+
+    @property
+    def self_device_href(self) -> str:
+        return DEFAULT_SELF_ROOT
+
+    @property
+    def time_href(self) -> str:
+        return DEFAULT_TIME_ROOT
+
+    @property
+    def usage_point_href(self) -> str:
+        return DEFAULT_UPT_ROOT
+
+    def fill_hrefs(self, dcap: m.DeviceCapability):
+        dcap.href = self.root
+        dcap.EndDeviceListLink = m.EndDeviceListLink(self.enddevice_href, all=0)
+        dcap.MirrorUsagePointLink = m.MirrorUsagePointListLink(self.mirror_usage_point_href, all=0)
+        dcap.SelfDeviceLink = m.SelfDeviceLink(self.self_device_href)
+        dcap.TimeLink = m.TimeLink(self.time_href)
+        dcap.UsagePointListLink = m.UsagePointListLink(self.usage_point_href, all=0)
+        dcap.DERProgramListLink = m.DERProgramListLink(href=DEFAULT_DERP_ROOT, all=0)
+        return dcap
+
+
+class DERProgramHref:
+
+    def __init__(self, program_index: int) -> None:
+        self._root = SEP.join([DEFAULT_DERP_ROOT, str(program_index)])
+
+    @property
+    def active_control_href(self) -> str:
+        return SEP.join([self._root, DER_CONTROL_ACTIVE])
+
+    @property
+    def default_control_href(self) -> str:
+        return SEP.join([self._root, DDERC])
+
+    @property
+    def der_control_list_href(self) -> str:
+        return SEP.join([self._root, DERC])
+
+    @property
+    def der_curve_list_href(self) -> str:
+        return SEP.join([self._root, CURVE])
+
+    def fill_hrefs(self, program: m.DERProgram) -> m.DERProgram:
+        program.href = self._root
+        program.ActiveDERControlListLink = m.ActiveDERControlListLink(self.active_control_href,
+                                                                      all=0)
+        program.DefaultDERControlLink = m.DefaultDERControlLink(self.default_control_href)
+        program.DERControlListLink = m.DERControlListLink(href=self.der_control_list_href, all=0)
+        program.DERCurveListLink = m.DERCurveListLink(href=self.der_curve_list_href, all=0)
+        return program
+
+
+class DERProgramHrefOld(NamedTuple):
     root: str
     index: int
     derp_subtype: DERProgramSubType = DERProgramSubType.NoLink
     derp_subtype_index: int = NO_INDEX
 
     @staticmethod
-    def parse(href: str) -> DERProgramHref:
+    def parse(href: str) -> DERProgramHrefOld:
         parsed = href.split(SEP)
         if len(parsed) == 1:
-            return DERProgramHref(parsed[0], NO_INDEX)
+            return DERProgramHrefOld(parsed[0], NO_INDEX)
         elif len(parsed) == 2:
-            return DERProgramHref(parsed[0], int(parsed[1]))
+            return DERProgramHrefOld(parsed[0], int(parsed[1]))
         else:
             mapped = dict(
                 derc=DERProgramSubType.DERControlListLink,
@@ -239,12 +334,13 @@ class DERProgramHref(NamedTuple):
                 dderc=DERProgramSubType.DefaultDERControlLink,
             )
             if len(parsed) == 4:
-                return DERProgramHref(parsed[0], int(parsed[1]), mapped[parsed[2]], int(parsed[3]))
-            return DERProgramHref(parsed[0], int(parsed[1]), mapped[parsed[2]])
+                return DERProgramHrefOld(parsed[0], int(parsed[1]), mapped[parsed[2]],
+                                         int(parsed[3]))
+            return DERProgramHrefOld(parsed[0], int(parsed[1]), mapped[parsed[2]])
 
 
-def der_program_parse(href: str) -> DERProgramHref:
-    return DERProgramHref.parse(href)
+def der_program_parse(href: str) -> DERProgramHrefOld:
+    return DERProgramHrefOld.parse(href)
 
 
 def der_program_href(index: int = NO_INDEX,

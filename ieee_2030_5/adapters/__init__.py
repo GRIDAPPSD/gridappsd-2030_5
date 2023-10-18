@@ -253,12 +253,9 @@ class ResourceListAdapter:
         if start == after == limit == 0:
             setattr(thelist, cls.__name__, thecontainerlist)
         else:
-            raise NotImplemented("Only can get full lists at this point in time.")
             posx = start + after
-            try:
-                setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
-            except:
-                setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
+            setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
+
         thelist.results = len(getattr(thelist, cls.__name__))
         return thelist
 

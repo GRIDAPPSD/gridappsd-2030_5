@@ -22,14 +22,18 @@ def create_device_capability(end_device_index: int) -> m.DeviceCapability:
 
     This function does not verify that there is a device at the passed index.
     """
-    device_capability = m.DeviceCapability(href=str(hrefs.DeviceCapabilityHref(end_device_index)))
-    device_capability.EndDeviceListLink = m.EndDeviceListLink(href=hrefs.DEFAULT_EDEV_ROOT, all=1)
-    device_capability.DERProgramListLink = m.DERProgramListLink(href=hrefs.DEFAULT_DERP_ROOT,
-                                                                all=0)
-    device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
-        href=hrefs.DEFAULT_MUP_ROOT, all=0)
-    device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
-    device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
+    dcap_href = hrefs.DeviceCapabilityHref(end_device_index)
+    device_capability = m.DeviceCapability()
+    device_capability = dcap_href.fill_hrefs(device_capability)
+
+    # device_capability = m.DeviceCapability(href=str(hrefs.DERCapabilitiesHref(end_device_index)))
+    # device_capability.EndDeviceListLink = m.EndDeviceListLink(href=hrefs.DEFAULT_EDEV_ROOT, all=1)
+    # device_capability.DERProgramListLink = m.DERProgramListLink(href=hrefs.DEFAULT_DERP_ROOT,
+    #                                                             all=0)
+    # device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
+    #     href=hrefs.DEFAULT_MUP_ROOT, all=0)
+    # device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
+    # device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
 
     adpt.DeviceCapabilityAdapter.add(device_capability)
     return device_capability
@@ -65,26 +69,14 @@ def add_enddevice(device: m.EndDevice) -> m.EndDevice:
     # Create a link object that holds references for linking other objects to the end device.
     ed_href = hrefs.EndDeviceHref(edev_href=device.href)
 
-    # These links are to list entries not a single element.  These hrefs should
-    # be used with the new apt.ListAdapter.
-    device.DERListLink = m.DERListLink(href=ed_href.der_list)
-    device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-        href=ed_href.function_set_assignments)
-    device.LogEventListLink = m.LogEventListLink(href=ed_href.log_event_list)
-    device.RegistrationLink = m.RegistrationLink(href=ed_href.registration)
+    ed_href.fill_hrefs(device)
 
     # Store objects in the href cache for retrieval.
-    device.ConfigurationLink = m.ConfigurationLink(href=ed_href.configuration)
-    add_href(ed_href.configuration, m.Configuration(href=ed_href.configuration))
-
-    device.DeviceInformationLink = m.DeviceInformationLink(href=ed_href.device_information)
-    add_href(ed_href.device_information, m.DeviceInformation(href=ed_href.device_information))
-
-    device.DeviceStatusLink = m.DeviceStatusLink(href=ed_href.device_status)
-    add_href(ed_href.device_status, m.DeviceStatus(href=ed_href.device_status))
-
-    device.PowerStatusLink = m.PowerStatusLink(href=ed_href.device_power_status)
-    add_href(ed_href.device_power_status, m.PowerStatus(href=ed_href.device_power_status))
+    add_href(ed_href.configuration, m.Configuration(href=device.ConfigurationLink.href))
+    add_href(ed_href.device_information,
+             m.DeviceInformation(href=device.DeviceInformationLink.href))
+    add_href(ed_href.device_status, m.DeviceStatus(href=device.DeviceStatusLink.href))
+    add_href(ed_href.power_status, m.PowerStatus(href=device.PowerStatusLink.href))
 
     return device
 
@@ -199,6 +191,35 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     if config.cleanse_storage:
         adpt.clear_all_adapters()
 
+    programs_by_description = {}
+
+    for index, program_cfg in enumerate(config.programs):
+        program_hrefs = hrefs.DERProgramHref(index)
+        # Pop off default_der_control if specified.
+        default_der_control = program_cfg.pop("DefaultDERControl", None)
+        program = m.DERProgram(**program_cfg)
+        program = program_hrefs.fill_hrefs(program)
+        adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
+
+        # Either set up default control or use the one passed in.
+        if not default_der_control:
+            default_der_control = m.DefaultDERControl(href=program_hrefs.default_control_href,
+                                                      DERControlBase=m.DERControlBase())
+        elif default_der_control:
+            der_control_base = None
+            if "DERControlBase" in default_der_control:
+                der_control_base = default_der_control.pop("DERControlBase")
+            default_der_control = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
+                                                      **default_der_control)
+            if not der_control_base:
+                default_der_control.DERControlBase = m.DERControlBase()
+            else:
+                default_der_control.DERControlBase = m.DERControlBase(**der_control_base)
+
+        add_href(program.DefaultDERControlLink.href, default_der_control)
+
+        programs_by_description[program.description] = program
+
     der_with_description = {}
     # Add DERs to the ListAdapter under the key hrefs.DEFAULT_DER_ROOT.
     # Add individual DER items to the href structure for retrieval.
@@ -207,14 +228,16 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         description = cfg_der.pop("description")
         der_href = hrefs.DERHref(hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, str(index)]))
         der_obj = m.DER(href=der_href.root, **cfg_der)
-        der_obj.DERAvailabilityLink = m.DERAvailabilityLink(der_href.der_availability)
-        add_href(der_href.der_availability, m.DERAvailability(href=der_href.der_availability))
-        der_obj.DERCapabilityLink = m.DERCapabilityLink(der_href.der_capability)
-        add_href(der_href.der_capability, m.DERCapability(href=der_href.der_capability))
-        der_obj.DERSettingsLink = m.DERSettingsLink(der_href.der_settings)
-        add_href(der_href.der_settings, m.DERSettings(href=der_href.der_settings))
-        der_obj.DERStatusLink = m.DERStatusLink(der_href.der_status)
-        add_href(der_href.der_status, m.DERStatus(href=der_href.der_status))
+        der_href.fill_hrefs(der_obj)
+
+        # der_obj.DERAvailabilityLink = m.DERAvailabilityLink(der_href.der_availability)
+        # add_href(der_href.der_availability, m.DERAvailability(href=der_href.der_availability))
+        # der_obj.DERCapabilityLink = m.DERCapabilityLink(der_href.der_capability)
+        # add_href(der_href.der_capability, m.DERCapability(href=der_href.der_capability))
+        # der_obj.DERSettingsLink = m.DERSettingsLink(der_href.der_settings)
+        # add_href(der_href.der_settings, m.DERSettings(href=der_href.der_settings))
+        # der_obj.DERStatusLink = m.DERStatusLink(der_href.der_status)
+        # add_href(der_href.der_status, m.DERStatus(href=der_href.der_status))
         der_with_description[description] = der_obj
         adpt.ListAdapter.append(hrefs.DEFAULT_DER_ROOT, der_obj)
         cfg_der["program"] = program

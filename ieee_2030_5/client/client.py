@@ -9,7 +9,7 @@ from http.client import HTTPSConnection
 from os import PathLike
 from pathlib import Path
 from threading import Timer
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 
 import werkzeug.middleware.lint
 import xsdata
@@ -19,6 +19,7 @@ import ieee_2030_5.utils as utils
 import ieee_2030_5.utils.tls_wrapper as tls
 
 _log = logging.getLogger(__name__)
+_log_req_resp = logging.getLogger(__name__ + ".request")
 
 
 class IEEE2030_5_Client:
@@ -211,6 +212,9 @@ class IEEE2030_5_Client:
         resp = self.__post__(self._device_cap.MirrorUsagePointListLink.href, data=data)
         return resp.status, resp.headers['Location']
 
+    def post(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
+        response = self.__post__(url, data, headers=headers)
+
     def __post__(self, url: str, data=None, headers: Optional[Dict[str, str]] = None):
         if not headers:
             headers = {'Content-Type': 'text/xml'}
@@ -253,6 +257,42 @@ class IEEE2030_5_Client:
         self._http_conn.close()
         self._ssl_context = None
         self._http_conn = None
+
+    def put(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
+        response = self.__put__(url, data, headers=headers)
+
+    def __put__(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
+        if not headers:
+            headers = {'Content-Type': 'text/xml'}
+
+        if self._debug:
+            _log_req_resp.debug(f"----> PUT REQUEST\nurl: {url}\nbody: {data}")
+
+        try:
+            self.http_conn.request(method="PUT", headers=headers, url=url, body=data)
+        except http.client.CannotSendRequest as ex:
+            self.http_conn.close()
+            _log.debug("Reconnecting to server")
+            self.http_conn.request(method="PUT", headers=headers, url=url, body=data)
+
+        response = self._http_conn.getresponse()
+        return response
+
+    def __post__(self, url: str, data=None, headers: Optional[Dict[str, str]] = None):
+        if not headers:
+            headers = {'Content-Type': 'text/xml'}
+
+        if self._debug:
+            _log_req_resp.debug(f"----> POST REQUEST\nurl: {url}\nbody: {data}")
+
+        self.http_conn.request(method="POST", headers=headers, url=url, body=data)
+        response = self._http_conn.getresponse()
+        response_data = response.read().decode("utf-8")
+        # response_data = response.read().decode("utf-8")
+        if response_data and self._debug:
+            _log_req_resp.debug(f"<---- POST RESPONSE\n{response_data}")
+
+        return response
 
 
 # noinspection PyTypeChecker

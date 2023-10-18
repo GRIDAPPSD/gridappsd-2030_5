@@ -96,13 +96,17 @@ class DERProgramRequests(RequestOp):
 
     def get(self) -> Response:
 
+        start = int(request.args.get('s', 0))
+        after = int(request.args.get('a', 0))
+        limit = int(request.args.get('l', 1))
+
         parsed = hrefs.HrefParser(request.path)
 
         if not parsed.has_index():
-            retval = adpt.DERProgramAdapter.fetch_all(
-                m.DERProgramList(href=request.path, all=adpt.DERProgramAdapter.size()))
+            retval = adpt.ListAdapter.get_resource_list(hrefs.DEFAULT_DERP_ROOT, start, after,
+                                                        limit)
         elif parsed.count() == 2:
-            retval = adpt.DERProgramAdapter.fetch(parsed.at(1))
+            retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, 1)
         elif parsed.count() == 4:
             # Retrive the list of controls from storage
             dercl = get_href(parsed.join(3))
