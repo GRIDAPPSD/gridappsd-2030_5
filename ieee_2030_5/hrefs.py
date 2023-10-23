@@ -239,7 +239,7 @@ class DERHref:
         der.DERAvailabilityLink = m.DERAvailabilityLink(self.der_availability)
         der.DERStatusLink = m.DERStatusLink(self.der_status)
         der.DERCapabilityLink = m.DERCapabilityLink(self.der_capability)
-        der.DERSettingsLink = m.DERSettings(self.der_settings)
+        der.DERSettingsLink = m.DERSettingsLink(self.der_settings)
         der.DERProgramLink = m.DERProgramLink(self.der_current_program)
         return der
 
@@ -274,7 +274,7 @@ class DeviceCapabilityHref:
 
     def fill_hrefs(self, dcap: m.DeviceCapability):
         dcap.href = self.root
-        dcap.EndDeviceListLink = m.EndDeviceListLink(self.enddevice_href, all=0)
+        dcap.EndDeviceListLink = m.EndDeviceListLink(self.enddevice_href, all=1)
         dcap.MirrorUsagePointLink = m.MirrorUsagePointListLink(self.mirror_usage_point_href, all=0)
         dcap.SelfDeviceLink = m.SelfDeviceLink(self.self_device_href)
         dcap.TimeLink = m.TimeLink(self.time_href)
