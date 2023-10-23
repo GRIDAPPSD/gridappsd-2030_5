@@ -543,7 +543,8 @@ class AdminEndpoints:
             elif isinstance(data, m.DERControl):
                 status_code = 201
 
-                der_cntl_list: m.DERControlList = get_href(derp.DERControlListLink.href)
+                der_cntl_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
+                    derp.DERControlListLink.href)
                 assert isinstance(der_cntl_list, m.DERControlList)
 
                 found_at = None
@@ -554,14 +555,15 @@ class AdminEndpoints:
                 if not found_at:
                     data.href = derp.DERControlListLink.href + hrefs.SEP + str(
                         len(der_cntl_list.DERControl))
-                    der_cntl_list.DERControl.append(data)
+                    adpt.ListAdapter.append(derp.DERControlListLink.href, data)
+                    #der_cntl_list.DERControl.append(data)
                 else:
                     status_code = 204
                     data.href = der_cntl_list.DERControl[found_at].href
                     der_cntl_list.DERControl[found_at] = data
 
                 der_cntl_list.all = len(der_cntl_list.DERControl)
-                add_href(derp.DERControlListLink.href, der_cntl_list)
+                #add_href(derp.DERControlListLink.href, der_cntl_list)
                 adpt.TimeAdapter.add_event(data)
 
             return Response(headers={'Location': data.href}, status=status_code)

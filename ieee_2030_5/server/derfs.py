@@ -44,10 +44,10 @@ class DERRequests(RequestOp):
 
         _log.debug(f"DER PUT {request.path} {data}")
 
-        orig = get_href(request.path)
-        if orig is None:
-            raise NotFound(f"{request.path}")
-        data.href = orig.href
+        #orig = get_href(request.path)
+        # if orig is None:
+        #     raise NotFound(f"{request.path}")
+        # data.href = orig.href
         add_href(request.path, data)
         return self.build_response_from_dataclass(data)
 
@@ -106,14 +106,17 @@ class DERProgramRequests(RequestOp):
             retval = adpt.ListAdapter.get_resource_list(hrefs.DEFAULT_DERP_ROOT, start, after,
                                                         limit)
         elif parsed.count() == 2:
-            retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, 1)
+            retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, parsed.at(1))
         elif parsed.count() == 4:
             # Retrive the list of controls from storage
             dercl = get_href(parsed.join(3))
             assert isinstance(dercl, m.DERControlList)
             # The index that we want to get the control from.
             retval = dercl.DERControl[parsed.at(3)]
-
+        elif parsed.at(2) == hrefs.DERC:
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+        # elif parsed.at(2) == hrefs.DDERC:
+        #     retval = adpt.DERControlAdapter.fetch_at(parsed.at(3))
         else:
             retval = get_href(request.path)
 

@@ -30,10 +30,10 @@ def create_device_capability(end_device_index: int) -> m.DeviceCapability:
     # device_capability.EndDeviceListLink = m.EndDeviceListLink(href=hrefs.DEFAULT_EDEV_ROOT, all=1)
     # device_capability.DERProgramListLink = m.DERProgramListLink(href=hrefs.DEFAULT_DERP_ROOT,
     #                                                             all=0)
-    # device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
-    #     href=hrefs.DEFAULT_MUP_ROOT, all=0)
-    # device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
-    # device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
+    device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
+        href=hrefs.DEFAULT_MUP_ROOT, all=0)
+    device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
+    device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
 
     adpt.DeviceCapabilityAdapter.add(device_capability)
     return device_capability
@@ -78,6 +78,12 @@ def add_enddevice(device: m.EndDevice) -> m.EndDevice:
     add_href(ed_href.device_status, m.DeviceStatus(href=device.DeviceStatusLink.href))
     add_href(ed_href.power_status, m.PowerStatus(href=device.PowerStatusLink.href))
 
+    device.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.DEFAULT_MUP_ROOT,
+                                                                 all=0)
+    device.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
+    adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_MUP_ROOT, m.MirrorUsagePoint)
+    adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_UPT_ROOT, m.UsagePoint)
+
     return device
 
 
@@ -96,7 +102,8 @@ def update_active_der_event_started(event: m.Event):
 
     program = adpt.DERProgramAdapter.fetch(href_parser.at(1))
 
-    control_list: m.DERControlList = get_href(program.DERControlListLink.href)
+    control_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
+        program.DERControlListLink.href)
     control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
     control.EventStatus = event.EventStatus
     add_href(control.href, control)
@@ -128,7 +135,8 @@ def update_active_der_event_ended(event: m.Event):
 
     program = adpt.DERProgramAdapter.fetch(href_parser.at(1))
 
-    control_list: m.DERControlList = get_href(program.DERControlListLink.href)
+    control_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
+        program.DERControlListLink.href)
     control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
     control.EventStatus = event.EventStatus
     add_href(control.href, control)
@@ -215,34 +223,28 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 default_der_control.DERControlBase = m.DERControlBase()
             else:
                 default_der_control.DERControlBase = m.DERControlBase(**der_control_base)
-
+        adpt.ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
         add_href(program.DefaultDERControlLink.href, default_der_control)
+        add_href(program.ActiveDERControlListLink.href, m.DERControlList(DERControl=[]))
 
         programs_by_description[program.description] = program
 
-    der_with_description = {}
-    # Add DERs to the ListAdapter under the key hrefs.DEFAULT_DER_ROOT.
-    # Add individual DER items to the href structure for retrieval.
-    for index, cfg_der in enumerate(config.ders):
-        program = cfg_der.pop("program", None)
-        description = cfg_der.pop("description")
-        der_href = hrefs.DERHref(hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, str(index)]))
-        der_obj = m.DER(href=der_href.root, **cfg_der)
-        der_href.fill_hrefs(der_obj)
+    fsa_with_description = {}
 
-        # der_obj.DERAvailabilityLink = m.DERAvailabilityLink(der_href.der_availability)
-        # add_href(der_href.der_availability, m.DERAvailability(href=der_href.der_availability))
-        # der_obj.DERCapabilityLink = m.DERCapabilityLink(der_href.der_capability)
-        # add_href(der_href.der_capability, m.DERCapability(href=der_href.der_capability))
-        # der_obj.DERSettingsLink = m.DERSettingsLink(der_href.der_settings)
-        # add_href(der_href.der_settings, m.DERSettings(href=der_href.der_settings))
-        # der_obj.DERStatusLink = m.DERStatusLink(der_href.der_status)
-        # add_href(der_href.der_status, m.DERStatus(href=der_href.der_status))
-        der_with_description[description] = der_obj
-        adpt.ListAdapter.append(hrefs.DEFAULT_DER_ROOT, der_obj)
-        cfg_der["program"] = program
-        cfg_der["description"] = description
-        add_href(der_obj.href, der_obj)
+    for index, fsa in enumerate(config.fsas):
+        programs = fsa.pop("programs", [])
+        fsa_obj = m.FunctionSetAssignments(href=hrefs.fsa_href(index), **fsa)
+        der_program_link = hrefs.SEP.join([fsa_obj.href, hrefs.DER_PROGRAM])
+        fsa_obj.DERProgramListLink = m.DERProgramListLink(href=der_program_link, all=len(programs))
+        adpt.ListAdapter.initialize_uri(der_program_link, m.DERProgram)
+        for program in programs:
+            if program not in programs_by_description:
+                raise ValueError(
+                    f"Program {program} not found in programs list for fsa {fsa['description']}")
+            adpt.ListAdapter.append(der_program_link, programs_by_description[program])
+        fsa_with_description[fsa_obj.description] = fsa_obj
+        # put the programs back in the config fsa.
+        fsa['programs'] = programs
 
     # Add DERCurves to the ListAdapter under the key hrefs.DEFAULT_CURVE_ROOT.
     for index, curve_cfg in enumerate(config.curves):
@@ -251,6 +253,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                            **curve_cfg)
         adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
 
+    der_global_count = 0
     for index, cfg_device in enumerate(config.devices):
 
         create_device_capability(index)
@@ -277,21 +280,40 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                  dateTimeRegistered=adpt.TimeAdapter.current_tick)
             adpt.RegistrationAdapter.add(reg)
             add_href(reg.href, reg)
+
             if cfg_device.fsas:
-                end_device_fsa[ed_href.function_set_assignments] = cfg_device.fsas
+                end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                    href=ed_href.function_set_assignments, all=len(cfg_device.fsas))
+                for fsa in cfg_device.fsas:
+                    adpt.ListAdapter.append(ed_href.function_set_assignments,
+                                            fsa_with_description[fsa])
+
+            # If no ders specified then we create one for the end device.
             if cfg_device.ders:
                 # Create references from the main der list to the ed specific list.
-                for der_description in cfg_device.ders:
-                    # der_item = adpt.ListAdapter.get_item_by_prop(hrefs.DEFAULT_DER_ROOT,
-                    #                                              "description", der_description)
-                    der_item = der_with_description[der_description]
-                    adpt.ListAdapter.append(ed_href.der_list, der_item)
+                for der in cfg_device.ders:
+                    der_href = hrefs.DERHref(
+                        hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
+                                        str(der_global_count)]))
+                    der_global_count += 1
+                    der_obj = m.DER(href=der_href.root,
+                                    DERStatusLink=m.DERStatusLink(der_href.der_status),
+                                    DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
+                                    DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
+                                    DERAvailabilityLink=m.DERAvailabilityLink(
+                                        der_href.der_availability))
+                    adpt.ListAdapter.append(ed_href.der_list, der_obj)
+                    current_min_primacy = 10000
+                    current_der_program = None
+                    for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
+                        for der_program in adpt.ListAdapter.get_list(fsa.DERProgramListLink.href):
+                            if current_der_program is None:
+                                current_der_program = der_program
+                            if der_program.primacy < current_min_primacy:
+                                current_min_primacy = der_program.primacy
+                    der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(
+                        current_der_program.href)
 
-                # add_href(
-                #     ed_href.der_list
-                #     m.DERList(href=ed_href.der_list,
-                #               all=len(cfg_device.ders),
-                #               DER=adpt.ListAdapter.get_list(ed_href.der_list))
             else:
 
                 # der_href will manage the url links to other lists/resources for the DER.
@@ -308,120 +330,14 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                           DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
                 ])
                 adpt.ListAdapter.append(ed_href.der_list, der_list)
+                current_min_primacy = 10000
+                current_der_program = None
+                for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
+                    for der_program in adpt.ListAdapter.get_list(fsa.DERProgramListLink.href):
+                        if current_der_program is None:
+                            current_der_program = der_program
+                        if der_program.primacy < current_min_primacy:
+                            current_min_primacy = der_program.primacy
+                der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(current_der_program.href)
 
-    for index, program_cfg in enumerate(config.programs):
-        program = adpt.DERProgramAdapter.fetch_by_href(hrefs.der_program_href(index))
-        if program is not None:
-            _log.warning(f"Updating existing program {hrefs.der_program_href(index)}")
-        else:
-            devices_cfg = program_cfg.pop("devices", [])
-            default_der_control = program_cfg.pop("DefaultDERControl", None)
-            der_controls = program_cfg.pop("DERControls", None)
-
-            program = m.DERProgram(href=hrefs.der_program_href(index), **program_cfg)
-            program = adpt.DERProgramAdapter.add(program)
-            for der in config.ders:
-                if der["program"] == program.description:
-                    der_obj = der_with_description[der["description"]]
-                    der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(program.href)
-                    add_href(der_obj.href, der_obj)
-
-                    for index, ed in enumerate(config.devices):
-                        # Need to update the add_href link to the updated der list.
-                        for cfg_program in ed.programs:
-                            if cfg_program == program.description:
-                                ed_href = hrefs.EndDeviceHref(index)
-                                add_href(
-                                    ed_href.der_list,
-                                    m.DERList(href=ed_href.der_list,
-                                              all=len(cfg_device.ders),
-                                              DER=adpt.ListAdapter.get_list(ed_href.der_list)))
-
-            if default_der_control is not None:
-                default_der_control_href = program.href + hrefs.SEP + "dderc"
-                der_control_base = None
-                if "DERControlBase" in default_der_control:
-                    der_control_base = default_der_control.pop("DERControlBase")
-                default_der_control = m.DefaultDERControl(href=default_der_control_href,
-                                                          **default_der_control)
-                if der_control_base:
-                    default_der_control.DERControlBase = m.DERControlBase(**der_control_base)
-                add_href(default_der_control_href, default_der_control)
-                program.DefaultDERControlLink = m.DefaultDERControlLink(
-                    href=default_der_control_href)
-
-            der_control_list = m.DERControlList(
-                href=program.href + hrefs.SEP + "derc",
-                all=0 if der_controls is None else len(der_controls))
-            if der_controls is not None:
-                for derc_index, der_control in enumerate(der_controls):
-                    derc_href = program.href + hrefs.SEP + "derc" + hrefs.SEP + str(derc_index)
-                    der_control_list.DERControl.append(m.DERControl(href=derc_href, **der_control))
-
-            add_href(der_control_list.href, der_control_list)
-            program.DERControlListLink = m.DERControlListLink(href=der_control_list.href,
-                                                              all=der_control_list.all)
-
-            active_control_list_href = program.href + hrefs.SEP + hrefs.DER_CONTROL_ACTIVE
-            active_control_list = m.DERControlList(href=active_control_list_href,
-                                                   all=0,
-                                                   DERControl=[])
-            add_href(active_control_list_href, active_control_list)
-            program.ActiveDERControlListLink = m.ActiveDERControlListLink(
-                href=active_control_list_href, all=0)
-
-            program.DERCurveListLink = m.DERCurveListLink(href=hrefs.curve_href(),
-                                                          all=adpt.DERCurveAdapter.size())
-
-            program.primacy = "0"
-
-    for index, fsa in enumerate(config.fsa):
-        fsa_obj = adpt.FunctionSetAssignmentsAdapter.fetch_by_href(hrefs.fsa_href(index))
-
-        if fsa_obj is not None:
-            _log.warning(f"Updating existing function set assignments {hrefs.fsa_href(index)}")
-        else:
-            programs_cfg = fsa.pop("programs", [])
-            fsa_obj = m.FunctionSetAssignments(hrefs.fsa_href(index), **fsa)
-            fsa_programs = []
-            for prg in program_cfg.values():
-                program = adpt.DERProgramAdapter.fetch_by_property("description", prg)
-                if program:
-                    fsa_programs.append(program)
-            fsa_obj = adpt.FunctionSetAssignmentsAdapter.add(fsa_obj)
-
-            if fsa_programs:
-                fsa_der_href = end_device.href + hrefs.SEP + "fsa" + hrefs.SEP + str(index)
-                fsa_obj.DERProgramListLink = m.DERProgramListLink(href=fsa_der_href,
-                                                                  all=len(fsa_programs))
-                add_href(
-                    fsa_der_href,
-                    m.DERProgramList(href=fsa_der_href,
-                                     DERProgram=fsa_programs,
-                                     all=len(fsa_programs)))
-
-    for href, fsaptr in end_device_fsa.items():
-        fsa_list = m.FunctionSetAssignmentsList(href)
-        for ptr in fsaptr:
-            fsa_obj = adpt.FunctionSetAssignmentsAdapter.fetch_by_property("description", ptr)
-            fsa_list.FunctionSetAssignments.append(fsa_obj)
-        fsa_list.all = len(fsa_list.FunctionSetAssignments)
-        add_href(href, fsa_list)
-
-    # for href, derptr in end_device_ders.items():
-    #     for index, ptr in enumerate(config.ders):
-    #         der_href = hrefs.DERHref(hrefs.SEP.join([href, str(index)]))
-
-    #         der_obj = adpt.DERAdapter.fetch_by_property("description", ptr)
-    #         if der_obj is None:
-    #             der_obj = m.DER(href=der_href.root)
-
-    #         if 'program' in ptr:
-    #             program = adpt.DERProgramAdapter.fetch_by_property("description", ptr['program'])
-    #             if program is not None:
-    #                 der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(program.href)
-
-    #         der_obj.DERAvailabilityLink = m.DERAvailabilityLink(der_href.der_availability)
-    #         der_obj.DERCapabilityLink = m.DERCapabilityLink(der_href.der_capability)
-    #         der_obj.DERSettingsLink = m.DERSettingsLink(der_href.der_settings)
-    #         der_obj.DERStatusLink = m.DERStatusLink(der_href.der_status)
+    adpt.ListAdapter.print_all()

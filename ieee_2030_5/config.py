@@ -27,30 +27,34 @@ from ieee_2030_5.types_ import Lfdi
 _log = logging.getLogger(__name__)
 
 D = TypeVar("D")
+
+
 @dataclass
 class ReturnValue:
     success: bool
     an_object: D
     was_update: bool
-    
+
     def get(self, datatype: D) -> D:
         return self.an_object
-    
+
 
 class InvalidConfigFile(Exception):
     pass
+
 
 @dataclass
 class FSAConfiguration:
     description: str
     programs: List[ProgramConfiguration] = field(default_factory=list)
-    
+
+
 @dataclass
 class DERConfiguration:
-    #capabilities: 
+    #capabilities:
     modesSupported: str
     type: int
-    
+
 
 @dataclass
 class DeviceConfiguration:
@@ -59,9 +63,7 @@ class DeviceConfiguration:
     pin: int = None
     poll_rate: int = 900
     fsas: List[str] = field(default_factory=list)
-    programs: List[str] = field(default_factory=list)
     ders: List[str] = field(default_factory=list)
-    
 
     @classmethod
     def from_dict(cls, env):
@@ -170,26 +172,25 @@ class ProgramList:
 class ServerConfiguration:
     openssl_cnf: str
 
-
     tls_repository: str
     openssl_cnf: str
 
     server: str
     port: int
     ui_port: int = None
-    
+
     cleanse_storage: bool = True
     storage_path: str = None
 
     log_event_list_poll_rate: int = 900
     device_capability_poll_rate: int = 900
     usage_point_post_rate: int = 300
-    end_device_list_poll_rate: int = 86400  # daily check-in
+    end_device_list_poll_rate: int = 86400    # daily check-in
 
     generate_admin_cert: bool = False
     lfdi_client: str = None
-    
-    fsa: List[FSAConfiguration] = field(default_factory=list)
+
+    fsas: List[FSAConfiguration] = field(default_factory=list)
     programs: List[ProgramConfiguration] = field(default_factory=list)
     devices: List[DeviceConfiguration] = field(default_factory=list)
     ders: List[DERConfiguration] = field(default_factory=list)
@@ -202,7 +203,6 @@ class ServerConfiguration:
     lfdi_mode: Union[
         Literal["lfdi_mode_from_file"],
         Literal["lfdi_mode_from_cert_fingerprint"]] = "lfdi_mode_from_cert_fingerprint"
-
 
     # programs: List[DERProgramConfiguration] = field(default_factory=list)
     # controls: List[DERControlConfiguration] = field(default_factory=list)
@@ -220,13 +220,13 @@ class ServerConfiguration:
     gridappsd: Optional[GridappsdConfiguration] = None
     # DefaultDERControl: Optional[DefaultDERControl] = None
     # DERControlList: Optional[DERControl] = field(default=list)
-    
+
     @property
     def server_hostname(self) -> str:
         server = self.server
         if self.port:
             server = server + f":{self.port}"
-            
+
         return server
 
     @classmethod
@@ -239,8 +239,8 @@ class ServerConfiguration:
         # self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
         self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
         # for d in self.devices:
-            # d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
-            #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
+        # d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
+        #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
 
         # der_controls, der_default_control = None, None
         # if self.DERControlListFile:

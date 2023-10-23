@@ -247,17 +247,19 @@ class ResourceListAdapter:
         if cls is None:
             raise KeyError(f"Resource list {list_uri} not found in adapter")
 
-        thecontainerlist = list(self._container_dict[list_uri].values())
         thelist = eval(f"m.{cls.__name__}List()")
-        thelist.href = list_uri
-        thelist.all = len(thecontainerlist)
-        if start == after == limit == 0:
-            setattr(thelist, cls.__name__, thecontainerlist)
-        else:
-            posx = start + after
-            setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
-
-        thelist.results = len(getattr(thelist, cls.__name__))
+        try:
+            thecontainerlist = list(self._container_dict[list_uri].values())
+            thelist.href = list_uri
+            thelist.all = len(thecontainerlist)
+            if start == after == limit == 0:
+                setattr(thelist, cls.__name__, thecontainerlist)
+            else:
+                posx = start + after
+                setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
+        except KeyError:
+            thelist.all = 0
+            thelist.results = len(getattr(thelist, cls.__name__))
         return thelist
 
     def get_list(self, list_uri: str) -> D:
@@ -303,6 +305,15 @@ class ResourceListAdapter:
 
     def print_container(self, list_uri: str):
         pprint(self._container_dict[list_uri])
+
+    def print_all(self):
+
+        for k in sorted(self._container_dict.keys()):
+            print("K:", k)
+            for index, v in self._container_dict[k].items():
+                print("index:", index)
+                pprint(v.__dict__)
+            #pprint(self._container_dict[k].)
 
     def clear_all(self):
         self._container_dict.clear()

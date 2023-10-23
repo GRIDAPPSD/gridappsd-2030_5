@@ -53,6 +53,7 @@ fsas:
 
 programs:
   - description: Program 1
+    primacy: 0
     DefaultDERControl:
       setESDelay: 30
       setGradW: 1000
@@ -65,5 +66,17 @@ curves:
   - description: Curve 1
     curveType: opModVoltVar
     CurveData:
-      - xvalue: 5
-        yvalue: 10
+      - xvalue: 99
+        yvalue: 50
+      - xvalue: 103
+        yvalue: -50
+      - xvalue: 101
+        yvalue: -50
+      - xvalue: 97
+        yvalue: 50
+    rampDecTms: 600
+    rampIncTms: 600
+    rampPT1Tms: 10
+    xMultiplier: 0
+    yMultiplier: 0
+    yRefType: 3

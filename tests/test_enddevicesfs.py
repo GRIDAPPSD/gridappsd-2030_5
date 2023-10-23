@@ -19,6 +19,10 @@ def test_request_enddevice(first_client: IEEE2030_5_Client):
     assert ed.sFDI
 
 
+def test_request_enddevice(first_client: IEEE2030_5_Client):
+    ed = first_client.end_device()
+
+
 def test_can_get_registration_link(first_client: IEEE2030_5_Client):
     ed = first_client.end_device()
     reg = first_client.registration(ed)

@@ -148,18 +148,23 @@ class FSARequests(RequestOp):
     def get(self):
         """ Retrieve a FSA or Program List
         """
+        start = int(request.args.get("s", 0))
+        limit = int(request.args.get("l", 0))
+        after = int(request.args.get("a", 0))
 
         fsa_href = hrefs.fsa_parse(request.path)
 
         if fsa_href.fsa_index == hrefs.NO_INDEX:
-            retval = adpt.FunctionSetAssignmentsAdapter.fetch_all(m.FunctionSetAssignmentsList(),
-                                                                  "FunctionSetAssignments")
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+            # retval = adpt.FunctionSetAssignmentsAdapter.fetch_all(m.FunctionSetAssignmentsList(),
+            #                                                       "FunctionSetAssignments")
         elif fsa_href.fsa_sub == hrefs.FSASubType.DERProgram.value:
-            fsa = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
-            retval = adpt.FunctionSetAssignmentsAdapter.fetch_children(
-                fsa, "fsa", m.DERProgramList())
-            # retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
-        else:
-            retval = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+            # fsa = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
+            # retval = adpt.FunctionSetAssignmentsAdapter.fetch_children(
+            #     fsa, "fsa", m.DERProgramList())
+            # # retval = FSAAdapter.fetch_children_list_container(fsa_href.fsa_index, m.DERProgram, m.DERProgramList(href="/derp"), "DERProgram")
+        # else:
+        #     retval = adpt.FunctionSetAssignmentsAdapter.fetch(fsa_href.fsa_index)
 
         return self.build_response_from_dataclass(retval)
