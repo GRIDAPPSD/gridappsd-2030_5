@@ -101,7 +101,7 @@ class IEEE2030_5_Client:
         res = self.__get_request__(url)
         return res
 
-    def end_devices(self) -> m.EndDeviceListLink:
+    def end_devices(self) -> m.EndDeviceList
         if not self._device_cap:
             self.device_capability()
 
