@@ -16,7 +16,6 @@ class Dcap(RequestOp):
         #     raise werkzeug.exceptions.Unauthorized()
         device = adpt.EndDeviceAdapter.fetch_by_property("lFDI", self.lfdi)
         device_index = adpt.EndDeviceAdapter.fetch_index(device)
-        device_href = hrefs.EndDeviceHref.parse(device.href)
         cap = adpt.DeviceCapabilityAdapter.fetch(device_index)
-        
+
         return self.build_response_from_dataclass(cap)
