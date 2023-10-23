@@ -249,6 +249,7 @@ class ResourceListAdapter:
 
         thecontainerlist = list(self._container_dict[list_uri].values())
         thelist = eval(f"m.{cls.__name__}List()")
+        thelist.href = list_uri
         thelist.all = len(thecontainerlist)
         if start == after == limit == 0:
             setattr(thelist, cls.__name__, thecontainerlist)
