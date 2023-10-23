@@ -34,11 +34,22 @@ cleanse_storage: true
 devices:
   - id: dev5
     pin: 111115
-    programs:
-      - Program 1
+    fsas:
+      - Function Set Assignments 1
 
   - id: dev6
     pin: 111115
+    fsas:
+      - Function Set Assignments 2
+
+fsas:
+  - description: Function Set Assignments 1
+    programs: 
+    - Program 1
+
+  - description: Function Set Assignments 2
+    programs: 
+    - Program 1
 
 programs:
   - description: Program 1
