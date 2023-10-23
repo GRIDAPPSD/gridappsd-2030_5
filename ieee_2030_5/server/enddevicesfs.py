@@ -101,15 +101,21 @@ class EDevRequests(RequestOp):
         ed = adpt.EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
 
         # /edev_0_dstat
-        if edev_href.count() > 2:
+        if request.path == ed.DERListLink.href:
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+        elif request.path == ed.LogEventListLink.href:
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+        elif request.path == ed.FunctionSetAssignmentsListLink.href:
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+        elif edev_href.count() > 2:
             retval = get_href(request.path)
         elif not edev_href.has_index():
             retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
         else:
             retval = get_href(request.path)
 
-        if adpt.ListAdapter.has_list(request.path):
-            retval = adpt.ListAdapter.get_resource_list(request.path)
+        # if adpt.ListAdapter.has_list(request.path):
+        #     retval = adpt.ListAdapter.get_resource_list(request.path)
 
         return self.build_response_from_dataclass(retval)
 
