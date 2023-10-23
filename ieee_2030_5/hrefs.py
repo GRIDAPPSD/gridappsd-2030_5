@@ -94,6 +94,21 @@ class HrefParser:
             return None
 
 
+class HrefEventParser(HrefParser):
+
+    @property
+    def program_index(self) -> int:
+        return int(self.at(1))
+
+    @property
+    def event_index(self) -> int:
+        return int(self._split[-1])
+
+    @property
+    def events_href(self) -> str:
+        return SEP.join(self._split[:-1])
+
+
 class EndDeviceHref:
 
     def __init__(self, index: int = None, edev_href: str = None):

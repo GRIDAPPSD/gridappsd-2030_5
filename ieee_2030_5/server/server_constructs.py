@@ -98,14 +98,17 @@ def update_active_der_event_started(event: m.Event):
 
     assert type(event) == m.DERControl
 
-    href_parser = hrefs.HrefParser(event.href)
+    href_parser = hrefs.HrefEventParser(event.href)
 
-    program = adpt.DERProgramAdapter.fetch(href_parser.at(1))
+    program = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, href_parser.program_index)
 
     control_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
         program.DERControlListLink.href)
     control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
     control.EventStatus = event.EventStatus
+    assert control.EventStatus.currentStatus == 1
+    adpt.ListAdapter.append(program.ActiveDERControlListLink.href, control)
+
     add_href(control.href, control)
     add_href(event.href, event)
     add_href(control_list.href, control_list)
@@ -131,9 +134,9 @@ def update_active_der_event_ended(event: m.Event):
     """
     assert type(event) == m.DERControl
 
-    href_parser = hrefs.HrefParser(event.href)
+    href_parser = hrefs.HrefEventParser(event.href)
 
-    program = adpt.DERProgramAdapter.fetch(href_parser.at(1))
+    program = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, href_parser.program_index)
 
     control_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
         program.DERControlListLink.href)
