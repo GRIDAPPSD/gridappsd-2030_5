@@ -13,8 +13,7 @@ from queue import Queue
 
 import OpenSSL
 import werkzeug.exceptions
-from flask import (Flask, Response, g, redirect, render_template, request,
-                   url_for)
+from flask import (Flask, Response, g, redirect, render_template, request, url_for)
 from flask_session import Session
 # from flask_socketio import SocketIO, send
 from werkzeug.serving import BaseWSGIServer, make_server
@@ -26,8 +25,7 @@ __all__ = ["build_server"]
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint,
-                               sfdi_from_lfdi)
+from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi)
 # templates = Jinja2Templates(directory="templates")
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.data.indexer import get_href, get_href_all_names
@@ -104,7 +102,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
                 environ['ieee_2030_5_lfdi'] = self.config.lfdi_client
                 environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(self.config.lfdi_client)
                 return environ
-            
+
             # For admin use the admin peer even though it's not what is sent in to the client.
             # This allows admin to login from any api, though not necessarily secure this
             # allows a way to have the admin be boxed off.
@@ -118,7 +116,8 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
             if PeerCertWSGIRequestHandler.config.lfdi_mode == "lfdi_mode_from_file":
                 _log.debug("Using hash from combined file.")
-                pth = PeerCertWSGIRequestHandler.tlsrepo.__get_combined_file__(x509.get_subject().CN)
+                pth = PeerCertWSGIRequestHandler.tlsrepo.__get_combined_file__(
+                    x509.get_subject().CN)
                 sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
                 environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(sha256hash)
             else:
@@ -136,7 +135,7 @@ class PeerCertWSGIRequestHandler(werkzeug.serving.WSGIRequestHandler):
                     found_device_id = self.tlsrepo.find_device_id_from_sfdi(
                         environ['ieee_2030_5_sfdi'])
                     assert found_device_id, "Unknown device found."
-                
+
         except OpenSSL.crypto.Error:
             # Only if we have a debug_device do we want to expose this device through the admin page.
             # if self.debug_device:
@@ -186,7 +185,8 @@ def before_request():
 def after_request(response: Response) -> Response:
     _log_protocol.debug(f"\nREQ: {request.path}")
     _log_protocol.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
-    _log_protocol.debug(f"\nRESP: {response.get_data().decode('utf-8')}")
+    first_line = response.get_data().decode('utf-8').split('\n')[0]
+    _log_protocol.debug(f"\nRESP: {first_line}")
 
     # _log.debug(f"RESP HEADERS:\n{response.headers}")
     # _log.debug(f"RESP:\n{response.get_data().decode('utf-8')}")
@@ -240,7 +240,6 @@ def __build_http_app__(config: ServerConfiguration) -> Flask:
 def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath('templates')))
 
-    
     # Debug headers path and request arguments
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.
@@ -321,7 +320,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             # Helper for connect and energize mode, which are ready for usage.
             if 'enable_opModConnect' not in kwargs:
                 kwargs['enable_opModConnect'] = 'off'
-            
+
             if 'enable_opModEnergize' not in kwargs:
                 kwargs['enable_opModEnergize'] = 'off'
 
@@ -380,13 +379,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
 
 
 def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
-    exclude_patterns = [
-        "data_store/**",
-        "docs/**",
-        "examples/**",
-        "ieee_2030_5_gui/**",
-        "logs/**"
-    ]
+    exclude_patterns = ["data_store/**", "docs/**", "examples/**", "ieee_2030_5_gui/**", "logs/**"]
     app.run(host=host,
             ssl_context=ssl_context,
             request_handler=request_handler,
@@ -399,15 +392,14 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs):
     global server_config, tls_repository
     server_config = config
     tls_repository = tlsrepo
-    
+
     app = __build_app__(config, tlsrepo)
-    
+
     ssl_context = None
     # If lfd_client is specified then we are running in http mode so we don'
     # establish an sslcontext.
     if not config.lfdi_client:
         ssl_context = __build_ssl_context__(tlsrepo)
-        
 
     try:
         host, port = config.server_hostname.split(":")
@@ -419,8 +411,13 @@ def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs):
     PeerCertWSGIRequestHandler.config = config
     PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
 
-    run_app(app=app, host=host, ssl_context=ssl_context, port=port, request_handler=PeerCertWSGIRequestHandler, **kwargs)
-    
+    run_app(app=app,
+            host=host,
+            ssl_context=ssl_context,
+            port=port,
+            request_handler=PeerCertWSGIRequestHandler,
+            **kwargs)
+
 
 def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) -> BaseWSGIServer:
 
@@ -433,7 +430,7 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
         # host and port not available
         host = config.server_hostname
         port = 8443
-        
+
     PeerCertWSGIRequestHandler.config = config
     PeerCertWSGIRequestHandler.tlsrepo = tlsrepo
 
