@@ -171,6 +171,10 @@ class ResourceListAdapter:
             _log.debug(
                 f"Skip loading initial store due to IEEE_ADAPTER_IGNORE_INITIAL_LOAD being set")
 
+    def list_size(self, list_uri: str) -> int:
+        alist = self._container_dict.get(list_uri, [])
+        return len(alist)
+
     def count(self) -> int:
         count_of = 0
         for v in self._container_dict.values():
@@ -229,8 +233,11 @@ class ResourceListAdapter:
         self._container_dict[list_uri][len(self._container_dict[list_uri])] = obj
         store_event.send(self)
 
+    def get_by_mrid(self, list_uri: str, mrid: str) -> Optional[T]:
+        return self.get_item_by_prop(list_uri, "mRID", mrid)
+
     def get_item_by_prop(self, list_uri: str, prop: str, value: Any) -> D:
-        for item in self._container_dict[list_uri].values():
+        for item in self._container_dict.get(list_uri, {}).values():
             if getattr(item, prop) == value:
                 return item
         raise NotFoundError(f"Uri {list_uri} does not contain {prop} == {value}")
@@ -259,10 +266,11 @@ class ResourceListAdapter:
                 setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
         except KeyError:
             thelist.all = 0
+            thelist.href = list_uri
             thelist.results = len(getattr(thelist, cls.__name__))
         return thelist
 
-    def get_list(self, list_uri: str) -> D:
+    def get_list(self, list_uri: str, start: int = 0, limit: int = 0, after: int = 0) -> D:
         if list_uri not in self._container_dict:
             raise KeyError(f"List {list_uri} not found in adapter")
 
@@ -286,6 +294,9 @@ class ResourceListAdapter:
                 f"Key {key} already exists in list {list_uri} but overwrite not set to True")
 
         self._container_dict[list_uri][key] = value
+        store_event.send(self)
+
+    def store(self):
         store_event.send(self)
 
     def get_values(self, list_uri: str, sort_by: Optional[str] = None) -> List[D]:
