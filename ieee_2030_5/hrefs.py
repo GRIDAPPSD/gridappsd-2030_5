@@ -563,6 +563,13 @@ class ParsedUsagePointHref:
         self._href = href
         self._split = href.split(SEP)
 
+    def last_list(self) -> str:
+        """Assuming the parsed href has a reference to an item, return the container href.
+        """
+        if self._split[-1].isnumeric():
+            return SEP.join(self._split[:-1])
+        return self._href
+
     def has_usage_point_index(self) -> bool:
         return self.usage_point_index is not None
 
