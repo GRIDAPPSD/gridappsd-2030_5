@@ -41,6 +41,20 @@ mirror_usage_points: List[m.MirrorUsagePoint] = [
 ]
 
 
+def test_no_mup_default(first_client: IEEE2030_5_Client):
+    upt: m.UsagePointList = first_client.get("/upt")
+    assert upt is not None
+    assert isinstance(upt, m.UsagePointList)
+    assert "/upt" == upt.href
+    assert 0 == upt.all
+
+    mup = first_client.get("/mup")
+    assert mup is not None
+    assert isinstance(mup, m.MirrorUsagePointList)
+    assert "/mup" == mup.href
+    assert 0 == mup.all
+
+
 def test_create_update_mup(first_client: IEEE2030_5_Client):
 
     dcap: m.DeviceCapability = first_client.device_capability()
