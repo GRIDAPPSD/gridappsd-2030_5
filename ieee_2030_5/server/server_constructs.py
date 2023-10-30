@@ -341,6 +341,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                             current_der_program = der_program
                         if der_program.primacy < current_min_primacy:
                             current_min_primacy = der_program.primacy
-                der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(current_der_program.href)
+                der_list.DER[0].CurrentDERProgramLink = m.CurrentDERProgramLink(
+                    current_der_program.href)
 
     adpt.ListAdapter.print_all()
