@@ -212,6 +212,12 @@ class IEEE2030_5_Client:
         resp = self.__post__(self._device_cap.MirrorUsagePointListLink.href, data=data)
         return resp.status, resp.headers['Location']
 
+    def create_mirror_meter_reading(self, mirror_usage_point_href: str,
+                                    mirror_meter_reading: m.MirrorMeterReading) -> Tuple[int, str]:
+        data = utils.dataclass_to_xml(mirror_meter_reading)
+        resp = self.__post__(mirror_usage_point_href, data=data)
+        return resp.status, resp.headers['Location']
+
     def post(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
         response = self.__post__(url, data, headers=headers)
 
