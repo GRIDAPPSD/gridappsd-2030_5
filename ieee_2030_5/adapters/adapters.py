@@ -188,6 +188,7 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> ReturnValue:
                            mRID=mup.mRID,
                            roleFlags=mup.roleFlags,
                            status=mup.status)
+        upt.MeterReadingListLink = m.MeterReadingListLink(href=hrefs.SEP.join([upt.href, "mr"]))
         adpt.ListAdapter.append(hrefs.DEFAULT_UPT_ROOT, upt)
 
         # Initialize the url for the mirror meter reading list.

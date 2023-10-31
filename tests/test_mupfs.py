@@ -221,6 +221,9 @@ def test_create_mup(first_client: IEEE2030_5_Client):
     assert upt is not None
     assert isinstance(upt, m.UsagePointList)
     assert len(mirror_usage_points) == upt.all and upt.all != 0
+    for u in upt.UsagePoint:
+        assert u.href is not None
+        assert u.MeterReadingListLink is not None and u.MeterReadingListLink.href is not None
 
 
 def test_post_mirror_reading(first_client: IEEE2030_5_Client):
