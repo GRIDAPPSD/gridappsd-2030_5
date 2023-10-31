@@ -30,20 +30,45 @@ class ResponseStatus:
 
 
 class UsagePointRequest(RequestOp):
-    
+
     def get(self) -> Response:
-        
+
+        start = int(request.args.get("s", 0))
+        limit = int(request.args.get("l", 1))
+        after = int(request.args.get("a", 0))
         parsed = hrefs.ParsedUsagePointHref(request.path)
-        
-        # /upt
-        if not parsed.has_usage_point_index():
-            obj = adpt.UsagePointAdapter.fetch_all(m.UsagePointList(request.path))
+
+        if parsed.has_reading_list() and parsed.reading_index is not None:
+            obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_index)
+
+        elif parsed.has_reading_set_list() and parsed.reading_set_index is not None:
+            obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_set_index)
+        elif parsed.has_meter_reading_list() and parsed.meter_reading_index is not None:
+            obj = adpt.ListAdapter.get(parsed.last_list(), parsed.meter_reading_index)
         else:
-            obj = adpt.UsagePointAdapter.fetch(parsed.usage_point_index)
-            
-        if parsed.has_extra():
-            obj = get_href(request.path)
-        
+            obj = adpt.ListAdapter.get_resource_list(request.path,
+                                                     start=start,
+                                                     limit=limit,
+                                                     after=after)
+
+        # # /upt
+        # if not parsed.has_usage_point_index():
+        #     obj = adpt.UsagePointAdapter.fetch_all(m.UsagePointList(request.path),
+        #                                            start=start,
+        #                                            limit=limit,
+        #                                            after=after)
+        # elif parsed.has_meter_reading_list() and not parsed.meter_reading_index:
+        #     obj = adpt.MirrorUsagePointAdapter.fetch_all(m.MeterReadingList(request.path),
+        #                                                  start=start,
+        #                                                  limit=limit,
+        #                                                  after=after)
+
+        # else:
+        #     obj = adpt.UsagePointAdapter.fetch(parsed.usage_point_index)
+
+        # if parsed.has_extra():
+        #     obj = get_href(request.path)
+
         return self.build_response_from_dataclass(obj)
 
 
@@ -57,19 +82,17 @@ class MirrorUsagePointRequest(RequestOp):
 
         if not pth_info.startswith(hrefs.DEFAULT_MUP_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
-        
-        
+
         mup_href = hrefs.ParsedUsagePointHref(request.path)
-        
+
         if not mup_href.has_usage_point_index():
             # /mup
-                mup = adpt.MirrorUsagePointAdapter.fetch_all(m.MirrorUsagePointList(href=request.path))
+            mup = adpt.ListAdapter.get_resource_list(request.path)
         else:
             # /mup_0
-            mup = adpt.MirrorUsagePointAdapter.fetch(mup_href.usage_point_index)
-                
+            mup = adpt.ListAdapter.get(hrefs.DEFAULT_MUP_ROOT, mup_href.usage_point_index)
+
         return self.build_response_from_dataclass(mup)
-       
 
     def post(self) -> Response:
         xml = request.data.decode('utf-8')
@@ -89,16 +112,16 @@ class MirrorUsagePointRequest(RequestOp):
             result = adpt.create_mirror_usage_point(mup=data)
             #result = adpt.MirrorUsagePointAdapter.create(mup=data)
         else:
-            result = adpt.create_mirror_meter_reading(mup_href=request.path, mr=data)
-            
+            result = adpt.create_mirror_meter_reading(mup_href=request.path, mmr_input=data)
+
         if result.success:
             status = '204' if result.was_update == True else '201'
         else:
             status = '405'
-        
+
         if status.startswith('20'):
-            return Response(headers={'Location': result.an_object.href}, status=status)    
+            if result.location:
+                return Response(headers={'Location': result.location}, status=status)
+            return Response(headers={'Location': result.an_object.href}, status=status)
         else:
             return Response(result.an_object, status=status)
-        
-        

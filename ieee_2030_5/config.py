@@ -34,6 +34,7 @@ class ReturnValue:
     success: bool
     an_object: D
     was_update: bool
+    location: str = None
 
     def get(self, datatype: D) -> D:
         return self.an_object
