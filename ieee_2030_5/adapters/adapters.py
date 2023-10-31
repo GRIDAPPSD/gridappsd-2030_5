@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Union
 from ieee_2030_5.data.indexer import add_href
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import Adapter, ResourceListAdapter
+import ieee_2030_5.adapters as adpt
+from ieee_2030_5.adapters import Adapter, NotFoundError, ResourceListAdapter
 from ieee_2030_5.config import ReturnValue
 
 from datetime import datetime
@@ -38,98 +39,188 @@ ListAdapter = ResourceListAdapter()
 
 
 def create_mirror_meter_reading(
-        mup_href: str, mr: Union[m.MirrorMeterReading, m.MirrorMeterReadingList]) -> ReturnValue:
-    upt_href = hrefs.UsagePointHref()
-    upt_index = int(mup_href.split(hrefs.SEP)[-1])
+        mup_href: str, mmr_input: Union[m.MirrorMeterReading,
+                                        m.MirrorMeterReadingList]) -> ReturnValue:
 
-    was_updated = False
-    was_success = True
-    try:
-        found_mirror_reading = MirrorMeterReadingAdapter.fetch_by_mrid(mr.mRID)
-        was_updated = True
-        mr_index = int(found_mirror_reading.href.split(hrefs.SEP)[-1])
-    except KeyError:
-        mr.href = upt_href.meterreading(upt_index, MirrorMeterReadingAdapter.size())
-        found_mirror_reading = MirrorMeterReadingAdapter.add(mr)
-        mr_index = int(mr.href.split(hrefs.SEP)[-1])
-
-    if isinstance(mr, m.MirrorMeterReadingList):
+    if isinstance(mmr_input, m.MirrorMeterReadingList):
         raise NotImplemented()
 
-    elif isinstance(mr, m.MirrorMeterReading):
-        for rs_index, rs in enumerate(found_mirror_reading.MirrorReadingSet):
-            try:
-                found_rs = MirrorReadingSetAdapter.fetch_by_mrid(rs.mRID)
-                was_updated = True
-            except KeyError:
-                found_rs = None
+    was_updated = False
+    location = None
+    if isinstance(mmr_input, m.MirrorMeterReading):
+        # Attempt to find an existing mup with the same mrid.  If found then we need to replace
+        # the data with the new data etc.  If not found then we add the mmr to the list of mmrs.
+        mmr_list_href = hrefs.SEP.join([mup_href, "mr"])
+        mr_list_href = mmr_list_href.replace("mup", "upt")
+        try:
+            mmr = ListAdapter.get_by_mrid(mmr_list_href, mmr_input.mRID)
+            mmr_index = ListAdapter.get_list(mmr_list_href).index(mmr)
+            was_updated = True
+        except NotFoundError:
+            mmr_index = ListAdapter.list_size(mmr_list_href)
+            mmr_input.href = hrefs.SEP.join([mmr_list_href, str(mmr_index)])
+            ListAdapter.append(mmr_list_href, mmr_input)
+            mmr = mmr_input
 
-            if not found_rs:
-                rs.href = upt_href.readingset(upt_index, mr_index, rs_index)
-                found_rs = MirrorReadingSetAdapter.add(rs)
-            else:
-                found_rs.description = rs.description
-                found_rs.timePeriod = rs.timePeriod
-                found_rs.version = rs.version
+        try:
+            mr = ListAdapter.get(mr_list_href, mmr_index)
+        except NotFoundError:
+            # This shouldn't happen if it does then there is something wrong with our code.
+            if was_updated:
+                raise ValueError("Unable to find meter reading for updated mirror meter reading")
+            mr = m.MeterReading(href=hrefs.SEP.join([mr_list_href, str(mmr_index)]),
+                                mRID=mmr.mRID,
+                                description=mmr.description)
+            ListAdapter.append(mr_list_href, mr)
+        location = mr_list_href
 
-            for r_index, r in enumerate(rs.Reading):
-                r.href = upt_href.readingsetreading(upt_index, mr_index, rs_index, r_index)
+        # Current instantanious values.
+        if mmr.Reading is not None:
+            mmr.Reading.href = hrefs.SEP.join([mmr.href, "r"])
+            mmr.Reading.href = mmr.Reading.href.replace("mup", "upt")
+            add_href(mmr.Reading.href, mmr.Reading)
+            mr.ReadingLink = m.ReadingLink(mmr.Reading.href)
 
-    return ReturnValue(was_success, found_mirror_reading, was_updated)
+        # Mirror reading sets
+        if mmr.MirrorReadingSet is not None:
+
+            mrs_list_href = hrefs.SEP.join([mmr.href, "rs"])
+            rs_list_href = hrefs.SEP.join([mmr.href, "rs"]).replace("mup", "upt")
+
+            mr.ReadingSetListLink = m.ReadingSetListLink(href=rs_list_href)
+
+            for mrs in mmr.MirrorReadingSet:
+                try:
+                    mrs_item = ListAdapter.get_by_mrid(mrs_list_href, mrs.mRID)
+                    mrs_item_index = ListAdapter.get_list(mrs_list_href).index(mrs_item)
+                    was_updated = True
+                except NotFoundError:
+                    mrs_item = mrs
+                    mrs_item_index = ListAdapter.list_size(mrs_list_href)
+                    mrs_item.href = hrefs.SEP.join([mrs_list_href, str(mrs_item_index)])
+                    ListAdapter.append(mrs_list_href, mrs_item)
+
+                if was_updated:
+                    rs_item = ListAdapter.get(rs_list_href, mrs_item_index)
+                    rs_item.description = mrs_item.description
+                    rs_item.timePeriod = mrs_item.timePeriod
+                    rs_item.version = mrs_item.version
+                else:
+                    rs_item = m.ReadingSet(href=hrefs.SEP.join([rs_list_href,
+                                                                str(mrs_item_index)]),
+                                           description=mrs_item.description,
+                                           timePeriod=mrs_item.timePeriod,
+                                           version=mrs_item.version)
+                    ListAdapter.append(rs_list_href, rs_item)
+
+                reading_list_href = hrefs.SEP.join([rs_item.href, "r"])
+                for reading_index, reading in enumerate(mrs_item.Reading):
+                    reading.href = hrefs.SEP.join([reading_list_href, str(reading_index)])
+                    ListAdapter.append(reading_list_href, reading)
+
+    ListAdapter.store()
+
+    # try:
+    #     found_mirror_reading = MirrorMeterReadingAdapter.fetch_by_mrid(mr.mRID)
+    #     was_updated = True
+    #     mr_index = int(found_mirror_reading.href.split(hrefs.SEP)[-1])
+    # except KeyError:
+    #     mr.href = upt_href.meterreading(upt_index, MirrorMeterReadingAdapter.size())
+    #     found_mirror_reading = MirrorMeterReadingAdapter.add(mr)
+    #     mr_index = int(mr.href.split(hrefs.SEP)[-1])
+
+    # if isinstance(mr, m.MirrorMeterReadingList):
+    #     raise NotImplemented()
+
+    # elif isinstance(mr, m.MirrorMeterReading):
+    #     for rs_index, rs in enumerate(found_mirror_reading.MirrorReadingSet):
+    #         try:
+    #             found_rs = MirrorReadingSetAdapter.fetch_by_mrid(rs.mRID)
+    #             was_updated = True
+    #         except KeyError:
+    #             found_rs = None
+
+    #         if not found_rs:
+    #             rs.href = upt_href.readingset(upt_index, mr_index, rs_index)
+    #             found_rs = MirrorReadingSetAdapter.add(rs)
+    #         else:
+    #             found_rs.description = rs.description
+    #             found_rs.timePeriod = rs.timePeriod
+    #             found_rs.version = rs.version
+
+    #         for r_index, r in enumerate(rs.Reading):
+    #             r.href = upt_href.readingsetreading(upt_index, mr_index, rs_index, r_index)
+
+    return ReturnValue(True, mmr, was_updated, location)
 
 
 def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> ReturnValue:
-    """Creates a MirrorUsagePoint and associated UsagePoint and adds them to their adapters."""
+    """Creates a MirrorUsagePoint and associated UsagePoint and adds them to their adapters.
+    """
 
-    # assert mup.href is None, "Cannot create a new mirror usage point with an href set already."
+    # Attempt to find an existing mup with the same mrid.  If found then we need to replace
+    # it with the new data etc.
     found_with_mrid = None
-    if MirrorUsagePointAdapter.size() > 0:
+    if adpt.ListAdapter.list_size(hrefs.DEFAULT_MUP_ROOT) > 0:
         try:
-            found_with_mrid = MirrorUsagePointAdapter.fetch_by_mrid(mup.mRID)
-        except KeyError:
+            found_with_mrid = adpt.ListAdapter.get_by_mrid(hrefs.DEFAULT_MUP_ROOT, mup.mRID)
+        except NotFoundError:
             ...
 
+    update = False
     if not found_with_mrid:
-        # After this call the href is populated with the mup
-        mup = MirrorUsagePointAdapter.add(mup)
-        usage_point_index = int(mup.href.split(hrefs.SEP)[-1])
-
+        # Creating a new allocation of resources for the mup. And then copy the data from the
+        # mup resources into the usage point resources allocating new data as needed.
         upt_href = hrefs.UsagePointHref()
 
-        meter_reading_list = m.MeterReadingList(href=upt_href.meterreading_list(usage_point_index))
+        # Both the usage point and mirror usage point will have the same point index.
+        point_index = adpt.ListAdapter.list_size(hrefs.DEFAULT_MUP_ROOT)
+        mup.href = hrefs.SEP.join([hrefs.DEFAULT_MUP_ROOT, str(point_index)])
+        # Add the mirror usage point to the list of mirror usage points.
+        adpt.ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup)
 
-        for index, mirror_reading in enumerate(mup.MirrorMeterReading):
-            if mirror_reading.ReadingType is None:
-                return ReturnValue(False, "Invalid Reading Type")
-            if not mirror_reading.href:
-                mirror_reading.href = upt_href.meterreading(usage_point_index, index)
-            reading = m.MeterReading(upt_href.meterreading(usage_point_index, index))
-            reading.mRID = mirror_reading.mRID
-            reading.description = mirror_reading.description
+        # Create a usage point with the same index as the mirror usage point.
+        upt = m.UsagePoint(href=hrefs.SEP.join([hrefs.DEFAULT_UPT_ROOT,
+                                                str(point_index)]),
+                           description=mup.description,
+                           deviceLFDI=mup.deviceLFDI,
+                           serviceCategoryKind=mup.serviceCategoryKind,
+                           mRID=mup.mRID,
+                           roleFlags=mup.roleFlags,
+                           status=mup.status)
+        adpt.ListAdapter.append(hrefs.DEFAULT_UPT_ROOT, upt)
 
-            if mirror_reading.Reading is not None:
-                # These links are going to be handled by the add_href / get_href functions.
-                reading.ReadingLink = m.ReadingLink(upt_href.reading(index))
-                add_href(upt_href.reading(index), mirror_reading.Reading)
+        # Initialize the url for the mirror meter reading list.
+        mmr_list_href = hrefs.SEP.join([mup.href, "mr"])
+        adpt.ListAdapter.initialize_uri(mmr_list_href, m.MirrorMeterReading)
 
-            reading.ReadingTypeLink = m.ReadingTypeLink(
-                upt_href.readingtype(usage_point_index, index))
-            add_href(upt_href.readingtype(usage_point_index, index), mirror_reading.ReadingType)
+        # Initialize the url for the meter reading list.
+        mr_list_href = hrefs.SEP.join([upt.href, "mr"])
+        adpt.ListAdapter.initialize_uri(mr_list_href, m.MeterReading)
 
-            meter_reading_list.MeterReading.append(reading)
+        for index_for_readings, mirror_meter_reading in enumerate(mup.MirrorMeterReading):
+            # Validate the the reading has a reading type associated with it.
+            if not mirror_meter_reading.ReadingType:
+                return ReturnValue(
+                    False,
+                    f"Invalid Reading Type for Mirror Meter Reading {mirror_meter_reading.mRID}")
 
-        upt = UsagePointAdapter.add(
-            m.UsagePoint(href=upt_href.usage_point(usage_point_index),
-                         description=mup.description,
-                         deviceLFDI=mup.deviceLFDI,
-                         serviceCategoryKind=mup.serviceCategoryKind,
-                         mRID=mup.mRID,
-                         roleFlags=mup.roleFlags,
-                         status=mup.status,
-                         MeterReadingListLink=m.MeterReadingListLink(meter_reading_list.href)))
-        _log.debug(f"Storing meter_reading_list {meter_reading_list.href}")
-        add_href(meter_reading_list.href, meter_reading_list)
-        update = False
+            # Update the mirror meter reading href and then add it to the list of mirror meter readings.
+            mirror_meter_reading.href = hrefs.SEP.join([mmr_list_href, str(index_for_readings)])
+            adpt.ListAdapter.append(mmr_list_href, mirror_meter_reading)
+
+            # Create a meter reading for the usage point.
+            meter_reading = m.MeterReading(href=hrefs.SEP.join(
+                [mr_list_href, str(index_for_readings)]),
+                                           mRID=mirror_meter_reading.mRID,
+                                           description=mirror_meter_reading.description)
+            adpt.ListAdapter.append(mr_list_href, meter_reading)
+
+            # Store the type of reading using the add_href method.
+            rt_href = hrefs.SEP.join([upt.href, "rt", str(index_for_readings)])
+            meter_reading.ReadingTypeLink = m.ReadingTypeLink(rt_href)
+            add_href(rt_href, mirror_meter_reading.ReadingType)
+
     else:
         # TODO Update all properties with new items from mup
         mup.href = found_with_mrid.href
@@ -140,8 +231,9 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> ReturnValue:
         found_with_mrid.roleFlags = mup.roleFlags
         found_with_mrid.status = mup.status
         update = True
+        adpt.ListAdapter.store()
 
-    return ReturnValue(True, mup, update)
+    return ReturnValue(True, mup, update, mup.href)
 
 
 @dataclass
