@@ -38,19 +38,31 @@ class UsagePointRequest(RequestOp):
         after = int(request.args.get("a", 0))
         parsed = hrefs.ParsedUsagePointHref(request.path)
 
-        if parsed.has_reading_list() and parsed.reading_index is not None:
-            obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_index)
+        handled = False
 
-        elif parsed.has_reading_set_list() and parsed.reading_set_index is not None:
-            obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_set_index)
-        elif parsed.has_meter_reading_list() and parsed.meter_reading_index is not None:
-            obj = adpt.ListAdapter.get(parsed.last_list(), parsed.meter_reading_index)
+        if parsed.has_reading_list():
+            if handled := parsed.reading_index is not None:
+                obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_index)
+
+        elif parsed.has_reading_set_list():
+            if handled := parsed.reading_set_index is not None:
+                obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_set_index)
+        elif parsed.has_meter_reading_list():
+            if handled := parsed.has_reading_type():
+                obj = get_href(request.path)
+            elif handled := parsed.meter_reading_index is not None:
+                obj = adpt.ListAdapter.get(parsed.last_list(), parsed.meter_reading_index)
         else:
             obj = adpt.ListAdapter.get_resource_list(request.path,
                                                      start=start,
                                                      limit=limit,
                                                      after=after)
 
+        if not handled:
+            obj = adpt.ListAdapter.get_resource_list(request.path,
+                                                     start=start,
+                                                     limit=limit,
+                                                     after=after)
         # # /upt
         # if not parsed.has_usage_point_index():
         #     obj = adpt.UsagePointAdapter.fetch_all(m.UsagePointList(request.path),

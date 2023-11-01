@@ -263,9 +263,10 @@ def test_post_mirror_reading(first_client: IEEE2030_5_Client):
     assert rs == rs_get
 
     assert rs.ReadingListLink is not None and rs.ReadingListLink.href is not None
-    r_list = first_client.get(rs.ReadingListLink.href)
+    r_list = first_client.get(f"{rs.ReadingListLink.href}?l=10")
     assert r_list is not None and isinstance(r_list, m.ReadingList)
     r = r_list.Reading[0]
+    assert 10 == len(r_list.Reading)
     assert r is not None and isinstance(r, m.Reading)
     r_get = first_client.get(r.href)
     assert r == r_get
