@@ -587,6 +587,14 @@ class ParsedUsagePointHref:
         except IndexError:
             return False
 
+    def has_reading_type(self) -> bool:
+        try:
+            if retval := self._split[4] == "rt":
+                ...
+            return retval
+        except IndexError:
+            return False
+
     def has_reading_set_list(self) -> bool:
         try:
             if retval := self._split[4] == "rs":
@@ -605,7 +613,7 @@ class ParsedUsagePointHref:
 
     def has_reading_list(self) -> bool:
         try:
-            if retval := self._split[4] == "r":
+            if retval := self._split[4] == "r" or self._split[6] == "r":
                 ...
             return retval
         except IndexError:
@@ -650,6 +658,8 @@ class ParsedUsagePointHref:
         try:
             if self._split[4] == "r":
                 return int(self._split[5])
+            elif self._split[6] == "r":
+                return int(self._split[7])
         except IndexError:
             pass
 
