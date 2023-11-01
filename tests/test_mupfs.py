@@ -234,14 +234,41 @@ def test_post_mirror_reading(first_client: IEEE2030_5_Client):
     assert 201 == status
     assert loc.startswith("/upt")
 
-    mr_list = first_client.get(loc)
+    mr_list: m.MeterReadingList = first_client.get(f"{loc}?l=1000")
     assert mr_list is not None
+    assert 2 == mr_list.all
+    assert 2 == mr_list.results
     assert isinstance(mr_list, m.MeterReadingList)
-    assert len(mr_list.MeterReading) == 1
-    mr = mr_list.MeterReading[0]
+    assert len(mr_list.MeterReading) == 2
+    mr = mr_list.MeterReading[1]
     mr_get = first_client.get(mr.href)
     assert mr_get is not None
     assert mr == mr_get
+
+    assert mr.ReadingTypeLink.href is not None
+    rt = first_client.get(mr.ReadingTypeLink.href)
+    assert rt is not None
+    assert isinstance(rt, m.ReadingType)
+
+    assert mr.ReadingSetListLink is not None and mr.ReadingSetListLink.href is not None
+    rs_list = first_client.get(mr.ReadingSetListLink.href)
+    assert rs_list is not None
+    assert isinstance(rs_list, m.ReadingSetList)
+
+    assert rs_list.all == 1 and rs_list.results == 1
+    rs = rs_list.ReadingSet[0]
+    assert rs is not None
+    assert isinstance(rs, m.ReadingSet)
+    rs_get = first_client.get(rs.href)
+    assert rs == rs_get
+
+    assert rs.ReadingListLink is not None and rs.ReadingListLink.href is not None
+    r_list = first_client.get(rs.ReadingListLink.href)
+    assert r_list is not None and isinstance(r_list, m.ReadingList)
+    r = r_list.Reading[0]
+    assert r is not None and isinstance(r, m.Reading)
+    r_get = first_client.get(r.href)
+    assert r == r_get
 
 
 def test_no_mup_default2(first_client: IEEE2030_5_Client):

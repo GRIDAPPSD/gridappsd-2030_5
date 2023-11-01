@@ -264,6 +264,7 @@ class ResourceListAdapter:
             else:
                 posx = start + after
                 setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
+            thelist.results = len(getattr(thelist, cls.__name__))
         except KeyError:
             thelist.all = 0
             thelist.href = list_uri
