@@ -280,6 +280,8 @@ class ResourceListAdapter:
     def get(self, list_uri: str, key: int) -> D:
         if list_uri not in self._container_dict:
             raise KeyError(f"List {list_uri} not found in adapter")
+        if not isinstance(key, int):
+            key = int(key)
 
         try:
             return self._container_dict[list_uri][key]
