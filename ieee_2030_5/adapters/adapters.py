@@ -89,32 +89,33 @@ def create_mirror_meter_reading(
         location = mr_list_href
 
         # Current instantanious values.
-        if mmr.Reading is not None:
+        if mmr_input.Reading is not None:
             mmr.Reading.href = hrefs.SEP.join([mmr.href, "r"])
             mmr.Reading.href = mmr.Reading.href.replace("mup", "upt")
             add_href(mmr.Reading.href, mmr.Reading)
             mr.ReadingLink = m.ReadingLink(mmr.Reading.href)
 
         # Mirror reading sets
-        if mmr.MirrorReadingSet:
+        if mmr_input.MirrorReadingSet:
 
             mrs_list_href = hrefs.SEP.join([mmr.href, "rs"])
             rs_list_href = hrefs.SEP.join([mmr.href, "rs"]).replace("mup", "upt")
             mr.ReadingSetListLink = m.ReadingSetListLink(href=rs_list_href)
             ListAdapter.initialize_uri(mr.ReadingSetListLink.href, m.ReadingSet)
 
-            for mrs in mmr.MirrorReadingSet:
+            for mrs in mmr_input.MirrorReadingSet:
+                found_rs = False
                 try:
                     mrs_item = ListAdapter.get_by_mrid(mrs_list_href, mrs.mRID)
                     mrs_item_index = ListAdapter.get_list(mrs_list_href).index(mrs_item)
-                    was_updated = True
+                    found_rs = True
                 except NotFoundError:
                     mrs_item = mrs
                     mrs_item_index = ListAdapter.list_size(mrs_list_href)
                     mrs_item.href = hrefs.SEP.join([mrs_list_href, str(mrs_item_index)])
                     ListAdapter.append(mrs_list_href, mrs_item)
 
-                if was_updated:
+                if found_rs:
                     rs_item = ListAdapter.get(rs_list_href, mrs_item_index)
                     rs_item.description = mrs_item.description
                     rs_item.timePeriod = mrs_item.timePeriod

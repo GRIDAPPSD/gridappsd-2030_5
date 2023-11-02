@@ -39,14 +39,19 @@ class UsagePointRequest(RequestOp):
         parsed = hrefs.ParsedUsagePointHref(request.path)
 
         handled = False
+        sort_by = []
+        reversed = True
 
         if parsed.has_reading_list():
+            sort_by = "timePeriod.start"
             if handled := parsed.reading_index is not None:
                 obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_index)
 
         elif parsed.has_reading_set_list():
+            sort_by = "timePeriod.start"
             if handled := parsed.reading_set_index is not None:
                 obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_set_index)
+                obj = sorted(obj, key="timePeriod.start")
         elif parsed.has_meter_reading_list():
             if handled := parsed.has_reading_type():
                 obj = get_href(request.path)
@@ -56,13 +61,16 @@ class UsagePointRequest(RequestOp):
             obj = adpt.ListAdapter.get_resource_list(request.path,
                                                      start=start,
                                                      limit=limit,
-                                                     after=after)
+                                                     after=after,
+                                                     reverse=reversed)
 
         if not handled:
             obj = adpt.ListAdapter.get_resource_list(request.path,
                                                      start=start,
                                                      limit=limit,
-                                                     after=after)
+                                                     after=after,
+                                                     sort_by=sort_by,
+                                                     reverse=reversed)
         # # /upt
         # if not parsed.has_usage_point_index():
         #     obj = adpt.UsagePointAdapter.fetch_all(m.UsagePointList(request.path),
@@ -99,7 +107,10 @@ class MirrorUsagePointRequest(RequestOp):
 
         if not mup_href.has_usage_point_index():
             # /mup
-            mup = adpt.ListAdapter.get_resource_list(request.path)
+            mup: m.MirrorUsagePointList = adpt.ListAdapter.get_resource_list(request.path)
+            # Because our resource_list doesn't include other properties than the list we set
+            # them here before returning.
+            mup.pollRate = self.server_config.mirror_usage_point_post_rate
         else:
             # /mup_0
             mup = adpt.ListAdapter.get(hrefs.DEFAULT_MUP_ROOT, mup_href.usage_point_index)
@@ -121,6 +132,8 @@ class MirrorUsagePointRequest(RequestOp):
 
         # Creating a new mup
         if data_type == m.MirrorUsagePoint:
+            if data.postRate is None:
+                data.postRate = self.server_config.mirror_usage_point_post_rate
             result = adpt.create_mirror_usage_point(mup=data)
             #result = adpt.MirrorUsagePointAdapter.create(mup=data)
         else:

@@ -249,7 +249,11 @@ class ResourceListAdapter:
                           list_uri: str,
                           start: int = 0,
                           after: int = 0,
-                          limit: int = 0) -> Union[m.List_type, m.SubscribableList]:
+                          limit: int = 0,
+                          sort_by: List[str] = [],
+                          reverse: bool = False) -> Union[m.List_type, m.SubscribableList]:
+        if isinstance(sort_by, str):
+            sort_by = [sort_by]
         cls = self.get_type(list_uri)
         if cls is None:
             raise KeyError(f"Resource list {list_uri} not found in adapter")
@@ -257,6 +261,26 @@ class ResourceListAdapter:
         thelist = eval(f"m.{cls.__name__}List()")
         try:
             thecontainerlist = list(self._container_dict[list_uri].values())
+            for sort in sort_by:
+                subobj = sort.split('.')
+                if len(subobj) == 2:
+                    try:
+                        thecontainerlist = sorted(
+                            thecontainerlist,
+                            key=lambda o: getattr(getattr(o, subobj[0]), subobj[1]),
+                            reverse=reverse)
+                    except AttributeError:
+                        # happens when value is none
+                        pass
+                elif len(subobj) == 1:
+                    thecontainerlist = sorted(thecontainerlist,
+                                              key=lambda o: getattr(o, sort),
+                                              reverse=reverse)
+                else:
+                    raise ValueError("Can only sort through single nested properties.")
+                # if "." in sort:
+
+                # thecontainerlist = sorted(thecontainerlist, key=sort)
             thelist.href = list_uri
             thelist.all = len(thecontainerlist)
             if start == after == limit == 0:
