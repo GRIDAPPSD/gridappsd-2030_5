@@ -51,7 +51,7 @@ class UsagePointRequest(RequestOp):
             sort_by = "timePeriod.start"
             if handled := parsed.reading_set_index is not None:
                 obj = adpt.ListAdapter.get(parsed.last_list(), parsed.reading_set_index)
-                obj = sorted(obj, key="timePeriod.start")
+
         elif parsed.has_meter_reading_list():
             if handled := parsed.has_reading_type():
                 obj = get_href(request.path)
