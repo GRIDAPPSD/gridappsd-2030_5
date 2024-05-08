@@ -90,7 +90,6 @@ class RequestForwarder(BaseHTTPRequestHandler):
         return response
 
     def do_GET(self):
-        
 
         conn = self.__start_request__()
 
@@ -113,7 +112,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         response = self.__handle_response__(conn)
         _log.info(f"POST {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
-        
+
     def do_DELETE(self):
         _log.info(f"DELETE {self.path} Content-Length: {self.headers.get('Content-Length')}")
 
@@ -128,7 +127,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         response = self.__handle_response__(conn)
         _log.info(f"DELETE {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
-        
+
     def do_PUT(self):
         _log.info(f"PUT {self.path} Content-Length: {self.headers.get('Content-Length')}")
 
@@ -220,6 +219,9 @@ def _main():
     cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
 
     config = ServerConfiguration(**cfg_dict)
+
+    if config.proxy_hostname is None:
+        print("Invalid proxy_hostname in config file.")
 
     tls_repo = TLSRepository(repo_dir=config.tls_repository,
                              openssl_cnffile_template=config.openssl_cnf,

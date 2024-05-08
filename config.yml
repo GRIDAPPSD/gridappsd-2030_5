@@ -4,9 +4,9 @@
 server: WE48687
 # Only include if we need to have dcap be available
 # http_port: 8080
-https_port: 8443
+port: 8090
 
-enable_cache: False
+proxy_hostname: 0.0.0.0:8443
 
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
@@ -30,6 +30,7 @@ generate_admin_cert: True
 
 log_event_list_poll_rate: 60
 device_capability_poll_rate: 60
+
 
 # Directory containing data files for the platform.
 # This directory will be created if it does not exist.
