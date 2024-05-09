@@ -41,11 +41,11 @@ def create_device_capability(end_device_index: int) -> m.DeviceCapability:
 
 def add_enddevice(device: m.EndDevice) -> m.EndDevice:
     """Populates links to EndDevice resources and adds it to the EndDeviceAdapter.
-    
+
     If the link is to a single writable (by the client) resource then create the link
     and the resource with default data.  Otherwise, the link will be to a list.  It is
     expected that the list will be populated at a later point in time in the code execution.
-    
+
     The enddevice is added to the enddevice adapter, and the following links are created and added to the enddevice:
 
     - `DERListLink`: A link to the DER list for the enddevice
@@ -89,7 +89,7 @@ def add_enddevice(device: m.EndDevice) -> m.EndDevice:
 
 def update_active_der_event_started(event: m.Event):
     """Event triggered when a DERControl event starts
-    
+
     Find the control and copy it to the ActiveDERControlList
 
     :param event: The control event
@@ -125,7 +125,7 @@ def update_active_der_event_started(event: m.Event):
 
 def update_active_der_event_ended(event: m.Event):
     """Event triggered when a DERControl event ends
-    
+
     Search over the ActiveDERControlListLink for the event that has been triggered
     and remove it from the list.
 
@@ -165,23 +165,23 @@ adpt.TimeAdapter.event_ended.connect(update_active_der_event_ended)
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
-    """Initialize the 2030.5 server.  
-    
+    """Initialize the 2030.5 server.
+
     This method initializes the adapters from the configuration objects into
     the persistence adapters.
-    
+
     The adapters are:
-    
+
      - EndDeviceAdapter
      - DERAdapter
      - DERCurveAdapter
      - DERProgramAdapter
      - FunctionSetAssignmentsAdapter
-     
+
     The EndDevices in the EndDeviceAdapter will link to Lists of other types.  Those
     Lists will be stored in the ListAdapter object under the List's href (see below /edev_0_der).
     As an example the following, note the DER href is not /edev_0_der_0, but /der_12 instead.
-    
+
     <EndDevice href="/edev_0">
       <DERList href="/edev_0_der" all="1">
     </EndDevice>
@@ -190,8 +190,8 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         ...
       </DER>
     </DERList
-        
-    
+
+
     """
     _log.debug("Initializing 2030.5")
     _log.debug("Adding server level urls to cache")
@@ -227,8 +227,13 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             else:
                 default_der_control.DERControlBase = m.DERControlBase(**der_control_base)
         adpt.ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
+
+
         add_href(program.DefaultDERControlLink.href, default_der_control)
         add_href(program.ActiveDERControlListLink.href, m.DERControlList(DERControl=[]))
+        add_href(program.DERCurveListLink.href, m.DERCurveList(DERCurve=[]))
+        add_href(program.DERControlListLink.href, m.DERControlList(DERControl=[]))
+
 
         programs_by_description[program.description] = program
 
