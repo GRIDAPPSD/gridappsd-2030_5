@@ -51,7 +51,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         # context.load_verify_locations(cafile="/home/gridappsd/tls/certs/ca.crt")
         assert cert_file
-        ca_file = str(Path(cert_file).parent.joinpath("ca.pem"))
+        ca_file = str(Path(cert_file).parent.joinpath("ca.crt"))
         context.load_verify_locations(cafile=ca_file)
         if cert_file is not None and key_file is not None and \
                 Path(cert_file).exists() and Path(key_file).exists():
