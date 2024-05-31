@@ -6,7 +6,7 @@ from pprint import pprint
 import logging
 import typing
 from copy import deepcopy
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, asdict
 from enum import Enum
 from pathlib import Path
 from typing import (Any, ClassVar, Dict, Generic, List, Optional, Protocol, Type, TypeVar, Union,
@@ -192,10 +192,15 @@ class ResourceListAdapter:
 
     def append(self, list_uri: str, obj: D):
         """
-        Appends an object to a list container in the adapter. If the list container does not exist, it is created. If the
-        list container exists but has not been initialized with a type, the type of the object is used to initialize the
-        list container. If the list container exists and has been initialized with a type, the type of the object is checked
-        against the initialized type, and an astsertion error is raised if they do not match.
+        Appends an object to a list container in the adapter.
+
+        The following rules are used to determine the container of the passed url.
+
+        1. If the list container does not exist, it is created.
+        2. If the list container exists but has not been initialized with a type, the type of the object[D]
+           is used to initialize the list container.
+        3. If the list container exists and has been initialized with a type, the type of the object[D] is
+           validated against the initialized type.  An ValueError is thrown if the types do not match.
 
         :param list_uri: The URI of the list container
         :type list_uri: str
@@ -260,6 +265,11 @@ class ResourceListAdapter:
 
         thelist = eval(f"m.{cls.__name__}List()")
         try:
+            # Create a new list because the type is known and the uri is already known
+            # there should be no need to add any items to the list, but the list should
+            # exist on first access now.
+            if list_uri not in self._container_dict:
+                self._container_dict[list_uri] = {}
             thecontainerlist = list(self._container_dict[list_uri].values())
             for sort in sort_by:
                 subobj = sort.split('.')
@@ -352,6 +362,29 @@ class ResourceListAdapter:
                 print("index:", index)
                 pprint(v.__dict__)
             #pprint(self._container_dict[k].)
+
+    def get_all(self) -> Dict[str, Dict[int, D]]:
+        out = {}
+
+        def replace_bytes(obj: dict) -> dict:
+            for k, v in obj.items():
+                if isinstance(v, dict):
+                    obj[k] = replace_bytes(v)
+                elif isinstance(v, bytearray):
+                    obj[k] = v.hex()
+                elif isinstance(v, bytes):
+                    obj[k] = v.hex()
+            return obj
+
+        for k in sorted(self._container_dict.keys()):
+            for index, v in self._container_dict[k].items():
+                if k not in out:
+                    out[k] = {}
+                a = deepcopy(v)
+                out[k] = asdict(a)
+                out[k] = replace_bytes(out[k])
+
+        return out
 
     def clear_all(self):
         self._container_dict.clear()
