@@ -71,7 +71,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         response = conn.getresponse()
         data = response.read()
 
-        _log.debug(f"Response from server:\n{data}")
+        _log.debug(f"Response from server:\n{data.decode('utf-8')}")
         self.wfile.write(f'HTTP/1.1 {response.status}\n'.encode('utf-8'))
 
         for k, v in response.headers.items():
