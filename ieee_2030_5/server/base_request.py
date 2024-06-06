@@ -23,6 +23,7 @@ class ServerOperation:
         if 'ieee_2030_5_peercert' not in request.environ:
             raise werkzeug.exceptions.Forbidden()
         self._headers = {'Content-Type': SEP_XML}
+        self._environ = request.environ
 
     def head(self, **kwargs):
         raise werkzeug.exceptions.MethodNotAllowed()
