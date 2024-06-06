@@ -234,11 +234,21 @@ class ServerConfiguration:
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
+    @classmethod
+    def load(cls, file: Path) -> ServerConfiguration:
+        if not file.exists():
+            raise InvalidConfigFile(f"File does not exist: {file}")
+        return cls.from_dict(yaml.safe_load(file.read_text()))
+
     def __post_init__(self):
         # self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
         # self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
         # self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
-        self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
+
+        if self.devices is None:
+            self.devices = []
+        else:
+            self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
         # for d in self.devices:
         # d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
         #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
