@@ -44,11 +44,7 @@ class DERRequests(RequestOp):
 
         _log.debug(f"DER PUT {request.path} {data}")
 
-        #orig = get_href(request.path)
-        # if orig is None:
-        #     raise NotFound(f"{request.path}")
-        # data.href = orig.href
-        add_href(request.path, data)
+        adpt.ListAdapter.set_single(request.path, data)
         return self.build_response_from_dataclass(data)
 
     def get(self) -> Response:
@@ -56,7 +52,7 @@ class DERRequests(RequestOp):
         if not request.path.startswith(hrefs.DEFAULT_DER_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
 
-        value = get_href(request.path)
+        value = adpt.ListAdapter.get_single(request.path)
 
         if value is None:
 
