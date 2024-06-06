@@ -163,6 +163,7 @@ class ResourceListAdapter:
     def __init__(self):
         self._list_urls = []
         self._container_dict: Dict[str, Dict[int, D]] = {}
+        self._singleton_dict: Dict[str, D] = {}
         self._types: Dict[str, D] = {}
         if not os.environ.get('IEEE_ADAPTER_IGNORE_INITIAL_LOAD'):
             _log.debug(f"Intializing adapter {self.__class__.__name__}")
@@ -189,6 +190,17 @@ class ResourceListAdapter:
             _log.error("Must initialize before container has any items.")
             raise ValueError("Must initialize before container has any items.")
         self._types[list_uri] = obj
+
+    def append_and_increment_href(self, list_uri: str, obj: D) -> D:
+        url_parts: list[str] = list_uri.split(hrefs.SEP)
+        try:
+            int(url_parts[0])
+            obj.href = hrefs.SEP.join(url_parts[1:].append(str(self.list_size(list_uri))))
+        except ValueError:
+            obj.href = hrefs.SEP.join([list_uri, str(self.list_size(list_uri))])
+
+        self.append(list_uri, obj)
+        return obj
 
     def append(self, list_uri: str, obj: D):
         """
@@ -239,7 +251,11 @@ class ResourceListAdapter:
         store_event.send(self)
 
     def get_by_mrid(self, list_uri: str, mrid: str) -> Optional[T]:
-        return self.get_item_by_prop(list_uri, "mRID", mrid)
+        try:
+            return self.get_item_by_prop(list_uri, "mRID", mrid)
+        except NotFoundError as ex:
+            _log.warning(f"mRID: {mrid} not found in list: {list_uri}")
+            return None
 
     def get_item_by_prop(self, list_uri: str, prop: str, value: Any) -> D:
         for item in self._container_dict.get(list_uri, {}).values():
@@ -311,6 +327,12 @@ class ResourceListAdapter:
 
         return list(self._container_dict[list_uri].values())
 
+    def set_single(self, uri: str, obj: D):
+        self._singleton_dict[uri] = obj
+
+    def get_single(self, uri: str) -> D:
+        return self._singleton_dict.get(uri)
+
     def get(self, list_uri: str, key: int) -> D:
         if list_uri not in self._container_dict:
             raise KeyError(f"List {list_uri} not found in adapter")
@@ -363,7 +385,7 @@ class ResourceListAdapter:
                 pprint(v.__dict__)
             #pprint(self._container_dict[k].)
 
-    def get_all(self) -> Dict[str, Dict[int, D]]:
+    def get_all_as_dict(self) -> Dict[str, Dict[int, D]]:
         out = {}
 
         def replace_bytes(obj: dict) -> dict:
@@ -384,7 +406,17 @@ class ResourceListAdapter:
                 out[k] = asdict(a)
                 out[k] = replace_bytes(out[k])
 
-        return out
+        data = dict(lists=out)
+
+        single = {}
+
+        for k, v in self._singleton_dict.items():
+            single[k] = asdict(deepcopy(v))
+            single[k] = replace_bytes(single[k])
+
+        data['singletons'] = single
+
+        return data
 
     def clear_all(self):
         self._container_dict.clear()
@@ -562,19 +594,38 @@ class Adapter(Generic[T]):
     def store(self):
         store_event.send(self)
 
+    def get_all_as_dict(self) -> Dict[str, Dict[int, D]]:
+        out = {}
+
+        def replace_bytes(obj: dict) -> dict:
+            for k, v in obj.items():
+                if isinstance(v, dict):
+                    obj[k] = replace_bytes(v)
+                elif isinstance(v, bytearray):
+                    obj[k] = v.hex()
+                elif isinstance(v, bytes):
+                    obj[k] = v.hex()
+            return obj
+
+        for k in sorted(self._item_list.keys()):
+            copyofitem = deepcopy(self._item_list[k])
+            out[k] = asdict(copyofitem)
+            out[k] = replace_bytes(out[k])
+
+        return out
+
+
 
 from ieee_2030_5.adapters.adapters import (DERAdapter, DERControlAdapter, DERCurveAdapter,
                                            DERProgramAdapter, DeviceCapabilityAdapter,
                                            EndDeviceAdapter, FunctionSetAssignmentsAdapter,
-                                           RegistrationAdapter, MirrorUsagePointAdapter,
-                                           UsagePointAdapter, TimeAdapter, ListAdapter,
-                                           create_mirror_usage_point, create_mirror_meter_reading)
+                                           RegistrationAdapter, TimeAdapter, ListAdapter,
+                                           create_mirror_usage_point, create_or_update_meter_reading)
 
 __all__ = [
     'DERControlAdapter', 'DERCurveAdapter', 'DERProgramAdapter', 'DeviceCapabilityAdapter',
     'EndDeviceAdapter', 'FunctionSetAssignmentsAdapter', 'RegistrationAdapter', 'DERAdapter',
-    'MirrorUsagePointAdapter', 'TimeAdapter', 'UsagePointAdapter', 'create_mirror_usage_point',
-    'create_mirror_meter_reading', 'ListAdapter'
+    'TimeAdapter', 'create_mirror_usage_point', 'create_or_update_meter_reading', 'ListAdapter'
 ]
 
 
