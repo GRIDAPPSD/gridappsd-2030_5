@@ -32,6 +32,7 @@ flask-session = "^0.5.0"
 
 pyyaml = "^6.0.1"
 gridappsd-field-bus = {version = "^2024.4.1a0", allow-prereleases = true}
+gridappsd-python = {version = "^2024.4.1a0", allow-prereleases = true}
 flet = "^0.22.1"
 
 xsdata = {extras = ["lxml"], version = "^22.5"}
