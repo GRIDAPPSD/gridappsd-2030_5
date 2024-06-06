@@ -39,13 +39,16 @@ cleanse_storage: true
 # This directory will be created if it does not exist.
 storage_path: data_store
 
-# gridappsd:
-#   # GridAPPS-D API endpoint
-#   api_endpoint: tcp://127.0.0.1:61613
-#   # GridAPPS-D username
-#   username: system
-#   # GridAPPS-D password
-#   password: manager
+gridappsd:
+  # GridAPPS-D API endpoint
+  address: 'localhost'
+  port: 61613
+  model_name: 'ieee13nodeckt'
+
+  # GridAPPS-D username
+  username: system
+  # GridAPPS-D password
+  password: manager
 
 # End Device
 devices:

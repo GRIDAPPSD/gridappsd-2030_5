@@ -132,6 +132,11 @@ class ProgramConfiguration:
 @dataclass_json
 @dataclass
 class GridappsdConfiguration:
+    model_name: str
+    address: str = 'localhost'
+    port: int = 61613
+    username: str = 'system'
+    password: str = 'manager'
     field_bus_config: Optional[str] = None
     field_bus_def: Optional[MessageBusDefinition] = None
     feeder_id_file: Optional[str] = None
@@ -303,29 +308,31 @@ class ServerConfiguration:
 
         if self.gridappsd:
             self.gridappsd = GridappsdConfiguration.from_dict(self.gridappsd)
-            if Path(self.gridappsd.feeder_id_file).exists():
-                self.gridappsd.feeder_id = Path(self.gridappsd.feeder_id_file).read_text().strip()
-            if Path(self.gridappsd.simulation_id_file).exists():
-                self.gridappsd.simulation_id = Path(
-                    self.gridappsd.simulation_id_file).read_text().strip()
 
-            if not self.gridappsd.feeder_id:
-                raise ValueError(
-                    "Feeder id from gridappsd not found in feeder_id_file nor was specified "
-                    "in gridappsd config section.")
+            # TODO Configuration for field bus here
+            # if Path(self.gridappsd.feeder_id_file).exists():
+            #     self.gridappsd.feeder_id = Path(self.gridappsd.feeder_id_file).read_text().strip()
+            # if Path(self.gridappsd.simulation_id_file).exists():
+            #     self.gridappsd.simulation_id = Path(
+            #         self.gridappsd.simulation_id_file).read_text().strip()
 
-            # TODO: This might not be the best place for this manipulation
-            self.gridappsd.field_bus_def = MessageBusDefinition.load(
-                self.gridappsd.field_bus_config)
-            self.gridappsd.field_bus_def.id = self.gridappsd.feeder_id
+            # if not self.gridappsd.feeder_id:
+            #     raise ValueError(
+            #         "Feeder id from gridappsd not found in feeder_id_file nor was specified "
+            #         "in gridappsd config section.")
 
-            _log.info("Gridappsd Configuration For Simulation")
-            _log.info(f"feeder id: {self.gridappsd.feeder_id}")
-            if self.gridappsd.simulation_id:
-                _log.info(f"simulation id: {self.gridappsd.simulation_id}")
-            else:
-                _log.info("no simulation id")
-            _log.info("x" * 80)
+            # # TODO: This might not be the best place for this manipulation
+            # self.gridappsd.field_bus_def = MessageBusDefinition.load(
+            #     self.gridappsd.field_bus_config)
+            # self.gridappsd.field_bus_def.id = self.gridappsd.feeder_id
+
+            # _log.info("Gridappsd Configuration For Simulation")
+            # _log.info(f"feeder id: {self.gridappsd.feeder_id}")
+            # if self.gridappsd.simulation_id:
+            #     _log.info(f"simulation id: {self.gridappsd.simulation_id}")
+            # else:
+            #     _log.info("no simulation id")
+            # _log.info("x" * 80)
 
         # if self.field_bus_config:
         #     self.field_bus_def = MessageBusDefinition.load(self.field_bus_config)

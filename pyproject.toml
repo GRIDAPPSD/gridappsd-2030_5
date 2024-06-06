@@ -35,6 +35,7 @@ gridappsd-field-bus = {version = "^2024.4.1a0", allow-prereleases = true}
 flet = "^0.22.1"
 
 xsdata = {extras = ["lxml"], version = "^22.5"}
+cim-graph = {path = "deps/cim_graph-1.0.0.dev1-py3-none-any.whl"}
 [tool.poetry.group.dev.dependencies]
 m2r2 = "^0.3.2"
 pytest = "^7.1.3"

@@ -69,6 +69,7 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.server.server_constructs import initialize_2030_5
+from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
 
 _log = logging.getLogger()
 
@@ -202,6 +203,19 @@ def _main():
 
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
+
+    if config.gridappsd is not None and create_certs:
+
+        from gridappsd import GridAPPSD
+
+        gapps = GridAPPSD(stomp_address=config.gridappsd.address,
+                        stomp_port=config.gridappsd.port,
+                        username=config.gridappsd.username,
+                        password=config.gridappsd.password)
+        assert gapps.connected
+
+        gridappsd_adpt = GridAPPSDAdapter(gapps, config.gridappsd.model_name)
+        gridappsd_adpt.create_der_client_certificates(tls_repo)
 
     if opts.show_lfdi:
         for cn in config.devices:
