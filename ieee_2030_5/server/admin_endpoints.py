@@ -96,9 +96,12 @@ class AdminEndpoints:
 
     def _admin_resources(self) -> Response:
         headers = {'CONTENT-TYPE': "application/json"}
-        resp = adpt.ListAdapter.get_all()
+        resp = adpt.ListAdapter.get_all_as_dict()
 
-        return Response(json.dumps(adpt.ListAdapter.get_all()), status=200)
+        data = {'resource_lists': adpt.ListAdapter.get_all_as_dict()}
+        data['end_devices'] = adpt.EndDeviceAdapter.get_all_as_dict()
+
+        return Response(json.dumps(data), status=200)
 
     def _admin_certs(self) -> Response:
         headers = {'CONTENT-TYPE': "application/json"}
