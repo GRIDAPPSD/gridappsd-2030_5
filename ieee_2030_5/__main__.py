@@ -43,7 +43,7 @@ import os
 import shutil
 
 log_level = os.environ.get('LOGGING_LEVEL', 'DEBUG').upper()
-   
+
 levels = {
     'DEBUG': logging.DEBUG,
     'INFO': logging.INFO,
@@ -100,7 +100,7 @@ def get_tls_repository(cfg: ServerConfiguration,
     if create_certificates_for_devices:
         already_represented = set()
 
-        
+
         # registers the devices, but doesn't initialize_device the end devices here.
         for k in cfg.devices:
             if tlsrepo.has_device(k.id):
@@ -148,7 +148,7 @@ def _main():
                         action="store_true",
                         default=False,
                         help="Run the server in a threaded environment.")
-    parser.add_argument("--lfdi", 
+    parser.add_argument("--lfdi",
                         help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
     parser.add_argument("--show-lfdi", action="store_true",
                         help="Show all of the lfdi for the generated certificates and exit.")
@@ -156,6 +156,7 @@ def _main():
 
     logging_level = logging.DEBUG if opts.debug else logging.INFO
     logging.basicConfig(level=logging_level)
+    logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.INFO)
 
     os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
         Path(opts.config).expanduser().resolve(strict=True))
@@ -194,48 +195,48 @@ def _main():
         for host in unknown:
             _log.error(host)
         sys.exit(1)
-        
+
     if opts.show_lfdi and not opts.no_create_certs:
         sys.stderr.write("Can't show lfdi when creating certificates.\n")
         sys.exit(1)
 
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
-    
+
     if opts.show_lfdi:
         for cn in config.devices:
             sys.stdout.write(f"{cn.id} {tls_repo.lfdi(cn.id)}\n")
-        sys.exit(0)    
-    
+        sys.exit(0)
+
     # Puts the server into http single client lfdi mode.
     if opts.lfdi:
         config.lfdi_client = opts.lfdi
-            
+
     # Initialize the data storage for the adapters
     if config.storage_path is None:
         config.storage_path = Path("data_store")
     else:
         config.storage_path = Path(config.storage_path)
-    
+
     # Cleanse means we want to reload the storage each time the server
     # is run.  Note this is dependent on the adapter being filestore
     # not database.  I will have to modify later to deal with that.
     if config.cleanse_storage and config.storage_path.exists():
         _log.debug(f"Removing {config.storage_path}")
         shutil.rmtree(config.storage_path)
-        
+
     data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
     if config.cleanse_storage and data_store_userdir.exists():
         _log.debug(f"Removing {data_store_userdir}")
         shutil.rmtree(data_store_userdir)
-        
-    
+
+
     # Has to be after we remove the storage path if necessary
     from ieee_2030_5.server.server_constructs import initialize_2030_5
-    
+
     initialize_2030_5(config, tls_repo)
-    
-    
+
+
     from ieee_2030_5.flask_server import run_server
 
     #from ieee_2030_5.gui import run_gui
@@ -254,16 +255,16 @@ def _main():
     # if __name__ in {"__main__", "__mp_main__"}:
     #     ui = run_gui()
     #     ui.run_with(app)
-    
-        #run_gui()
-        
-        # p_gui = Process(target = run_gui)
-        # p_gui.daemon = True
-        # p_gui.start()
-                
-                
-        # # while True:
-        # #     sleep(1)
+
+    #run_gui()
+
+    # p_gui = Process(target = run_gui)
+    # p_gui.daemon = True
+    # p_gui.start()
+
+
+    # # while True:
+    # #     sleep(1)
     run_server(config,
                 tls_repo,
                 debug=opts.debug,
