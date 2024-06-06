@@ -66,6 +66,24 @@ app.mount(
                      upload_dir=Path("~/.2030_5_uploads").expanduser().as_posix()))
 
 
+def _main():
+    from argparse import ArgumentParser
+    import os
+
+    parser = ArgumentParser()
+
+    parser.add_argument("config", help="Path to config server configuration file.")
+    parser.add_argument("--reset-certs", action="store_true", help="Reset the certificates.")
+
+    opts = parser.parse_args()
+
+    os.environ["CONFIG_FILE"] = opts.config
+    os.environ["RESET_CERTS"] = str(opts.reset_certs)
+
+    import uvicorn
+
+    uvicorn.run(app, host="localhost", port=8000)
+
 if __name__ == "__main__":
     from argparse import ArgumentParser
     import os

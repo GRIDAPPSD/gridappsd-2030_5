@@ -68,3 +68,4 @@ split_before_logical_operator = true
 2030_5_proxy = 'ieee_2030_5.basic_proxy:_main'
 2030_5_cert = 'ieee_2030_5.certs:_main'
 2030_5_gridappsd = 'ieee_2030_5.config_setup:_main'
+2030_5_gui = 'ieee_2030_5_gui.__main__:_main'
