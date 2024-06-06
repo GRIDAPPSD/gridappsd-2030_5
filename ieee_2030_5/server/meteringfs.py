@@ -107,6 +107,10 @@ class MirrorUsagePointRequest(RequestOp):
 
         if not mup_href.has_usage_point_index():
             # /mup
+            try:
+                mup: m.MirrorUsagePointList = adpt.ListAdapter.get_resource_list(request.path)
+            except KeyError:
+                adpt.ListAdapter.initialize_uri(request.path, m.MirrorUsagePoint)
             mup: m.MirrorUsagePointList = adpt.ListAdapter.get_resource_list(request.path)
             # Because our resource_list doesn't include other properties than the list we set
             # them here before returning.
@@ -137,7 +141,7 @@ class MirrorUsagePointRequest(RequestOp):
             result = adpt.create_mirror_usage_point(mup=data)
             #result = adpt.MirrorUsagePointAdapter.create(mup=data)
         else:
-            result = adpt.create_mirror_meter_reading(mup_href=request.path, mmr_input=data)
+            result = adpt.create_or_update_meter_reading(mup_href=request.path, mmr_input=data)
 
         if result.success:
             status = '204' if result.was_update == True else '201'
