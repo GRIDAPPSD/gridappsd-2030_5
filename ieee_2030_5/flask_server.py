@@ -440,3 +440,9 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
                        request_handler=PeerCertWSGIRequestHandler,
                        port=port,
                        **kwargs)
+
+def make_app(config_file: Path, reset_certs: bool) -> Flask:
+    config = ServerConfiguration.load(config_file)
+    tlsrepo = TLSRepository(config.tls_repository, clear=reset_certs, openssl_cnffile_template=config.openssl_cnf, serverhost=config.server_hostname)
+    app = __build_app__(config, tlsrepo)
+    return app
