@@ -171,7 +171,7 @@ class ProxyServer(ThreadingHTTPServer):
         super().finish_request(request, client_address)
 
     def shutdown_request(self, request):
-        print("Connection Closing")
+        _log.info("Connection Closing")
         conn = connections.pop(request.connection_name)
         conn.close()
         super().shutdown_request(request)
