@@ -5,7 +5,7 @@ import os
 import ssl
 from dataclasses import dataclass
 from http.client import HTTPSConnection
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Tuple
 from urllib.parse import urlparse
@@ -26,6 +26,7 @@ class ContextWithPaths:
     certpath: str
     keypath: str
 
+connections: dict[str, HTTPSConnection] = {}
 
 class RequestForwarder(BaseHTTPRequestHandler):
 
@@ -61,9 +62,15 @@ class RequestForwarder(BaseHTTPRequestHandler):
     def __start_request__(self) -> HTTPSConnection:
         ccp = self.get_context_cert_pair()
 
-        host, port = self.server.proxy_target
-        conn = HTTPSConnection(host=host, port=port, context=ccp.context)
-        conn.connect()
+        conn = connections.get(ccp.keypath)
+
+        if not conn:
+            self.request.connection_name = ccp.keypath
+            host, port = self.server.proxy_target
+            conn = HTTPSConnection(host=host, port=port, context=ccp.context)
+            conn.connect()
+            connections[self.request.connection_name] = conn
+
         return conn
 
     def __handle_response__(self, conn: HTTPSConnection):
@@ -144,7 +151,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         _log.info(f"PUT {self.path} Content-Length: {self.headers.get('Content-Length')}, Response Status: {response.status}")
 
 
-class ProxyServer(HTTPServer):
+class ProxyServer(ThreadingHTTPServer):
 
     def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int], **kwargs):
         super().__init__(**kwargs)
@@ -158,6 +165,16 @@ class ProxyServer(HTTPServer):
     @property
     def tls_repo(self) -> TLSRepository:
         return self._tls_repo
+
+
+    def finish_request(self, request, client_address):
+        super().finish_request(request, client_address)
+
+    def shutdown_request(self, request):
+        print("Connection Closing")
+        conn = connections.pop(request.connection_name)
+        conn.close()
+        super().shutdown_request(request)
 
 
 def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
