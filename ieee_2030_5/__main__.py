@@ -204,7 +204,8 @@ def _main():
     create_certs = not opts.no_create_certs
     tls_repo = get_tls_repository(config, create_certs)
 
-    if config.gridappsd is not None and create_certs:
+    if config.gridappsd is not None:
+        _log.info("Loading GridAPPSD devices.")
 
         from gridappsd import GridAPPSD
 
@@ -214,8 +215,16 @@ def _main():
                         password=config.gridappsd.password)
         assert gapps.connected
 
-        gridappsd_adpt = GridAPPSDAdapter(gapps, config.gridappsd.model_name)
-        gridappsd_adpt.create_der_client_certificates(tls_repo)
+        gridappsd_adpt = GridAPPSDAdapter(gapps, config.gridappsd.model_name, default_pin=config.gridappsd.default_pin)
+
+        gridappsd_devices: list = []
+        if create_certs:
+            _log.debug("Creating certificates for GridAPPSD devices.")
+            gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations(tls_repo)
+        else:
+            gridappsd_devices = gridappsd_adpt.get_device_configurations()
+
+        config.devices.extend(gridappsd_devices)
 
     if opts.show_lfdi:
         for cn in config.devices:

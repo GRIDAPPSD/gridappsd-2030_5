@@ -133,6 +133,7 @@ class ProgramConfiguration:
 @dataclass
 class GridappsdConfiguration:
     model_name: str
+    default_pin: str
     address: str = 'localhost'
     port: int = 61613
     username: str = 'system'

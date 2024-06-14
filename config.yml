@@ -50,6 +50,9 @@ gridappsd:
   # GridAPPS-D password
   password: manager
 
+  # Default pin to use for gridappsd power electronic devices
+  default_pin: 111115
+
 # End Device
 devices:
   # SolarEdge SE6000H HD-Wave SetApp Enabled Inverter
