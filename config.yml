@@ -45,6 +45,14 @@ gridappsd:
   port: 61613
   model_name: 'ieee13nodeckt'
 
+  # Integration with ochre model uses the CIM dictionary
+  # to find the inverters rather than through cim graph
+  # itself.
+  ocher_houses_as_inverters: true
+
+  # Model dictionary file to use rather than querying the gridappsd server.
+  model_dict_file: 'model_dict.json'
+
   # GridAPPS-D username
   username: system
   # GridAPPS-D password

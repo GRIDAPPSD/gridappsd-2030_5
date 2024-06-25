@@ -134,6 +134,8 @@ class ProgramConfiguration:
 class GridappsdConfiguration:
     model_name: str
     default_pin: str
+    ocher_houses_as_inverters: bool = False
+    model_dict_file: str | None = None
     address: str = 'localhost'
     port: int = 61613
     username: str = 'system'

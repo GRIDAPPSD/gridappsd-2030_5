@@ -215,7 +215,11 @@ def _main():
                         password=config.gridappsd.password)
         assert gapps.connected
 
-        gridappsd_adpt = GridAPPSDAdapter(gapps, config.gridappsd.model_name, default_pin=config.gridappsd.default_pin)
+        gridappsd_adpt = GridAPPSDAdapter(gapps=gapps,
+                                          model_name=config.gridappsd.model_name,
+                                          default_pin=config.gridappsd.default_pin,
+                                          ocher_houses_as_inverters=config.gridappsd.ocher_houses_as_inverters,
+                                          model_dict_file=config.gridappsd.model_dict_file)
 
         gridappsd_devices: list = []
         if create_certs:
