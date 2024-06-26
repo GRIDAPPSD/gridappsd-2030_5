@@ -39,11 +39,37 @@ cleanse_storage: true
 # This directory will be created if it does not exist.
 storage_path: data_store
 
+# Should every device have a der associated by default?
+include_default_der_on_all_devices: True
+
+# Make sure that all ders have a default program associated with it
+include_default_der_program_on_ders: True
+
+# The default program to use for all ders.
+default_program:
+
+  description: Default Program
+  primacy: 0
+  DefaultDERControl:
+    setESDelay: 30
+    setGradW: 1000
+
+    DERControlBase:
+      opModConnect: true
+      opModEnergize: true
+
+
 gridappsd:
   # GridAPPS-D API endpoint
   address: 'localhost'
   port: 61613
   model_name: 'ieee13nodeckt'
+
+  # How often should the aggregates for the houses be published.
+  ocher_publish_interval_seconds: 3
+
+  # The topic the aggregate houses should publish to the goss bus.
+  ocher_publish_topic: '/topic/goss.gridappsd.simulation.ochre.output'
 
   # Integration with ochre model uses the CIM dictionary
   # to find the inverters rather than through cim graph
@@ -99,16 +125,16 @@ devices:
 
 
 
-programs:
-  - description: Default Program
-    primacy: 0
-    DefaultDERControl:
-      setESDelay: 30
-      setGradW: 1000
+# programs:
+#   - description: Default Program
+#     primacy: 0
+#     DefaultDERControl:
+#       setESDelay: 30
+#       setGradW: 1000
 
-      DERControlBase:
-        opModConnect: true
-        opModEnergize: true
+#       DERControlBase:
+#         opModConnect: true
+#         opModEnergize: true
 
 # curves:
 #   - description: Curve 1

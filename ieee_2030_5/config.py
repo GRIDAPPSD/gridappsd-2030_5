@@ -134,6 +134,8 @@ class ProgramConfiguration:
 class GridappsdConfiguration:
     model_name: str
     default_pin: str
+    ocher_publish_interval_seconds: int
+    ocher_publish_topic: str
     ocher_houses_as_inverters: bool = False
     model_dict_file: str | None = None
     address: str = 'localhost'
@@ -182,11 +184,16 @@ class ServerConfiguration:
     openssl_cnf: str
 
     tls_repository: str
-    openssl_cnf: str
 
     server: str
     port: int
     ui_port: int = None
+
+    include_default_der_on_all_devices: bool = True
+    include_default_der_program_on_ders: bool = True
+
+    default_program: m.DERProgram | None = None
+    default_der_control: m.DefaultDERControl | None = None
 
     cleanse_storage: bool = True
     storage_path: str = None
@@ -197,7 +204,7 @@ class ServerConfiguration:
     end_device_list_poll_rate: int = 86400    # daily check-in
 
     generate_admin_cert: bool = False
-    lfdi_client: str = None
+    lfdi_client: str | None = None
 
     fsas: List[FSAConfiguration] = field(default_factory=list)
     programs: List[ProgramConfiguration] = field(default_factory=list)
@@ -257,6 +264,23 @@ class ServerConfiguration:
             self.devices = []
         else:
             self.devices = [DeviceConfiguration.from_dict(x) for x in self.devices]
+
+        if self.default_program:
+            # Get DefaultDERControl off of the default program and bulid the base.
+            if 'DefaultDERControl' in self.default_program:
+                self.default_der_control = m.DefaultDERControl(
+                    **{k: v for k, v in self.default_program.items() if k in inspect.signature(m.DefaultDERControl).parameters})
+
+                if 'DERControlBase' in self.default_program['DefaultDERControl']:
+                    cb = self.default_program['DefaultDERControl']['DERControlBase']
+                    self.default_der_control.DERControlBase = m.DERControlBase(**{k: v for k, v in cb.items() if k in inspect.signature(m.DERControlBase).parameters})
+
+
+            # Populate from the default_program dictionary the keys of the configuration file.
+            self.default_program = m.DERProgram(
+                **{k: v
+                   for k, v in self.default_program.items() if k in inspect.signature(m.DERProgram).parameters})
+
         # for d in self.devices:
         # d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
         #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")

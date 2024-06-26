@@ -207,8 +207,37 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
     adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
 
-    for index, program_cfg in enumerate(config.programs):
+    if config.default_program:
+
+        index = adpt.ListAdapter.list_size(hrefs.DEFAULT_DERP_ROOT)
+
+        # Convienence Reference
+        derp = config.default_program
+        adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
         program_hrefs = hrefs.DERProgramHref(index)
+        derp.href = program_hrefs._root
+        derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
+        derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
+        derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
+        derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
+
+        if config.default_der_control:
+            # Default DER Control
+            dderc = config.default_der_control
+
+            dderc.href = derp.DefaultDERControlLink.href
+
+            add_href(derp.DefaultDERControlLink.href, dderc)
+
+        # Controls if there are any should be added to this list.
+        adpt.ListAdapter.initialize_uri(derp.DERControlListLink.href, m.DERControl)
+
+
+
+
+
+    for index, program_cfg in enumerate(config.programs):
+        program_hrefs = hrefs.DERProgramHref(adpt.ListAdapter.list_size(hrefs.DEFAULT_DERP_ROOT))
         # Pop off default_der_control if specified.
         default_der_control = program_cfg.pop("DefaultDERControl", None)
         program = m.DERProgram(**program_cfg)
@@ -302,6 +331,8 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
             adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
 
+            # If we have ders specified in the configuration file then set those up, otherwise
+            # if we need to create a default der then set that up.
             if cfg_device.ders:
                 # Create references from the main der list to the ed specific list.
                 for der in cfg_device.ders:
@@ -315,18 +346,42 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                     DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
                                     DERAvailabilityLink=m.DERAvailabilityLink(
                                         der_href.der_availability))
+                    if config.include_default_der_program_on_ders:
+                        if not config.default_program:
+                            raise ConfigurationError("default_program must be set to 'include_default_der_program_on_ders")
+                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
                     adpt.ListAdapter.append(ed_href.der_list, der_obj)
                     current_min_primacy = 10000
                     current_der_program = None
-                    for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
-                        for der_program in adpt.ListAdapter.get_list(fsa.DERProgramListLink.href):
-                            if current_der_program is None:
-                                current_der_program = der_program
-                            if der_program.primacy < current_min_primacy:
-                                current_min_primacy = der_program.primacy
-                    der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(
-                        current_der_program.href)
-
+                    try:
+                        # get_list throws keyerror if a list doesn't exist.  This is ok so
+                        # we capture the error.
+                        for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
+                            for der_program in adpt.ListAdapter.get_list(fsa.DERProgramListLink.href):
+                                if current_der_program is None:
+                                    current_der_program = der_program
+                                if der_program.primacy < current_min_primacy:
+                                    current_min_primacy = der_program.primacy
+                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(current_der_program.href)
+                    except KeyError:
+                        pass
+            elif config.include_default_der_on_all_devices:
+                if not config.default_program:
+                    raise ConfigurationError("Mulst include default_program if include_include_default_der_on_all_devices set!")
+                der_href = hrefs.DERHref(
+                        hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
+                                        str(der_global_count)]))
+                der_global_count += 1
+                der_obj = m.DER(href=der_href.root,
+                                DERStatusLink=m.DERStatusLink(der_href.der_status),
+                                DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
+                                DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
+                                DERAvailabilityLink=m.DERAvailabilityLink(
+                                    der_href.der_availability))
+                der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
+                adpt.ListAdapter.append(ed_href.der_list, der_obj)
+                current_min_primacy = 10000
+                current_der_program = None
             # else:
 
             #     # der_href will manage the url links to other lists/resources for the DER.

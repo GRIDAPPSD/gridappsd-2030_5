@@ -1,4 +1,6 @@
 import json
+from threading import Timer
+
 
 ENABLED = True
 try:
@@ -12,15 +14,23 @@ try:
 except ImportError:
     ENABLED = False
 
-from ieee_2030_5.certs import TLSRepository
-from ieee_2030_5.config import DeviceConfiguration
-
-
 if ENABLED:
+
+    from ieee_2030_5.certs import TLSRepository
+    from ieee_2030_5.config import DeviceConfiguration
+    from ieee_2030_5.adapters import DERAdapter
+
     @define
     class OcherHouse:
         mrid: str
         name: str
+
+    class PublishTimer(Timer):
+        def run(self):
+            while not self.finished.wait(self.interval):
+                self.function(*self.args, **self.kwargs)
+
+
 
     @define
     class GridAPPSDAdapter:
@@ -28,11 +38,17 @@ if ENABLED:
         model_name: str
         default_pin: str
         ocher_houses_as_inverters: bool = False
+        ocher_publish_interval_seconds: int = 20
         model_dict_file: str | None = None
         model_id: str | None = None
         devices: list[DeviceConfiguration] | None = None
         power_electronic_connections: list[cim.PowerElectronicsConnection] | None = None
         ocher_houses: list[OcherHouse] | None = None
+        _timer: PublishTimer | None = None
+
+        def __attrs_post_init__ (self):
+            self._timer = PublishTimer(self.ocher_publish_interval_seconds, self.publish_house_aggregates)
+            self._timer.start()
         # power_electronic_connections: list[cim.PowerElectronicsConnection] = []
 
         def _get_model_id_from_name(self) -> str:
@@ -125,6 +141,7 @@ if ENABLED:
                 for ocr in self._get_ocher_house_and_utility_inverters():
                     dev = DeviceConfiguration(id=ocr.mrid,
                                               pin=self.default_pin)
+                    dev.ders = [dict(description= ocr.name)]
                     self.devices.append(dev)
             else:
                 for inv in self._get_power_electronic_connections():
@@ -132,6 +149,7 @@ if ENABLED:
                         id=inv.mRID,
                         pin=self.default_pin
                     )
+                    dev.ders = [dict(description=inv.mRID)]
                     self.devices.append(dev)
 
         def get_device_configurations(self) -> list[DeviceConfiguration]:
@@ -150,3 +168,6 @@ if ENABLED:
                     tls.create_cert(inv.mRID)
             self._build_device_configurations()
             return self.devices
+
+        def publish_house_aggregates(self):
+            print("Publishing house aggregates.")
