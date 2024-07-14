@@ -68,7 +68,6 @@ import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
-from ieee_2030_5.server.server_constructs import initialize_2030_5
 from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
 
 _log = logging.getLogger()
@@ -101,7 +100,6 @@ def get_tls_repository(cfg: ServerConfiguration,
     if create_certificates_for_devices:
         already_represented = set()
 
-
         # registers the devices, but doesn't initialize_device the end devices here.
         for k in cfg.devices:
             if tlsrepo.has_device(k.id):
@@ -132,18 +130,17 @@ def remove_stop_file():
         os.remove(pth)
 
 
-
 def _main():
     parser = ArgumentParser()
 
     parser.add_argument(dest="config", help="Configuration file for the server.")
-    parser.add_argument("--no-validate",
-                        action="store_true",
-                        help="Allows faster startup since the resolving of addresses is not done!")
+    # parser.add_argument("--validate",
+    #                     action="store_true",
+    #                     help="Validate that the client is reachable by an addAllows faster startup since the resolving of addresses is not done!")
     parser.add_argument(
-        "--no-create-certs",
+        "--create-certs",
         action="store_true",
-        help="If specified certificates for for client and server will not be created.")
+        help="If specified certificates for for client and server will be created.")
     parser.add_argument("--debug", action="store_true", help="Debug level of the server")
     parser.add_argument("--production",
                         action="store_true",
@@ -175,54 +172,51 @@ def _main():
     add_href(hrefs.get_server_config_href(), config)
     unknown = []
     # Only check for resolvability if not passed --no-validate
-    if not opts.no_validate:
-        _log.debug("Validating hostnames and/or ip of devices are resolvable.")
-        for i in range(len(config.devices)):
-            assert config.devices[i].hostname
+    # if not opts.no_validate:
+    #     _log.debug("Validating hostnames and/or ip of devices are resolvable.")
+    #     for i in range(len(config.devices)):
+    #         assert config.devices[i].hostname
+    #
+    #         try:
+    #             socket.gethostbyname(config.devices[i].hostname)
+    #         except socket.gaierror:
+    #             if hasattr(config.devices[i], "ip"):
+    #                 try:
+    #                     socket.gethostbyname(config.devices[i].ip)
+    #                 except socket.gaierror:
+    #                     unknown.append(config.devices[i].hostname)
+    #             else:
+    #                 unknown.append(config.devices[i].hostname)
+    #
+    # if unknown:
+    #     _log.error("Couldn't resolve the following hostnames.")
+    #     for host in unknown:
+    #         _log.error(host)
+    #     sys.exit(1)
 
-            try:
-                socket.gethostbyname(config.devices[i].hostname)
-            except socket.gaierror:
-                if hasattr(config.devices[i], "ip"):
-                    try:
-                        socket.gethostbyname(config.devices[i].ip)
-                    except socket.gaierror:
-                        unknown.append(config.devices[i].hostname)
-                else:
-                    unknown.append(config.devices[i].hostname)
-
-    if unknown:
-        _log.error("Couldn't resolve the following hostnames.")
-        for host in unknown:
-            _log.error(host)
-        sys.exit(1)
-
-    if opts.show_lfdi and not opts.no_create_certs:
+    if opts.show_lfdi and opts.create_certs:
         sys.stderr.write("Can't show lfdi when creating certificates.\n")
         sys.exit(1)
 
-    create_certs = not opts.no_create_certs
-    tls_repo = get_tls_repository(config, create_certs)
+    tls_repo = get_tls_repository(config, create_certificates_for_devices=opts.create_certs)
 
     if config.gridappsd is not None:
         _log.info("Loading GridAPPSD devices.")
 
+        import ieee_2030_5.adapters as adpt
         from gridappsd import GridAPPSD
 
         gapps = GridAPPSD(stomp_address=config.gridappsd.address,
-                        stomp_port=config.gridappsd.port,
-                        username=config.gridappsd.username,
-                        password=config.gridappsd.password)
+                          stomp_port=config.gridappsd.port,
+                          username=config.gridappsd.username,
+                          password=config.gridappsd.password)
         assert gapps.connected
 
         gridappsd_adpt = GridAPPSDAdapter(gapps=gapps,
-                                          model_name=config.gridappsd.model_name,
-                                          default_pin=config.gridappsd.default_pin,
-                                          ocher_houses_as_inverters=config.gridappsd.ocher_houses_as_inverters,
-                                          model_dict_file=config.gridappsd.model_dict_file)
+                                          gridappsd_configuration=config.gridappsd)
 
         gridappsd_devices: list = []
-        if create_certs:
+        if opts.create_certs:
             _log.debug("Creating certificates for GridAPPSD devices.")
             gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations(tls_repo)
         else:
@@ -257,12 +251,10 @@ def _main():
         _log.debug(f"Removing {data_store_userdir}")
         shutil.rmtree(data_store_userdir)
 
-
     # Has to be after we remove the storage path if necessary
     from ieee_2030_5.server.server_constructs import initialize_2030_5
 
     initialize_2030_5(config, tls_repo)
-
 
     from ieee_2030_5.flask_server import run_server
 
@@ -289,15 +281,14 @@ def _main():
     # p_gui.daemon = True
     # p_gui.start()
 
-
     # # while True:
     # #     sleep(1)
     run_server(config,
-                tls_repo,
-                debug=opts.debug,
-                use_reloader=True,
-                use_debugger=opts.debug,
-                threaded=False)
+               tls_repo,
+               debug=opts.debug,
+               use_reloader=False,
+               use_debugger=opts.debug,
+               threaded=False)
     # except KeyboardInterrupt:
     #     _log.info("Shutting down server")
     # finally:
