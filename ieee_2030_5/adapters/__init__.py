@@ -5,6 +5,7 @@ import inspect
 from pprint import pprint
 import logging
 import typing
+from typing import Callable, Iterator
 from copy import deepcopy
 from dataclasses import dataclass, fields, is_dataclass, asdict
 from enum import Enum
@@ -332,6 +333,13 @@ class ResourceListAdapter:
 
     def get_single(self, uri: str) -> D:
         return self._singleton_dict.get(uri)
+
+    def show_single_dict(self):
+        from pprint import pformat
+        _log.debug(pformat(self._singleton_dict, indent=2))
+
+    def filter_single_dict(self, fn: Callable) -> Iterator:
+        return filter(fn, self._singleton_dict.keys())
 
     def get(self, list_uri: str, key: int) -> D:
         if list_uri not in self._container_dict:
