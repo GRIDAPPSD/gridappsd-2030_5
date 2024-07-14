@@ -1,85 +1,137 @@
+from __future__ import annotations
 import json
-from threading import Timer
+import logging
 
+import re
+from threading import Timer
 
 ENABLED = True
 try:
     from attrs import define, field
+    import gridappsd.topics as topics
     from gridappsd import GridAPPSD
+    from gridappsd.field_interface.interfaces import FieldMessageBus
     from cimgraph.data_profile import CIM_PROFILE
+    from gridappsd.field_interface.agents.agents import GridAPPSDMessageBus
     import cimgraph.data_profile.rc4_2021 as cim
     from cimgraph.models import FeederModel
     from cimgraph.databases.gridappsd import GridappsdConnection
     from cimgraph.databases import ConnectionParameters
+
 except ImportError:
     ENABLED = False
 
 if ENABLED:
-
+    _log = logging.getLogger("ieee_2030_5.gridappsd.adapter")
     from ieee_2030_5.certs import TLSRepository
-    from ieee_2030_5.config import DeviceConfiguration
-    from ieee_2030_5.adapters import DERAdapter
+    from ieee_2030_5.config import DeviceConfiguration, GridappsdConfiguration
+    import ieee_2030_5.adapters as adpt
 
     @define
-    class OcherHouse:
+    class HouseLookup:
         mrid: str
         name: str
 
+
     class PublishTimer(Timer):
+        # def __init__(self, interval: float, function, adapter: GridAPPSDAdapter):
+        #     self.adapter = adapter
+        #     super().__init__(interval=interval, function=function)
         def run(self):
             while not self.finished.wait(self.interval):
                 self.function(*self.args, **self.kwargs)
 
 
-
     @define
     class GridAPPSDAdapter:
         gapps: GridAPPSD
-        model_name: str
-        default_pin: str
-        ocher_houses_as_inverters: bool = False
-        ocher_publish_interval_seconds: int = 20
-        model_dict_file: str | None = None
-        model_id: str | None = None
-        devices: list[DeviceConfiguration] | None = None
-        power_electronic_connections: list[cim.PowerElectronicsConnection] | None = None
-        ocher_houses: list[OcherHouse] | None = None
-        _timer: PublishTimer | None = None
+        gridappsd_configuration: dict | GridappsdConfiguration
+        _publish_interval_seconds: int = 3
 
-        def __attrs_post_init__ (self):
-            self._timer = PublishTimer(self.ocher_publish_interval_seconds, self.publish_house_aggregates)
+        _default_pin: str | None = None
+        _inverters: list[HouseLookup] | None = None
+        _model_dict_file: str | None = None
+        _model_id: str | None = None
+        _model_name: str | None = None
+        _devices: list[DeviceConfiguration] | None = None
+        _power_electronic_connections: list[cim.PowerElectronicsConnection] | None = None
+        _timer: PublishTimer | None = None
+        __field_bus_connection__: FieldMessageBus | None = None
+
+        def get_message_bus(self) -> FieldMessageBus:
+            if self.__field_bus_connection__ is None:
+                # TODO Use factory class here!
+                self.__field_bus_connection__ = GridAPPSDMessageBus(self.gridappsd_configuration.field_bus_def)
+                # TODO Hack to make sure the gridappsd is actually able to connect.
+                self.__field_bus_connection__.gridappsd_obj = GridAPPSD(username=self.gridappsd_configuration.username,
+                                                                        password=self.gridappsd_configuration.password)
+                # TODO Use the interface instead of this, however the gridappsdmessagebus doesn't implement it!
+                assert self.__field_bus_connection__.gridappsd_obj.connected
+            return self.__field_bus_connection__
+
+        def use_houses_as_inverters(self) -> bool:
+            return (self.gridappsd_configuration.house_named_inverters_regex is not None or
+                    self.gridappsd_configuration.utility_named_inverters_regex is not None)
+
+        def __attrs_post_init__(self):
+            if self.gridappsd_configuration is not None and not isinstance(self.gridappsd_configuration,
+                                                                           GridappsdConfiguration):
+                self.gridappsd_configuration = GridappsdConfiguration(**self.gridappsd_configuration)
+
+            if not self.gridappsd_configuration:
+                raise ValueError("Missing GridAPPSD configuration, but it is required.")
+
+            self._model_name = self.gridappsd_configuration.model_name
+            self._default_pin = self.gridappsd_configuration.default_pin
+
+
+
+
+            # if self._topic_to_publish is None:
+            #     self._topic_to_publish = topics.field_output_topic()
+            # if self._input_topic is None:
+            #     self._input_topic = topics.field_input_topic()
+            _log.debug("Creating timer now")
+            self._timer = PublishTimer(self._publish_interval_seconds, self.publish_house_aggregates)
             self._timer.start()
+
         # power_electronic_connections: list[cim.PowerElectronicsConnection] = []
 
-        def _get_model_id_from_name(self) -> str:
+        def get_model_id_from_name(self) -> str:
             models = self.gapps.query_model_info()
             for m in models['data']['models']:
-                if m['modelName'] == self.model_name:
+                if m['modelName'] == self._model_name:
                     return m['modelId']
-            raise ValueError(f"Model {self.model_name} not found")
+            raise ValueError(f"Model {self._model_name} not found")
 
-        def _get_ocher_house_and_utility_inverters(self) -> list[OcherHouse]:
+        def get_house_and_utility_inverters(self) -> list[HouseLookup]:
             """
-            This function uses the GridAPPSD API to get the list of energy consumers.  The list is then filtered to
-            include only the names that are in the format t1_house* and utility_*.  From this the name t1_ is removed
-            from the name and the mrid is used for the inverter mrid.
+            This function uses the GridAPPSD API to get the list of energy consumers.
 
-            :return: list of OcherHouse objects
-            :rtype: list[OcherHouse]
+            This method should only be called with the `house_named_inverters_regex` or `utility_named_inverters_regex`
+            properties set on the `GridappsdConfiguration object.  If set then the function searches for energy
+            consumers that match the regular expression and returns them as a list of HouseLookup objects.
+            In the case of utility regular expression it will return 3 HouseLookup objects for each phase of the
+            utility inverter.  The name of the phase (a b c, A B C, 1 2 3, etc) is determined by the
+            response from the server in the querying of the model.
+
+            :return: list of HouseLookup objects
+            :rtype: list[HouseLookup]
             """
 
-            if self.ocher_houses is not None:
-                return self.ocher_houses
+            if self._inverters is not None:
+                return self._inverters
 
-            self.ocher_houses = []
+            self._inverters = []
 
-            if self.model_dict_file is None:
+            if self._model_dict_file is None:
 
-                if self.model_id is None:
-                    self.model_id = self._get_model_id_from_name()
+                if self._model_id is None:
+                    self._model_id = self.get_model_id_from_name()
 
                 response = self.gapps.get_response(topic='goss.gridappsd.process.request.config',
-                                                message={"configurationType":"CIM Dictionary","parameters":{"model_id":f"{self.model_id}"}})
+                                                   message={"configurationType": "CIM Dictionary",
+                                                            "parameters": {"model_id": f"{self._model_id}"}})
 
                 # Should have returned only a single feeder
                 feeder = response['data']['feeders'][0]
@@ -88,37 +140,33 @@ if ENABLED:
                 with open(self.model_dict_file, 'r') as f:
                     feeder = json.load(f)['feeders'][0]
 
+            re_houses = re.compile(self.gridappsd_configuration.house_named_inverters_regex)
+            re_utility = re.compile(self.gridappsd_configuration.utility_named_inverters_regex)
+
+            # Based upon the energyconsumers create matches to the houses and utilities
+            # and add them to the list.
             for ec in feeder['energyconsumers']:
-                name = ec['name']
-                if name.startswith("tl_house"):
-                    mrid = ec['mRID']
-                    name = ec['name'][3:]
-                    #inv_mrid = ec['eqContainer']
-                    self.ocher_houses.append(OcherHouse(mrid, name))
-                elif name.startswith("utility_"):
-                    mrid = ec['mRID']
+                if match_house := re.match(re_houses, ec['name']):
+                    self._inverters.append(HouseLookup(mrid=ec['mRID'], name=match_house.group(0)))
+                elif match_utility := re.match(re_utility, ec['name']):
                     for phase in ec['phases']:
-                        name = ec['name'] + f"_{phase}"
-                        mrid = ec['mRID'] + f"{phase}"
-                        self.ocher_houses.append(OcherHouse(mrid, name))
+                        self._inverters.append(HouseLookup(mrid=ec['mRID'],
+                                                           name=match_utility.group(0) + f"_{phase}"))
+            return self._inverters
 
-                    # name = ec['name']
-                    # self.ocher_houses.append(OcherHouse(mrid, name, inv_mrid))
-            return self.ocher_houses
+        def get_power_electronic_connections(self) -> list[cim.PowerElectronicsConnection]:
+            if self._power_electronic_connections is not None:
+                return self._power_electronic_connections
 
-        def _get_power_electronic_connections(self) -> list[cim.PowerElectronicsConnection]:
-            if self.power_electronic_connections is not None:
-                return self.power_electronic_connections
-
-            self.power_electronic_connections = []
+            self._power_electronic_connections = []
 
             models = self.gapps.query_model_info()
             for m in models['data']['models']:
-                if m['modelName'] == self.model_name:
-                    self.model_id = m['modelId']
+                if m['modelName'] == self._model_name:
+                    self._model_id = m['modelId']
                     break
-            if not self.model_id:
-                raise ValueError(f"Model {self.model_name} not found")
+            if not self._model_id:
+                raise ValueError(f"Model {self._model_name} not found")
 
             cim_profile = CIM_PROFILE.RC4_2021.value
             iec = 7
@@ -126,48 +174,85 @@ if ENABLED:
 
             conn = GridappsdConnection(params)
             conn.cim_profile = cim_profile
-            feeder = cim.Feeder(mRID=self.model_id)
+            feeder = cim.Feeder(mRID=self._model_id)
 
             network = FeederModel(connection=conn, container=feeder, distributed=False)
 
             network.get_all_edges(cim.PowerElectronicsConnection)
 
-            self.power_electronic_connections = network.graph[cim.PowerElectronicsConnection].values()
-            return self.power_electronic_connections
+            self._power_electronic_connections = network.graph[cim.PowerElectronicsConnection].values()
+            return self._power_electronic_connections
 
         def _build_device_configurations(self):
-            self.devices = []
-            if self.ocher_houses_as_inverters:
-                for ocr in self._get_ocher_house_and_utility_inverters():
-                    dev = DeviceConfiguration(id=ocr.mrid,
-                                              pin=self.default_pin)
-                    dev.ders = [dict(description= ocr.name)]
-                    self.devices.append(dev)
+            self._devices = []
+            if self.use_houses_as_inverters():
+                for inv in self.get_house_and_utility_inverters():
+                    dev = DeviceConfiguration(id=inv.mrid,
+                                              pin=int(self._default_pin))
+                    dev.ders = [dict(description=inv.name)]
+                    self._devices.append(dev)
             else:
-                for inv in self._get_power_electronic_connections():
+                for inv in self.get_power_electronic_connections():
                     dev = DeviceConfiguration(
                         id=inv.mRID,
-                        pin=self.default_pin
+                        pin=int(self._default_pin)
                     )
                     dev.ders = [dict(description=inv.mRID)]
-                    self.devices.append(dev)
+                    self._devices.append(dev)
 
         def get_device_configurations(self) -> list[DeviceConfiguration]:
-            if not self.devices:
+            if not self._devices:
                 self._build_device_configurations()
-            return self.devices
+            return self._devices
+
+        def get_message_for_bus(self) -> dict:
+            import random
+            msg = {}
+
+            # TODO Get from list adapter for each house.
+            # TODO This might not be the right way to do this
+            # Filter for availability
+            availability_keys = adpt.ListAdapter.filter_single_dict(lambda k: k.endswith('dera'))
+
+            for inv in self._inverters:
+                try:
+                    # TODO we need to make sure we have the right mrid for the inverters this doesn't guarantee it.
+                    uri = next(availability_keys)
+                    data = adpt.ListAdapter.get_single(uri)
+                    msg[inv.mrid] = dict(mrid=inv.mrid, name=inv.name)
+                    for k, v in data.__dict__.items():
+                        if v is not None:
+                            msg[inv.mrid][k] = v
+
+                except StopIteration:
+                    pass
+
+            return msg
 
         def create_2030_5_device_certificates_and_configurations(self, tls: TLSRepository) -> list[DeviceConfiguration]:
 
-            self.devices = []
-            if self.ocher_houses_as_inverters:
-                for house in self._get_ocher_house_and_utility_inverters():
+            self._devices = []
+            if self.use_houses_as_inverters():
+                for house in self.get_house_and_utility_inverters():
                     tls.create_cert(house.mrid)
             else:
-                for inv in self.power_electronic_connections:
+                for inv in self.get_power_electronic_connections():
                     tls.create_cert(inv.mRID)
             self._build_device_configurations()
-            return self.devices
+            return self._devices
 
         def publish_house_aggregates(self):
-            print("Publishing house aggregates.")
+            from pprint import pformat
+
+            mb = self.get_message_bus()
+
+            if field_bus := self.gridappsd_configuration.field_bus_def.id:
+                ...
+
+            # TODO: the output topic goes to the field bus manager regardless of the message_bus_id for some reason.
+            output_topic = topics.field_output_topic(message_bus_id=field_bus)
+
+            message = self.get_message_for_bus()
+
+            _log.debug(f"Output: {output_topic}\n{pformat(message, 2)}")
+            mb.send(topic=output_topic, message=message)

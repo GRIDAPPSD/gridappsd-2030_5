@@ -52,7 +52,7 @@ def create_project_dir() -> Path:
     """
     Create a temporary directory with a prefix of "/tmp/tmpproject" and yield the path to the directory.
     After the test that uses this fixture is done, the directory is deleted using `shutil.rmtree`.
-    
+
     :return: Path to the temporary directory
     :rtype: Path
     """
@@ -72,7 +72,7 @@ def server_startup(create_project_dir: Path) -> Tuple[TLSRepository, ServerConfi
     to use the temporary directory for TLS certificates and storage, and creates a `ServerConfiguration` object with the
     modified configuration. Finally, it returns a tuple containing a `TLSRepository` object and the `ServerConfiguration`
     object.
-    
+
     :param create_project_dir: The `create_project_dir` fixture
     :type create_project_dir: fixture
     :return: A tuple containing a `TLSRepository` object and the `ServerConfiguration` object
@@ -137,7 +137,7 @@ def first_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
     the hostname and SSL port of the server, the CA certificate file, and the key and certificate files for the first
     device specified in the server configuration. The client is yielded to the test function, and disconnected after
     the test function completes.
-    
+
     :param server_startup: The `server_startup` fixture
     :type server_startup: fixture
     :return: An instance of `IEEE2030_5_Client` for the first device specified in the server configuration
@@ -148,7 +148,7 @@ def first_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
     host, port = servercfg.server_hostname.split(":")
     certfile, keyfile = repo.get_file_pair(servercfg.devices[0].id)
     client = IEEE2030_5_Client(server_hostname=host,
-                               server_ssl_port=port,
+                               server_ssl_port=int(port),
                                cafile=repo.ca_cert_file,
                                keyfile=Path(keyfile),
                                certfile=Path(certfile))
@@ -166,7 +166,7 @@ def admin_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
     tuple that `server_startup` yields. The client is created with the hostname and SSL port of the server, the CA
     certificate file, and the key and certificate files for the admin device. The client is yielded to the test
     function, and disconnected after the test function completes.
-    
+
     :param server_startup: The `server_startup` fixture
     :type server_startup: fixture
     :return: An instance of `IEEE2030_5_Client` for the admin device
@@ -194,7 +194,7 @@ def new_tls_repository() -> TLSRepository:
     `openssl.cnf` file located at the root of the project is used as a template for generating the certificate
     authority and device certificates. The `TLSRepository` object is yielded to the test function, and the temporary
     directory is deleted after the test function completes.
-    
+
     :return: A new `TLSRepository` object
     :rtype: TLSRepository
     """

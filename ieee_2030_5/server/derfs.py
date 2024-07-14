@@ -42,9 +42,8 @@ class DERRequests(RequestOp):
         data = request.get_data(as_text=True)
         data = xml_to_dataclass(data, clstype[parser.at(2)])
 
-        _log.debug(f"DER PUT {request.path} {data}")
-
-        adpt.ListAdapter.set_single(request.path, data)
+        _log.info(f"DER PUT {request.path} {data}")
+        adpt.ListAdapter.set_single(f"{request.path}", data)
         return self.build_response_from_dataclass(data)
 
     def get(self) -> Response:

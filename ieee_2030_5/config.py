@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 __all__ = ["ServerConfiguration", "ReturnValue"]
 
-#from ieee_2030_5.adapters import DERControlAdapter
+import json
 
 try:
     from gridappsd.field_interface import MessageBusDefinition
@@ -134,43 +134,47 @@ class ProgramConfiguration:
 class GridappsdConfiguration:
     model_name: str
     default_pin: str
-    ocher_publish_interval_seconds: int
-    ocher_publish_topic: str
-    ocher_houses_as_inverters: bool = False
+    publish_interval_seconds: int
+    house_named_inverters_regex: str | None = None
+    utility_named_inverters_regex: str | None = None
     model_dict_file: str | None = None
     address: str = 'localhost'
     port: int = 61613
     username: str = 'system'
     password: str = 'manager'
-    field_bus_config: Optional[str] = None
-    field_bus_def: Optional[MessageBusDefinition] = None
+    field_bus_def: MessageBusDefinition | str | None = None
     feeder_id_file: Optional[str] = None
     feeder_id: Optional[str] = None
     simulation_id_file: Optional[str] = None
-    simulation_id: Optional[str] = None
 
+    @property
+    def full_address(self):
+        return f"tcp://{self.address}:{self.port}"
 
-# @dataclass
-# class ControlDefaults:
-#     setESDelay: Optional[Int]
-#     setESHighFreq: UInt16 [0..1]
-#     setESHighVolt: Int16 [0..1]
-#     setESLowFreq: UInt16 [0..1]
-#     setESLowVolt: Int16 [0..1]
-#     setESRampTms: UInt32 [0..1]
-#     setESRandomDelay: UInt32 [0..1]
-#     setGradW: UInt16 [0..1]
-#     setSoftGradW: UInt16 [0..1]
+    def __post_init__(self):
+        if self.field_bus_def is not None:
+            if isinstance(self.field_bus_def, str):
+                fb = json.loads(self.field_bus_def)
+            else:
+                fb = self.field_bus_def
 
-# @dataclass
-# class Program:
-#     description: str
-#     mRID: Optional[str]
+            if is_ot_bus := fb.get('is_ot_bus', True):
+                fb['connection_type'] = 'CONNECTION_TYPE_GRIDAPPSD'
+                fb['connection_args'] = dict(
+                    GRIDAPPSD_ADDRESS=self.full_address,
+                    GRIDAPPSD_USER=self.username,
+                    GRIDAPPSD_PASSWORD=self.password
+                )
 
-# @dataclass
-# class Control:
-#     description: str
-#     mRID: Optional[str]
+            else:
+                assert fb['connection_args']
+                assert fb['connection_type']
+
+            # TODO: Error in gridappsd-python library the spelling is definately incorrect.
+            fb['conneciton_args'] = fb.pop('connection_args')
+            assert fb['id']
+
+            self.field_bus_def = MessageBusDefinition(**fb)
 
 
 @dataclass
@@ -281,58 +285,6 @@ class ServerConfiguration:
                 **{k: v
                    for k, v in self.default_program.items() if k in inspect.signature(m.DERProgram).parameters})
 
-        # for d in self.devices:
-        # d.deviceCategory = eval(f"m.DeviceCategoryType.{d.deviceCategory}").name
-        #d.device_category_type = eval(f"m.DeviceCategoryType.{d.device_category_type}")
-
-        # der_controls, der_default_control = None, None
-        # if self.DERControlListFile:
-        #     der_controls, der_default_control = DERControlAdapter.load_from_yaml_file(self.DERControlListFile)
-
-        # temp_program_list = self.program_lists
-        # if isinstance(self.program_lists, str):
-        #     temp_program_list = yaml.safe_load(Path(self.program_lists).read_text())
-
-        # self.program_lists = []
-        # for program_list in temp_program_list['program_lists']:
-        #     pl_obj = ProgramList(name=program_list["name"], programs=[])
-        #     for inter_index, program_obj in enumerate(program_list['programs']):
-        #         base = None
-        #         if "DERControlBase" in program_obj:
-        #             base = DERControlBase()
-        #             for k in program_obj.get("DERControlBase"):
-        #                 setattr(base, k, program_obj["DERControlBase"].get(k))
-        #             del program_obj["DERControlBase"]
-        #         # TODO Do Something with base so we can retrieve it.
-        #         # if base:
-        #         #     self.DefaultDERControl = DefaultDERControl(DERControlBase=base)
-        #         #     for k, v in program.items():
-        #         #         setattr(self.DefaultDERControl, k, v)
-        #         # else:
-        #         program = DERProgram()
-        #
-        #         for k, v in program_obj.items():
-        #             setattr(program, k, v)
-        #
-        #         pl_obj.programs.append(program)
-        #     self.program_lists.append(pl_obj)
-        #
-        # temp_curve_list = self.curve_list
-        # if isinstance(self.curve_list, str):
-        #     temp_curve_list = yaml.safe_load(Path(self.curve_list).read_text())
-        #
-        # self.curve_list = []
-        # for item in temp_curve_list['curve_list']:
-        #     curve_data: List[CurveData] = []
-        #     for data in item.get('CurveData'):
-        #         curve_data.append(CurveData(xvalue=data['xvalue'], yvalue=data['yvalue']))
-        #     del item["CurveData"]
-        #
-        #     curve = DERCurve(CurveData=curve_data)
-        #     for k, v in item.items():
-        #         setattr(curve, k, v)
-        #     self.curve_list.append(curve)
-
         if self.gridappsd:
             self.gridappsd = GridappsdConfiguration.from_dict(self.gridappsd)
 
@@ -350,7 +302,7 @@ class ServerConfiguration:
 
             # # TODO: This might not be the best place for this manipulation
             # self.gridappsd.field_bus_def = MessageBusDefinition.load(
-            #     self.gridappsd.field_bus_config)
+            #     self.gridappsd.field_bus_def)
             # self.gridappsd.field_bus_def.id = self.gridappsd.feeder_id
 
             # _log.info("Gridappsd Configuration For Simulation")
@@ -361,8 +313,8 @@ class ServerConfiguration:
             #     _log.info("no simulation id")
             # _log.info("x" * 80)
 
-        # if self.field_bus_config:
-        #     self.field_bus_def = MessageBusDefinition.load(self.field_bus_config)
+        # if self.field_bus_def:
+        #     self.field_bus_def = MessageBusDefinition.load(self.field_bus_def)
 
     def get_device_pin(self, lfdi: Lfdi, tls_repo: TLSRepository) -> int:
         for d in self.devices:
