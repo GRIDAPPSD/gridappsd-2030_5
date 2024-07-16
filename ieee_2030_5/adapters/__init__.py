@@ -144,6 +144,7 @@ ready_signal = Signal("ready-signal")
 T = TypeVar('T')
 C = TypeVar('C')
 D = TypeVar('D')
+E = TypeVar('E')
 
 
 class ResourceListAdapter:
@@ -165,6 +166,7 @@ class ResourceListAdapter:
         self._list_urls = []
         self._container_dict: Dict[str, Dict[int, D]] = {}
         self._singleton_dict: Dict[str, D] = {}
+        self._singleton_envelops: Dict[str, E] = {}
         self._types: Dict[str, D] = {}
         if not os.environ.get('IEEE_ADAPTER_IGNORE_INITIAL_LOAD'):
             _log.debug(f"Intializing adapter {self.__class__.__name__}")
@@ -333,6 +335,13 @@ class ResourceListAdapter:
 
     def get_single(self, uri: str) -> D:
         return self._singleton_dict.get(uri)
+
+    def set_single_amd_meta_data(self, uri: str, envelop: dict, obj: D):
+        self.set_single(uri=uri, obj=obj)
+        self._singleton_envelops[uri] = envelop
+
+    def get_single_meta_data(self, uri: str) -> E:
+        return self._singleton_envelops[uri]
 
     def show_single_dict(self):
         from pprint import pformat

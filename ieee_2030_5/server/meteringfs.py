@@ -131,7 +131,7 @@ class MirrorUsagePointRequest(RequestOp):
         pth_info = request.path
         pths = pth_info.split(hrefs.SEP)
         if len(pths) == 1 and data_type is not m.MirrorUsagePoint:
-            # Check to make sure not a new mrid
+            # Check to make sure not a new mRID
             raise BadRequest("Must post MirrorUsagePoint to top level only")
 
         # Creating a new mup

@@ -139,7 +139,7 @@ def build_config(output_file: str, modelid: str):
                 device_category_type=DeviceCategoryType.SMART_INVERTER.name,
                 p=float(data["p"]["value"]),
                 q=float(data["q"]["value"]),
-            # inverter mrid is pecid (PowerElectronicsConnection)
+            # inverter mRID is pecid (PowerElectronicsConnection)
                 id=data["pecid"]["value"],
                 resource_id=data["id"]["value"],
             #pecid=data["pecid"]["value"],

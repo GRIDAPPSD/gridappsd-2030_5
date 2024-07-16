@@ -131,7 +131,7 @@ connections:
                 pecid = binding['pecid']['value']
                 mrid = binding['id']['value']
                 # ieee_resources.append(
-                #     UsagePoint(mRID=mrid)
+                #     UsagePoint(mRID=mRID)
                 # )
                 # pecid is being found, but id is not
                 #ieee_resources.append(UsagePoint(mRID=other_mrid))

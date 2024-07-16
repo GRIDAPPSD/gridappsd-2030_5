@@ -222,7 +222,7 @@ def create_or_update_meter_reading(
 
     elif isinstance(mmr_input, m.MirrorMeterReading):
 
-        # Attempt to find an existing mirror meter reading with the same mrid.
+        # Attempt to find an existing mirror meter reading with the same mRID.
         # If found then we need to replace it with this new meter reading.
         mmr_list_href = hrefs.SEP.join([mup_href, "mr"])
         upt_list_href = mmr_list_href.replace("mup", "upt")
@@ -282,7 +282,7 @@ def create_or_update_meter_reading(
         # if mmr_input.MirrorReadingSet is not None:
         #     return_value = _create_or_update_reading_set(mup, mmr_input.MirrorReadingSet, internal_ref_transform)
 
-    #     # Attempt to find an existing mup with the same mrid.  If found then we need to replace
+    #     # Attempt to find an existing mup with the same mRID.  If found then we need to replace
     #     # the data with the new data etc.  If not found then we add the mmr to the list of mmrs.
     #     mmr_list_href = hrefs.SEP.join([mup_href, "mr"])
     #     upt_list_href = mmr_list_href.replace("mup", "upt")
@@ -431,7 +431,7 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint, ) -> ReturnValue:
     """Creates a MirrorUsagePoint and associated UsagePoint and adds them to their adapters.
     """
 
-    # Attempt to find an existing mup with the same mrid.  If found then we need to replace
+    # Attempt to find an existing mup with the same mRID.  If found then we need to replace
     # it with the new data etc.
     found_with_mrid = None
     if adpt.ListAdapter.list_size(hrefs.DEFAULT_MUP_ROOT) > 0:

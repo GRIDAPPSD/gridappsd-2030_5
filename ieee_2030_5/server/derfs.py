@@ -43,7 +43,11 @@ class DERRequests(RequestOp):
         data = xml_to_dataclass(data, clstype[parser.at(2)])
 
         _log.info(f"DER PUT {request.path} {data}")
-        adpt.ListAdapter.set_single(f"{request.path}", data)
+        _log.debug(f"Meta data")
+        meta_data = dict(lfdi=self.lfdi, uri=f"{request.path}")
+        adpt.ListAdapter.set_single_amd_meta_data(uri=f"{request.path}",
+                                                  envelop=meta_data,
+                                                  obj=data)
         return self.build_response_from_dataclass(data)
 
     def get(self) -> Response:
@@ -103,7 +107,7 @@ class DERProgramRequests(RequestOp):
         elif parsed.count() == 2:
             retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, parsed.at(1))
         elif parsed.count() == 4:
-            # Retrive the list of controls from storage
+            # Retrieve the list of controls from storage
             dercl = get_href(parsed.join(3))
             assert isinstance(dercl, m.DERControlList)
             # The index that we want to get the control from.

@@ -60,6 +60,7 @@ class DERConfiguration:
 @dataclass
 class DeviceConfiguration:
     id: str = None
+    lfdi: Lfdi | None = None
     post_rate: int = 900
     pin: int = None
     poll_rate: int = 900

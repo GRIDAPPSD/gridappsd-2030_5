@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import asdict
 import json
 import logging
 
@@ -9,6 +10,8 @@ ENABLED = True
 try:
     from attrs import define, field
     import gridappsd.topics as topics
+    from ieee_2030_5.types_ import Lfdi
+    import ieee_2030_5.models as m
     from gridappsd import GridAPPSD
     from gridappsd.field_interface.interfaces import FieldMessageBus
     from cimgraph.data_profile import CIM_PROFILE
@@ -29,8 +32,9 @@ if ENABLED:
 
     @define
     class HouseLookup:
-        mrid: str
+        mRID: str
         name: str
+        lfdi: Lfdi
 
 
     class PublishTimer(Timer):
@@ -46,8 +50,9 @@ if ENABLED:
     class GridAPPSDAdapter:
         gapps: GridAPPSD
         gridappsd_configuration: dict | GridappsdConfiguration
-        _publish_interval_seconds: int = 3
+        tls: TLSRepository
 
+        _publish_interval_seconds: int = 3
         _default_pin: str | None = None
         _inverters: list[HouseLookup] | None = None
         _model_dict_file: str | None = None
@@ -84,13 +89,6 @@ if ENABLED:
             self._model_name = self.gridappsd_configuration.model_name
             self._default_pin = self.gridappsd_configuration.default_pin
 
-
-
-
-            # if self._topic_to_publish is None:
-            #     self._topic_to_publish = topics.field_output_topic()
-            # if self._input_topic is None:
-            #     self._input_topic = topics.field_input_topic()
             _log.debug("Creating timer now")
             self._timer = PublishTimer(self._publish_interval_seconds, self.publish_house_aggregates)
             self._timer.start()
@@ -147,11 +145,14 @@ if ENABLED:
             # and add them to the list.
             for ec in feeder['energyconsumers']:
                 if match_house := re.match(re_houses, ec['name']):
-                    self._inverters.append(HouseLookup(mrid=ec['mRID'], name=match_house.group(0)))
+                    self._inverters.append(HouseLookup(mRID=ec['mRID'],
+                                                       name=match_house.group(0),
+                                                       lfdi=self.tls.lfdi(ec['mRID'])))
                 elif match_utility := re.match(re_utility, ec['name']):
                     for phase in ec['phases']:
-                        self._inverters.append(HouseLookup(mrid=ec['mRID'],
-                                                           name=match_utility.group(0) + f"_{phase}"))
+                        self._inverters.append(HouseLookup(mRID=ec['mRID'],
+                                                           name=match_utility.group(0) + f"_{phase}",
+                                                           lfdi=self.tls.lfdi(ec['mRID'])))
             return self._inverters
 
         def get_power_electronic_connections(self) -> list[cim.PowerElectronicsConnection]:
@@ -187,15 +188,17 @@ if ENABLED:
             self._devices = []
             if self.use_houses_as_inverters():
                 for inv in self.get_house_and_utility_inverters():
-                    dev = DeviceConfiguration(id=inv.mrid,
-                                              pin=int(self._default_pin))
+                    dev = DeviceConfiguration(id=inv.mRID,
+                                              pin=int(self._default_pin),
+                                              lfdi=self.tls.lfdi(inv.mRID))
                     dev.ders = [dict(description=inv.name)]
                     self._devices.append(dev)
             else:
                 for inv in self.get_power_electronic_connections():
                     dev = DeviceConfiguration(
                         id=inv.mRID,
-                        pin=int(self._default_pin)
+                        pin=int(self._default_pin),
+                        lfdi=self.tls.lfdi(inv.mRID)
                     )
                     dev.ders = [dict(description=inv.mRID)]
                     self._devices.append(dev)
@@ -212,32 +215,60 @@ if ENABLED:
             # TODO Get from list adapter for each house.
             # TODO This might not be the right way to do this
             # Filter for availability
-            availability_keys = adpt.ListAdapter.filter_single_dict(lambda k: k.endswith('dera'))
+            # for dev in self._devices:
+            #     if inverter := next(filter(lambda x: x.lfdi == dev.lfdi, self._inverters):
 
-            for inv in self._inverters:
-                try:
-                    # TODO we need to make sure we have the right mrid for the inverters this doesn't guarantee it.
-                    uri = next(availability_keys)
-                    data = adpt.ListAdapter.get_single(uri)
-                    msg[inv.mrid] = dict(mrid=inv.mrid, name=inv.name)
-                    for k, v in data.__dict__.items():
-                        if v is not None:
-                            msg[inv.mrid][k] = v
+            der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: k.endswith('ders'))
 
-                except StopIteration:
-                    pass
+            for uri in der_status_uris:
+                _log.debug(f"Testing uri: {uri}")
+
+                meta_data = adpt.ListAdapter.get_single_meta_data(uri)
+                status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
+
+                inverter: HouseLookup | None = None
+
+                _log.debug(f"Status is: {status}")
+                if status:
+                    _log.debug(f"Status found: {status}")
+                    for x in self._devices:
+                        if x.lfdi == meta_data['lfdi']:
+                            inverter = x
+                            _log.debug(f"Found inverter: {inverter}")
+                            break
+
+                    if inverter:
+
+                        msg[inverter.mRID] = dict(mrid=inverter.mRID, name=inverter.name)
+
+                        msg[inverter.mRID].update(asdict(status))
+
+
+            # for inv in self._inverters:
+            #     adpt.ListAdapter.get_single_meta_data(())
+            #     try:
+            #         # TODO we need to make sure we have the right mRID for the inverters this doesn't guarantee it.
+            #         uri = next(der_status_uris)
+            #         data = adpt.ListAdapter.get_single(uri)
+            #         msg[inv.mRID] = dict(mrid=inv.mRID, name=inv.name)
+            #         for k, v in data.__dict__.items():
+            #             if v is not None:
+            #                 msg[inv.mRID][k] = v
+            #
+            #     except StopIteration:
+            #         pass
 
             return msg
 
-        def create_2030_5_device_certificates_and_configurations(self, tls: TLSRepository) -> list[DeviceConfiguration]:
+        def create_2030_5_device_certificates_and_configurations(self) -> list[DeviceConfiguration]:
 
             self._devices = []
             if self.use_houses_as_inverters():
                 for house in self.get_house_and_utility_inverters():
-                    tls.create_cert(house.mrid)
+                    self.tls.create_cert(house.mRID)
             else:
                 for inv in self.get_power_electronic_connections():
-                    tls.create_cert(inv.mRID)
+                    self.tls.create_cert(inv.mRID)
             self._build_device_configurations()
             return self._devices
 
@@ -254,5 +285,6 @@ if ENABLED:
 
             message = self.get_message_for_bus()
 
+            #if message:
             _log.debug(f"Output: {output_topic}\n{pformat(message, 2)}")
             mb.send(topic=output_topic, message=message)

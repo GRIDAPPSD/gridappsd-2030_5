@@ -213,7 +213,8 @@ def _main():
         assert gapps.connected
 
         gridappsd_adpt = GridAPPSDAdapter(gapps=gapps,
-                                          gridappsd_configuration=config.gridappsd)
+                                          gridappsd_configuration=config.gridappsd,
+                                          tls=tls_repo)
 
         gridappsd_devices: list = []
         if opts.create_certs:
