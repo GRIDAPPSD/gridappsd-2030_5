@@ -225,7 +225,7 @@ def _main():
         gridappsd_devices: list = []
         if opts.create_certs:
             _log.debug("Creating certificates for GridAPPSD devices.")
-            gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations(tls_repo)
+            gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations()
         else:
             gridappsd_devices = gridappsd_adpt.get_device_configurations()
 
