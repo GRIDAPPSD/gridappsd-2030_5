@@ -150,6 +150,8 @@ def _main():
                         help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
     parser.add_argument("--show-lfdi", action="store_true",
                         help="Show all of the lfdi for the generated certificates and exit.")
+    parser.add_argument("--simulation_id",
+                        help="When running as a service the simulation_id must be passed for it to run in this mode.")
     opts = parser.parse_args()
 
     logging_level = logging.DEBUG if opts.debug else logging.INFO
@@ -162,6 +164,10 @@ def _main():
     cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
 
     config = ServerConfiguration(**cfg_dict)
+
+    os.environ['GRIDAPPSD_SERVICE_NAME'] = config.service_name
+    if config.simulation_id:
+        os.environ['GRIDAPPSD_SIMULATION_ID'] = config.simulation_id
 
     if config.lfdi_mode == "lfdi_mode_from_file":
         os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'

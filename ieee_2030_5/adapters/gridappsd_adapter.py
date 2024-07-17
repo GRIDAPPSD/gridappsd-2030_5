@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import os
 from dataclasses import asdict
 import json
 import logging
@@ -280,11 +282,16 @@ if ENABLED:
             if field_bus := self.gridappsd_configuration.field_bus_def.id:
                 ...
 
-            # TODO: the output topic goes to the field bus manager regardless of the message_bus_id for some reason.
-            output_topic = topics.field_output_topic(message_bus_id=field_bus)
+            if simulation_id := os.environ.get("GRIDAPPSD_SIMULATION_ID"):
+                pass
+            if service_name := os.environ.get("GRIDAPPSD_SERVICE_NAME"):
+                pass
+
+            output_topic = topics.application_output_topic(application_id=service_name, simulation_id=simulation_id)
+            # # TODO: the output topic goes to the field bus manager regardless of the message_bus_id for some reason.
+            # output_topic = topics.field_output_topic(message_bus_id=field_bus)
 
             message = self.get_message_for_bus()
 
-            #if message:
             _log.debug(f"Output: {output_topic}\n{pformat(message, 2)}")
             mb.send(topic=output_topic, message=message)

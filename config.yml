@@ -2,7 +2,7 @@
 ---
 server: WE48687
 port: 8090
-
+service_name: IEEE_2030_5
 proxy_hostname: 0.0.0.0:8443
 
 tls_repository: "~/tls"
@@ -81,9 +81,6 @@ gridappsd:
 
   # How often should the aggregates for the houses be published.
   publish_interval_seconds: 3
-
-  # The topic the aggregate houses should publish to the goss bus.
-  publish_topic: '/topic/goss.gridappsd.simulation.ochre.output'
 
   # An alternate to using the gridappsd house models for named inverters.
   # This is a regex that will be used to match the name of the inverters for

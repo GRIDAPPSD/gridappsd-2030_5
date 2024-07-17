@@ -192,6 +192,10 @@ class ServerConfiguration:
 
     server: str
     port: int
+
+    service_name: str = "IEEE_2030_5"
+    simulation_id: str | None = None
+
     ui_port: int = None
 
     include_default_der_on_all_devices: bool = True
