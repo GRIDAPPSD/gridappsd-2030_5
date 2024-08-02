@@ -1,4 +1,6 @@
+from dataclasses import asdict
 from typing import Optional
+from pprint import pformat
 
 from flask import Response, request
 from werkzeug.exceptions import NotFound
@@ -42,8 +44,11 @@ class DERRequests(RequestOp):
         data = request.get_data(as_text=True)
         data = xml_to_dataclass(data, clstype[parser.at(2)])
 
-        _log.info(f"DER PUT {request.path} {data}")
-        _log.debug(f"Meta data")
+        # if request.path.endswith("ders") or request.path.endswith("derg"):
+        #     print(f"----------------------DER PUT {request.path} {data}")
+
+
+        _log.info(f"DER PUT {request.path} {asdict(data)}")
         meta_data = dict(lfdi=self.lfdi, uri=f"{request.path}")
         adpt.ListAdapter.set_single_amd_meta_data(uri=f"{request.path}",
                                                   envelop=meta_data,

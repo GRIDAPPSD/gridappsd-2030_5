@@ -64,7 +64,8 @@ gridappsd:
   # GridAPPS-D API endpoint
   address: 'localhost'
   port: 61613
-  model_name: 'ieee13nodeckt'
+  model_name: 'imp_base_reduced_southern_withpv'
+  #model_name: 'ieee13nodeckt'
 
   #simulation_id: 5023
 
@@ -87,13 +88,13 @@ gridappsd:
   # both houses as well as utilities.  When utiliities are found there will
   # be 3 named inverters for each utility (utility_bat1_a, utility_bat1_b,
   # utility_bat1_c, etc)
-  house_named_inverters_regex: '646'
-  utility_named_inverters_regex: '652'
-#  house_named_inverters_regex: 'house_\d+_\d+v'
-#  utility_named_inverters_regex: 'utility_bat\d+'
+#  house_named_inverters_regex: '646'
+#  utility_named_inverters_regex: '652'
+  house_named_inverters_regex: '.*house_\d+_\d+v'
+  utility_named_inverters_regex: '.*utility_bat\d+'
 
   # Model dictionary file to use rather than querying the gridappsd server.
-  model_dict_file: 'model_dict.json'
+  # model_dict_file: 'model_dict.json'
 
   # GridAPPS-D username
   username: system

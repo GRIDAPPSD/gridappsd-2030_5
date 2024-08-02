@@ -42,7 +42,7 @@ import logging
 import os
 import shutil
 
-log_level = os.environ.get('LOGGING_LEVEL', 'DEBUG').upper()
+log_level = os.environ.get('LOGGING_LEVEL', 'INFO').upper()
 
 levels = {
     'DEBUG': logging.DEBUG,

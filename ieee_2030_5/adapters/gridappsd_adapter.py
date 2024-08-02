@@ -36,7 +36,7 @@ if ENABLED:
     class HouseLookup:
         mRID: str
         name: str
-        lfdi: Lfdi
+        lfdi: Lfdi | None = None
 
 
     class PublishTimer(Timer):
@@ -56,10 +56,10 @@ if ENABLED:
 
         _publish_interval_seconds: int = 3
         _default_pin: str | None = None
-        _inverters: list[HouseLookup] | None = None
         _model_dict_file: str | None = None
         _model_id: str | None = None
         _model_name: str | None = None
+        _inverters: list[HouseLookup] | None = None
         _devices: list[DeviceConfiguration] | None = None
         _power_electronic_connections: list[cim.PowerElectronicsConnection] | None = None
         _timer: PublishTimer | None = None
@@ -147,14 +147,20 @@ if ENABLED:
             # and add them to the list.
             for ec in feeder['energyconsumers']:
                 if match_house := re.match(re_houses, ec['name']):
+                    try:
+                        lfdi=self.tls.lfdi(ec['mRID'])
+                    except FileNotFoundError:
+                        lfdi = None
                     self._inverters.append(HouseLookup(mRID=ec['mRID'],
                                                        name=match_house.group(0),
-                                                       lfdi=self.tls.lfdi(ec['mRID'])))
+                                                       lfdi=lfdi))
                 elif match_utility := re.match(re_utility, ec['name']):
-                    for phase in ec['phases']:
-                        self._inverters.append(HouseLookup(mRID=ec['mRID'],
-                                                           name=match_utility.group(0) + f"_{phase}",
-                                                           lfdi=self.tls.lfdi(ec['mRID'])))
+                    pass
+                    # TODO: Figure out about mrid for utilities.
+                    # for phase in ec['phases']:
+                    #     self._inverters.append(HouseLookup(mRID=ec['mRID'],
+                    #                                        name=match_utility.group(0) + f"_{phase}",
+                    #                                        lfdi=self.tls.lfdi(ec['mRID'])))
             return self._inverters
 
         def get_power_electronic_connections(self) -> list[cim.PowerElectronicsConnection]:
@@ -233,7 +239,8 @@ if ENABLED:
                 _log.debug(f"Status is: {status}")
                 if status:
                     _log.debug(f"Status found: {status}")
-                    for x in self._devices:
+                    _log.debug(f"Looking for: {meta_data['lfdi']}")
+                    for x in self._inverters:
                         if x.lfdi == meta_data['lfdi']:
                             inverter = x
                             _log.debug(f"Found inverter: {inverter}")
@@ -268,6 +275,8 @@ if ENABLED:
             if self.use_houses_as_inverters():
                 for house in self.get_house_and_utility_inverters():
                     self.tls.create_cert(house.mRID)
+                    if house.lfdi is None:
+                        house.lfdi = self.tls.lfdi(house.mRID)
             else:
                 for inv in self.get_power_electronic_connections():
                     self.tls.create_cert(inv.mRID)
