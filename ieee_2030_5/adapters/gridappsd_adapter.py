@@ -151,16 +151,12 @@ if ENABLED:
                         lfdi=self.tls.lfdi(ec['mRID'])
                     except FileNotFoundError:
                         lfdi = None
-                    self._inverters.append(HouseLookup(mRID=ec['mRID'],
-                                                       name=match_house.group(0),
-                                                       lfdi=lfdi))
+                    self._inverters.append(
+                        HouseLookup(mRID=ec['mRID'], name=match_house.group(0), lfdi=lfdi))
                 elif match_utility := re.match(re_utility, ec['name']):
-                    pass
-                    # TODO: Figure out about mrid for utilities.
-                    # for phase in ec['phases']:
-                    #     self._inverters.append(HouseLookup(mRID=ec['mRID'],
-                    #                                        name=match_utility.group(0) + f"_{phase}",
-                    #                                        lfdi=self.tls.lfdi(ec['mRID'])))
+                    self._inverters.append(
+                        HouseLookup(mRID=ec['mRID'], name=match_utility.group(0), lfdi=lfdi))
+
             return self._inverters
 
         def get_power_electronic_connections(self) -> list[cim.PowerElectronicsConnection]:
@@ -218,6 +214,8 @@ if ENABLED:
 
         def get_message_for_bus(self) -> dict:
             import random
+            import ieee_2030_5.models.output as mo
+
             msg = {}
 
             # TODO Get from list adapter for each house.
@@ -247,10 +245,11 @@ if ENABLED:
                             break
 
                     if inverter:
+                        msg[inverter.mRID] = asdict(mo.AnalogValue(mRID=inverter.mRID, timeStamp=status.readingTime, name=inverter.name, value=status.stateOfChargeStatus.value))
 
-                        msg[inverter.mRID] = dict(mrid=inverter.mRID, name=inverter.name)
+                        # msg[inverter.mRID] = dict(mrid=inverter.mRID, name=inverter.name)
 
-                        msg[inverter.mRID].update(asdict(status))
+                        # msg[inverter.mRID].update(asdict(status))
 
 
             # for inv in self._inverters:
