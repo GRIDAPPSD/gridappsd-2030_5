@@ -39,20 +39,9 @@
 # -------------------------------------------------------------------------------
 
 import logging
+import logging.config
 import os
 import shutil
-
-log_level = os.environ.get('LOGGING_LEVEL', 'INFO').upper()
-
-levels = {
-    'DEBUG': logging.DEBUG,
-    'INFO': logging.INFO,
-    'WARNING': logging.WARNING,
-    'ERROR': logging.ERROR
-}
-
-logging.basicConfig(level=levels[log_level])
-
 import socket
 import sys
 import threading
@@ -69,8 +58,6 @@ from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
-
-_log = logging.getLogger()
 
 
 class ServerThread(threading.Thread):
@@ -130,7 +117,59 @@ def remove_stop_file():
         os.remove(pth)
 
 
+def get_default_logger_config(log_level: str | int = 'INFO'):
+    if isinstance(log_level, int):
+        log_level = logging.getLevelName(log_level)
+
+    return {
+        "version": 1,
+        "formatters": {
+            "default": {
+                "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
+            },
+            'brief': {
+                'datefmt': '%H:%M:%S',
+                'format': '%(levelname)-8s; %(name)s; %(message)s;'
+            },
+            'single-line': {
+                'datefmt':
+                '%H:%M:%S',
+                'format':
+                '%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s'
+            },
+        },
+        "handlers": {
+            "wsgi": {
+                "class": "logging.StreamHandler",
+                "stream": "ext: //flask.logging.wsgi_errors_stream",
+                "formatter": "default"
+            },
+            'console': {
+                'level': log_level,
+                'class': 'logging.StreamHandler',
+                'formatter': 'brief',
+    #'filters': ['my_filter'],
+    # 'stream': 'ext://sys.stdout'
+            }
+        },
+        "root": {
+            "level": log_level,
+            "handlers": ["wsgi", "console"]
+        },
+        'loggers': {
+            '': {    # this is root logger
+                'level': log_level,
+                'handlers': ['console'],
+            },
+        }
+    }
+
+
+_log = logging.getLogger("ieee_2030_5")
+
+
 def _main():
+    global _log
     parser = ArgumentParser()
 
     parser.add_argument(dest="config", help="Configuration file for the server.")
@@ -146,17 +185,26 @@ def _main():
                         action="store_true",
                         default=False,
                         help="Run the server in a threaded environment.")
-    parser.add_argument("--lfdi",
-                        help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
-    parser.add_argument("--show-lfdi", action="store_true",
+    parser.add_argument(
+        "--lfdi",
+        help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
+    parser.add_argument("--show-lfdi",
+                        action="store_true",
                         help="Show all of the lfdi for the generated certificates and exit.")
-    parser.add_argument("--simulation_id",
-                        help="When running as a service the simulation_id must be passed for it to run in this mode.")
+    parser.add_argument(
+        "--simulation_id",
+        help=
+        "When running as a service the simulation_id must be passed for it to run in this mode.")
     opts = parser.parse_args()
 
-    logging_level = logging.DEBUG if opts.debug else logging.INFO
-    logging.basicConfig(level=logging_level)
+    #logconfig = get_default_logger_config(logging.DEBUG if opts.debug else logging.INFO)
+    #logging.config.dictConfig(logconfig)
+    log_level = logging.DEBUG if opts.debug else logging.INFO
+    logging.basicConfig(level=log_level)
     logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.INFO)
+    _log = logging.getLogger("ieee_2030_5")
+
+    _log.debug("Here I am")
 
     os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
         Path(opts.config).expanduser().resolve(strict=True))
@@ -205,6 +253,7 @@ def _main():
         sys.exit(1)
 
     tls_repo = get_tls_repository(config, create_certificates_for_devices=opts.create_certs)
+    gridappsd_adpt = None
 
     if config.gridappsd is not None:
         _log.info("Loading GridAPPSD devices.")
@@ -225,7 +274,8 @@ def _main():
         gridappsd_devices: list = []
         if opts.create_certs:
             _log.debug("Creating certificates for GridAPPSD devices.")
-            gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations()
+            gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations(
+            )
         else:
             gridappsd_devices = gridappsd_adpt.get_device_configurations()
 
@@ -288,14 +338,22 @@ def _main():
     # p_gui.daemon = True
     # p_gui.start()
 
+    if gridappsd_adpt:
+        gridappsd_adpt.start_publishing()
+
     # # while True:
     # #     sleep(1)
-    run_server(config,
-               tls_repo,
-               debug=opts.debug,
-               use_reloader=False,
-               use_debugger=opts.debug,
-               threaded=False)
+    try:
+        run_server(config,
+                tls_repo,
+                debug=opts.debug,
+                use_reloader=False,
+                use_debugger=opts.debug,
+                threaded=False)
+    except KeyboardInterrupt:
+        _log.info("Shutting down server")
+        sys.flush()
+
     # except KeyboardInterrupt:
     #     _log.info("Shutting down server")
     # finally:

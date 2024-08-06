@@ -8,6 +8,7 @@ import logging
 import re
 from threading import Timer
 
+_log = logging.getLogger("ieee_2030_5.gridappsd.adapter")
 ENABLED = True
 try:
     from attrs import define, field
@@ -27,7 +28,6 @@ except ImportError:
     ENABLED = False
 
 if ENABLED:
-    _log = logging.getLogger("ieee_2030_5.gridappsd.adapter")
     from ieee_2030_5.certs import TLSRepository
     from ieee_2030_5.config import DeviceConfiguration, GridappsdConfiguration
     import ieee_2030_5.adapters as adpt
@@ -65,6 +65,13 @@ if ENABLED:
         _timer: PublishTimer | None = None
         __field_bus_connection__: FieldMessageBus | None = None
 
+        def start_publishing(self):
+            if self._timer is None:
+                _log.debug("Creating timer now")
+                self._timer = PublishTimer(self._publish_interval_seconds,
+                                           self.publish_house_aggregates)
+                self._timer.start()
+
         def get_message_bus(self) -> FieldMessageBus:
             if self.__field_bus_connection__ is None:
                 # TODO Use factory class here!
@@ -91,9 +98,8 @@ if ENABLED:
             self._model_name = self.gridappsd_configuration.model_name
             self._default_pin = self.gridappsd_configuration.default_pin
 
-            _log.debug("Creating timer now")
-            self._timer = PublishTimer(self._publish_interval_seconds, self.publish_house_aggregates)
-            self._timer.start()
+
+
 
         # power_electronic_connections: list[cim.PowerElectronicsConnection] = []
 
@@ -245,26 +251,14 @@ if ENABLED:
                             break
 
                     if inverter:
-                        msg[inverter.mRID] = asdict(mo.AnalogValue(mRID=inverter.mRID, timeStamp=status.readingTime, name=inverter.name, value=status.stateOfChargeStatus.value))
-
-                        # msg[inverter.mRID] = dict(mrid=inverter.mRID, name=inverter.name)
-
-                        # msg[inverter.mRID].update(asdict(status))
-
-
-            # for inv in self._inverters:
-            #     adpt.ListAdapter.get_single_meta_data(())
-            #     try:
-            #         # TODO we need to make sure we have the right mRID for the inverters this doesn't guarantee it.
-            #         uri = next(der_status_uris)
-            #         data = adpt.ListAdapter.get_single(uri)
-            #         msg[inv.mRID] = dict(mrid=inv.mRID, name=inv.name)
-            #         for k, v in data.__dict__.items():
-            #             if v is not None:
-            #                 msg[inv.mRID][k] = v
-            #
-            #     except StopIteration:
-            #         pass
+                        # Convert to cim object measurement as analog value.
+                        analog_value = mo.AnalogValue(mRID=inverter.mRID, name=inverter.name)
+                        if status.readingTime is not None:
+                            analog_value.timeStamp = status.readingTime
+                        if status.stateOfChargeStatus is not None:
+                            if status.stateOfChargeStatus.value is not None:
+                                analog_value.value = status.stateOfChargeStatus.value
+                        msg[inverter.mRID] = asdict(analog_value)
 
             return msg
 
