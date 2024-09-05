@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import typing
 from dataclasses import asdict
 import json
 import logging
+import typing
+from typing import get_type_hints
 
 import re
 from threading import Timer
@@ -15,7 +18,9 @@ try:
     import gridappsd.topics as topics
     from ieee_2030_5.types_ import Lfdi
     import ieee_2030_5.models as m
-    from gridappsd import GridAPPSD
+    import ieee_2030_5.hrefs as hrefs
+    import ieee_2030_5.adapters as adpt
+    from gridappsd import GridAPPSD, DifferenceBuilder
     from gridappsd.field_interface.interfaces import FieldMessageBus
     from cimgraph.data_profile import CIM_PROFILE
     from gridappsd.field_interface.agents.agents import GridAPPSDMessageBus
@@ -65,6 +70,7 @@ if ENABLED:
         _timer: PublishTimer | None = None
         __field_bus_connection__: FieldMessageBus | None = None
 
+
         def start_publishing(self):
             if self._timer is None:
                 _log.debug("Creating timer now")
@@ -98,6 +104,68 @@ if ENABLED:
             self._model_name = self.gridappsd_configuration.model_name
             self._default_pin = self.gridappsd_configuration.default_pin
 
+            assert self.gapps.connected, "Gridappsd passed is not connected."
+
+            if simulation_id := os.environ.get("GRIDAPPSD_SIMULATION_ID"): pass
+            if service_id := os.environ.get("GRIDAPPSD_SERVICE_NAME"): pass
+
+            if self.gridappsd_configuration.publish_interval_seconds:
+                self._publish_interval_seconds = self.gridappsd_configuration.publish_interval_seconds
+
+            _log.debug(f"Subscribing to topic: "
+                       f"{topics.application_input_topic(application_id=service_id, simulation_id=simulation_id)}")
+
+            self.gapps.subscribe(topics.application_input_topic(application_id=service_id,
+                                                                simulation_id=simulation_id), callback=self._input_detected)
+
+        def _input_detected(self, header: dict | None, message: dict | None):
+
+            import inspect
+            forward_diffs = message['input']['message']['forward_differences']
+            rev_diffs = message['input']['message']['reverse_differences']
+
+            from pprint import pprint
+            pprint(adpt.GlobalmRIDs.get_items())
+
+            for item in forward_diffs:
+                obj = adpt.GlobalmRIDs.get_item(item['object'])
+                if not item.get('attribute'):
+                    _log.error(f"INVALID attribute detected!")
+                    continue
+
+                if not item.get('value'):
+                    _log.error(f"INVALID value specified.")
+                    continue
+
+                if  not item['attribute'].startswith("DERControl"):
+                    _log.error(f"INVALID attribute.  Must start with DERControl but was {item['attribute']}")
+                    continue
+
+                if isinstance(obj, m.EndDevice):
+                    # Get the specific DER (NOTE we are only getting the first one)
+                    # TODO: Handle multiple DERs
+                    der: m.DER = adpt.ListAdapter.get_list(obj.DERListLink.href)[0]
+                    program: m.DERProgram = next(filter(lambda x: x.href == der.CurrentDERProgramLink.href,
+                                                    adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT)))
+                    dderc: m.DefaultDERControl = next(filter(lambda x: x.href ==program.DefaultDERControlLink.href,
+                                                      adpt.ListAdapter.get_list(hrefs.DEFAULT_DDERC_ROOT)))
+                    # Should be something like ['DERControl', 'DERControlBase', 'opModTargetW']
+                    obj_path = item['attribute'].split('.')
+
+                    # Depending on whether we are controlling the outer default control or the inner base control
+                    # this will be set so we can use hasattr and setattr on it.
+                    controller = dderc
+                    prop = obj_path[1]
+                    if obj_path[1] == 'DERControlBase' and len(obj_path) == 3:
+                        controller = dderc.DERControlBase
+                        prop = obj_path[2]
+
+                    if not hasattr(controller, prop):
+                        _log.error(f"Property {prop} is not on obj type {type(controller)}")
+                        continue
+                    _log.debug(f"Before {der.href} Setting property {prop} with value: {getattr(controller, prop)}")
+                    setattr(controller, prop, item["value"])
+                    _log.debug(f"After {der.href} Setting property {prop} with value: {item['value']}")
 
 
 
@@ -105,9 +173,9 @@ if ENABLED:
 
         def get_model_id_from_name(self) -> str:
             models = self.gapps.query_model_info()
-            for m in models['data']['models']:
-                if m['modelName'] == self._model_name:
-                    return m['modelId']
+            for model in models['data']['models']:
+                if model['modelName'] == self._model_name:
+                    return model['modelId']
             raise ValueError(f"Model {self._model_name} not found")
 
         def get_house_and_utility_inverters(self) -> list[HouseLookup]:
@@ -172,9 +240,9 @@ if ENABLED:
             self._power_electronic_connections = []
 
             models = self.gapps.query_model_info()
-            for m in models['data']['models']:
-                if m['modelName'] == self._model_name:
-                    self._model_id = m['modelId']
+            for model in models['data']['models']:
+                if model['modelName'] == self._model_name:
+                    self._model_id = model['modelId']
                     break
             if not self._model_id:
                 raise ValueError(f"Model {self._model_name} not found")

@@ -51,45 +51,45 @@ def __get_store__(store_name: str) -> Path:
 
 def do_load_event(caller: Union[Adapter, ResourceListAdapter]) -> None:
     """Load an adaptor type from the data_store path.
-
-
     """
-    store_file = None
-    if isinstance(caller, Adapter):
-        _log.debug(f"Loading store {caller.generic_type_name}")
-        store_file = __get_store__(caller.generic_type_name)
-    elif isinstance(caller, ResourceListAdapter):
-        store_file = __get_store__(caller.__class__.__name__)
-    else:
-        raise ValueError(f"Invalid caller type {type(caller)}")
+    _log.debug("No-op load")
+    # store_file = None
+    # if isinstance(caller, Adapter):
+    #     _log.debug(f"Loading store {caller.generic_type_name}")
+    #     store_file = __get_store__(caller.generic_type_name)
+    # elif isinstance(caller, ResourceListAdapter):
+    #     store_file = __get_store__(caller.__class__.__name__)
+    # else:
+    #     raise ValueError(f"Invalid caller type {type(caller)}")
+    #
+    # if not store_file.exists():
+    #     _log.debug(f"Store {store_file.as_posix()} does not exist at present.")
+    #     return
+    #
+    # # Load from yaml unsafe values etc.
+    # with open(store_file, "r") as f:
+    #     items = yaml.load(f, Loader=yaml.UnsafeLoader)
+    #
+    #     caller.__dict__.update(items)
 
-    if not store_file.exists():
-        _log.debug(f"Store {store_file.as_posix()} does not exist at present.")
-        return
-
-    # Load from yaml unsafe values etc.
-    with open(store_file, "r") as f:
-        items = yaml.load(f, Loader=yaml.UnsafeLoader)
-
-        caller.__dict__.update(items)
-
-    _log.debug(f"Loaded {caller.count} items from store")
+    # _log.debug(f"Loaded {caller.count} items from store")
 
 
 def do_save_event(caller: Union[Adapter, ResourceListAdapter]) -> None:
 
-    store_file = None
-    if isinstance(caller, Adapter):
-        _log.debug(f"Loading store {caller.generic_type_name}")
-        store_file = __get_store__(caller.generic_type_name)
-        _log.debug(f"Storing: {caller.generic_type_name}")
-    elif isinstance(caller, ResourceListAdapter):
-        store_file = __get_store__(caller.__class__.__name__)
-    else:
-        raise ValueError(f"Invalid caller type {type(caller)}")
-
-    with open(store_file, 'w') as f:
-        yaml.dump(caller.__dict__, f, default_flow_style=False, allow_unicode=True)
+    _log.debug("Store no op")
+    # store_file = None
+    # if isinstance(caller, Adapter):
+    #     _log.debug(f"Loading store {caller.generic_type_name}")
+    #     store_file = __get_store__(caller.generic_type_name)
+    #     _log.debug(f"Storing: {caller.generic_type_name}")
+    # elif isinstance(caller, ResourceListAdapter):
+    #     store_file = __get_store__(caller.__class__.__name__)
+    # else:
+    #     raise ValueError(f"Invalid caller type {type(caller)}")
+    #
+    # with open(store_file, 'w') as f:
+    #     yaml.dump(caller.__dict__, f, default_flow_style=False, allow_unicode=True)
 
 
 load_event.connect(do_load_event)
@@ -202,6 +202,8 @@ class ResourceListAdapter:
         except ValueError:
             obj.href = hrefs.SEP.join([list_uri, str(self.list_size(list_uri))])
 
+        GlobalmRIDs.add_item(value=obj)
+
         self.append(list_uri, obj)
         return obj
 
@@ -234,6 +236,7 @@ class ResourceListAdapter:
 
             # Recurse over the list appending to the end for each in the list
             for ele in getattr(obj, expected_type.__name__):
+                GlobalmRIDs.add_item(value=ele)
                 self.append(list_uri, ele)
 
             # Exit here as all of the sub-items have been added now.
@@ -331,12 +334,14 @@ class ResourceListAdapter:
         return list(self._container_dict[list_uri].values())
 
     def set_single(self, uri: str, obj: D):
+        GlobalmRIDs.add_item(value=obj)
         self._singleton_dict[uri] = obj
 
     def get_single(self, uri: str) -> D:
         return self._singleton_dict.get(uri)
 
     def set_single_amd_meta_data(self, uri: str, envelop: dict, obj: D):
+        GlobalmRIDs.add_item(value=obj)
         self.set_single(uri=uri, obj=obj)
         self._singleton_envelops[uri] = envelop
 
@@ -396,9 +401,8 @@ class ResourceListAdapter:
     def print_all(self):
 
         for k in sorted(self._container_dict.keys()):
-            print("K:", k)
             for index, v in self._container_dict[k].items():
-                print("index:", index)
+                print(f"{k} :index:", index)
                 pprint(v.__dict__)
             #pprint(self._container_dict[k].)
 
@@ -446,6 +450,37 @@ class ResourceListAdapter:
             self._list_urls[list_uri].clear()
             self._types[list_uri].clear()
 
+class _GlobalAdapter:
+    def __init__(self):
+        self._mrid_to_object: dict[str, object] = {}
+
+    def add_item(self, value: object):
+        if hasattr(value, 'mRID'):
+            mrid = getattr(value, 'mRID')
+            if not mrid:
+                _log.error(f"Invalid mrid specified on object of type {type(value)}\n {value}")
+            else:
+                self._mrid_to_object[mrid] = value
+
+    def get_items(self) -> list[object]:
+        return [deepcopy(x) for x in self._mrid_to_object.values()]
+
+    def add_item_with_mrid(self, mrid: str, value: object):
+        self._mrid_to_object[mrid] = value
+
+    def remove_item(self, mrid: str):
+        self._mrid_to_object.pop(mrid)
+
+    def get_item(self, mrid: str) -> object:
+        return self._mrid_to_object.get(mrid)
+
+    def has_item(self, mrid: str) -> bool:
+        return mrid in self._mrid_to_object
+
+    def clear(self):
+        self._mrid_to_object.clear()
+
+GlobalmRIDs = _GlobalAdapter()
 
 class Adapter(Generic[T]):
     """
@@ -532,6 +567,9 @@ class Adapter(Generic[T]):
                                                   str(self._current_index + 1)]))
         self._current_index += 1
         self._item_list[self._current_index] = item
+
+        if hasattr(item, 'mRID'):
+            GlobalmRIDs.add_item(getattr(item, 'mRID'), item)
 
         store_event.send(self)
         return item
@@ -642,11 +680,13 @@ from ieee_2030_5.adapters.adapters import (DERAdapter, DERControlAdapter, DERCur
 __all__ = [
     'DERControlAdapter', 'DERCurveAdapter', 'DERProgramAdapter', 'DeviceCapabilityAdapter',
     'EndDeviceAdapter', 'FunctionSetAssignmentsAdapter', 'RegistrationAdapter', 'DERAdapter',
-    'TimeAdapter', 'create_mirror_usage_point', 'create_or_update_meter_reading', 'ListAdapter'
+    'TimeAdapter', 'create_mirror_usage_point', 'create_or_update_meter_reading', 'ListAdapter',
+    'GlobalmRIDs'
 ]
 
 
 def clear_all_adapters():
+    GlobalmRIDs.clear()
     for adpt in __all__:
         obj = eval(adpt)
         if isinstance(obj, Adapter):

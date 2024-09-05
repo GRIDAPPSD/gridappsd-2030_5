@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from venv import create
 
 from blinker import Signal
 
@@ -165,6 +166,32 @@ def update_active_der_event_ended(event: m.Event):
 adpt.TimeAdapter.event_started.connect(update_active_der_event_started)
 adpt.TimeAdapter.event_ended.connect(update_active_der_event_ended)
 
+def create_der_program_and_control(default_der_program: m.DERProgram,
+                                   default_der_control: m.DefaultDERControl,
+                                   name: str) -> m.DERProgram:
+    """
+    Create a new DERProgram based upon the default derp control
+    """
+    from copy import deepcopy
+    derp_index = adpt.ListAdapter.list_size(hrefs.DEFAULT_DERP_ROOT)
+
+    derp = deepcopy(default_der_program)
+    dderc = deepcopy(default_der_control)
+
+    adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+    program_hrefs = hrefs.DERProgramHref(derp_index)
+    derp.href = program_hrefs._root
+    derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
+    derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
+    derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
+    derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
+
+    dderc.href = derp.DefaultDERControlLink.href
+
+    adpt.ListAdapter.append(hrefs.DEFAULT_DDERC_ROOT, dderc)
+    adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+    return derp
+
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     """Initialize the 2030.5 server.
@@ -314,6 +341,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                      enabled=True,
                                      changedTime=adpt.TimeAdapter.current_tick)
             add_enddevice(end_device)
+            adpt.GlobalmRIDs.add_item_with_mrid(cfg_device.id, end_device)
             reg = m.Registration(href=end_device.RegistrationLink.href,
                                  pIN=cfg_device.pin,
                                  pollRate=cfg_device.poll_rate,
@@ -346,10 +374,18 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                     DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
                                     DERAvailabilityLink=m.DERAvailabilityLink(
                                         der_href.der_availability))
-                    if config.include_default_der_program_on_ders:
-                        if not config.default_program:
-                            raise ConfigurationError("default_program must be set to 'include_default_der_program_on_ders")
-                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
+
+                    # if config.include_default_der_program_on_ders:
+                    #
+                    #     if not config.default_program:
+                    #         raise ConfigurationError("default_program must be set to 'include_default_der_program_on_ders")
+                    #     der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
+
+                    derp: m.DERProgram = create_der_program_and_control(default_der_program=config.default_program,
+                                                                        default_der_control=config.default_der_control,
+                                                                        name=f"{der} Program")
+                    der_obj.CurrentDERProgramLink = m.DERProgramLink(derp.href)
+
                     adpt.ListAdapter.append(ed_href.der_list, der_obj)
                     current_min_primacy = 10000
                     current_der_program = None

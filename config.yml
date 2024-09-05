@@ -41,10 +41,10 @@ cleanse_storage: true
 storage_path: data_store
 
 # Should every device have a der associated by default?
-include_default_der_on_all_devices: True
+include_default_der_on_all_devices: true
 
 # Make sure that all ders have a default program associated with it
-include_default_der_program_on_ders: True
+include_default_der_program_on_ders: true
 
 # The default program to use for all ders.
 default_program:
@@ -81,7 +81,7 @@ gridappsd:
 #      GRIDAPPSD_PASSWORD: manager
 
   # How often should the aggregates for the houses be published.
-  publish_interval_seconds: 3
+  publish_interval_seconds: 15
 
   # An alternate to using the gridappsd house models for named inverters.
   # This is a regex that will be used to match the name of the inverters for

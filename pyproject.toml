@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gridappsd-2030_5"
-version = "1.2.1a0"
+version = "1.2.1a1"
 description = ""
 authors = ["C. Allwardt <3979063+craig8@users.noreply.github.com>"]
 packages = [{ include = "ieee_2030_5" }, { include = "ieee_2030_5_gui" }]
@@ -29,12 +29,14 @@ blinker = "^1.5"
 click = "^8.1.3"
 flask-session = "^0.5.0"
 pyyaml = "^6.0.1"
-gridappsd-field-bus = {version = "^2024.4.1a0", allow-prereleases = true}
-gridappsd-python = {version = "^2024.4.1a0", allow-prereleases = true}
+#gridappsd-field-bus = {version = "^2024.4.1a0", allow-prereleases = true}
+#gridappsd-python = {version = "^2024.4.1a0", allow-prereleases = true}
 flet = "^0.22.1"
 xsdata = {extras = ["lxml"], version = "^22.5"}
 # Fixes issue with pypi.org not serving the correct version of docutils
 docutils = "!=0.21"
+gridappsd-field-bus = "2024.8.1a1"
+
 
 [tool.poetry.group.dev.dependencies]
 m2r2 = "^0.3.2"
