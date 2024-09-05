@@ -124,9 +124,6 @@ if ENABLED:
             forward_diffs = message['input']['message']['forward_differences']
             rev_diffs = message['input']['message']['reverse_differences']
 
-            from pprint import pprint
-            pprint(adpt.GlobalmRIDs.get_items())
-
             for item in forward_diffs:
                 obj = adpt.GlobalmRIDs.get_item(item['object'])
                 if not item.get('attribute'):
