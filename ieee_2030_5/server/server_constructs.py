@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-from venv import create
-
 from blinker import Signal
 
 # from ieee_2030_5.adapters import BaseAdapter
@@ -168,7 +166,7 @@ adpt.TimeAdapter.event_ended.connect(update_active_der_event_ended)
 
 def create_der_program_and_control(default_der_program: m.DERProgram,
                                    default_der_control: m.DefaultDERControl,
-                                   name: str) -> m.DERProgram:
+                                   name: str) -> [m.DERProgram, m.DefaultDERControl]:
     """
     Create a new DERProgram based upon the default derp control
     """
@@ -184,13 +182,13 @@ def create_der_program_and_control(default_der_program: m.DERProgram,
     derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
     derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
     derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
-    derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
+    # derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
 
     dderc.href = derp.DefaultDERControlLink.href
 
     adpt.ListAdapter.append(hrefs.DEFAULT_DDERC_ROOT, dderc)
     adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
-    return derp
+    return derp, dderc
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
@@ -246,7 +244,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
         derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
         derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
-        derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
+        #derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
 
         if config.default_der_control:
             # Default DER Control
@@ -321,9 +319,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
 
     der_global_count = 0
+
     for index, cfg_device in enumerate(config.devices):
 
-        create_device_capability(index, cfg_device)
+        device_capability: m.DeviceCapability = create_device_capability(index, cfg_device)
         ed_href = hrefs.EndDeviceHref(index)
         end_device = adpt.EndDeviceAdapter.fetch_by_href(str(ed_href))
         if end_device is not None:
@@ -359,9 +358,23 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
             adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
 
+            if cfg_device.fsas:
+                for fsa_name in cfg_device.fsas:
+                    fsa_index = adpt.ListAdapter.list_size(ed_href.function_set_assignments)
+                    fsa = m.FunctionSetAssignments(href=hrefs.SEP.join((ed_href.function_set_assignments,
+                                                                        str(fsa_index))),
+                                                   description=fsa_name)
+                    adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)
+
+                end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                    href=ed_href.function_set_assignments,
+                    all=adpt.ListAdapter.list_size(ed_href.function_set_assignments),
+                )
+
             # If we have ders specified in the configuration file then set those up, otherwise
             # if we need to create a default der then set that up.
             if cfg_device.ders:
+
                 # Create references from the main der list to the ed specific list.
                 for der in cfg_device.ders:
                     der_href = hrefs.DERHref(
@@ -381,12 +394,37 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     #         raise ConfigurationError("default_program must be set to 'include_default_der_program_on_ders")
                     #     der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
 
-                    derp: m.DERProgram = create_der_program_and_control(default_der_program=config.default_program,
-                                                                        default_der_control=config.default_der_control,
-                                                                        name=f"{der} Program")
+                    derp, dderc = create_der_program_and_control(default_der_program=config.default_program,
+                                                                 default_der_control=config.default_der_control,
+                                                                 name=f"{der} Program")
                     der_obj.CurrentDERProgramLink = m.DERProgramLink(derp.href)
-
                     adpt.ListAdapter.append(ed_href.der_list, der_obj)
+                    adpt.ListAdapter.set_single(obj=dderc, uri=dderc.href)
+                    derp_derc_list_href = hrefs.SEP.join((derp.href, "derc"))
+                    adpt.ListAdapter.initialize_uri(list_uri=derp_derc_list_href, obj=m.DERControl)
+                    derp_derc: m.DERControl = m.DERControl(DERControlBase=dderc.DERControlBase)
+                    adpt.ListAdapter.append(list_uri=derp_derc_list_href, obj=derp_derc)
+
+                    adpt.ListAdapter.set_single(uri=derp_derc.href, obj=derp_derc)
+
+                    if fsa_list := adpt.ListAdapter.get_list(ed_href.function_set_assignments):
+                        # Create a new der program for this specific fsa
+                        fsa: m.FunctionSetAssignments = fsa_list[0]
+                        derp_fsa_href = hrefs.SEP.join((fsa.href, "derp"))
+                        adpt.ListAdapter.initialize_uri(list_uri=derp_fsa_href, obj=m.DERProgram)
+                        adpt.ListAdapter.append(list_uri=derp_fsa_href, obj=derp)
+                        fsa.DERProgramListLink = m.DERProgramListLink(href=derp_fsa_href,
+                                                                      all=adpt.ListAdapter.list_size(derp_fsa_href))
+
+
+
+
+
+
+
+
+
+
                     current_min_primacy = 10000
                     current_der_program = None
                     try:

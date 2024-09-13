@@ -118,7 +118,10 @@ class DERProgramRequests(RequestOp):
             # The index that we want to get the control from.
             retval = dercl.DERControl[parsed.at(3)]
         elif parsed.at(2) == hrefs.DERC:
+            #retval = adpt.ListAdapter.get_single(request.path)
             retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+        elif parsed.at(2) == hrefs.DDERC:
+            retval = adpt.ListAdapter.get_single(request.path)
         # elif parsed.at(2) == hrefs.DDERC:
         #     retval = adpt.DERControlAdapter.fetch_at(parsed.at(3))
         else:

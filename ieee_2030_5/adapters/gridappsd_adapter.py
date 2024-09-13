@@ -267,6 +267,7 @@ if ENABLED:
                                               pin=int(self._default_pin),
                                               lfdi=self.tls.lfdi(inv.mRID))
                     dev.ders = [dict(description=inv.name)]
+                    dev.fsas = ["fsa0"]
                     self._devices.append(dev)
             else:
                 for inv in self.get_power_electronic_connections():
@@ -276,6 +277,7 @@ if ENABLED:
                         lfdi=self.tls.lfdi(inv.mRID)
                     )
                     dev.ders = [dict(description=inv.mRID)]
+                    dev.fsas = ["fsa0"]
                     self._devices.append(dev)
 
         def get_device_configurations(self) -> list[DeviceConfiguration]:
@@ -295,7 +297,13 @@ if ENABLED:
             # for dev in self._devices:
             #     if inverter := next(filter(lambda x: x.lfdi == dev.lfdi, self._inverters):
 
-            der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: k.endswith('ders'))
+
+            def detect(v):
+                if v:
+                    return v.endswith("ders")
+
+            der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
+
 
             for uri in der_status_uris:
                 _log.debug(f"Testing uri: {uri}")

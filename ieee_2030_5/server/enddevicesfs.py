@@ -108,11 +108,17 @@ class EDevRequests(RequestOp):
         elif request.path == ed.FunctionSetAssignmentsListLink.href:
             retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
         elif edev_href.count() > 2:
-            retval = get_href(request.path)
+            if retval := get_href(request.path):
+                pass
+            else:
+                retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
         elif not edev_href.has_index():
             retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
         else:
-            retval = get_href(request.path)
+            if retval := get_href(request.path):
+                pass
+            else:
+                retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
 
         # if adpt.ListAdapter.has_list(request.path):
         #     retval = adpt.ListAdapter.get_resource_list(request.path)

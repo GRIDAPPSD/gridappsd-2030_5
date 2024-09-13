@@ -353,6 +353,13 @@ class ResourceListAdapter:
         _log.debug(pformat(self._singleton_dict, indent=2))
 
     def filter_single_dict(self, fn: Callable) -> Iterator:
+        """
+        Filters the single objects using the specified callable.
+
+        The return value will either be None or an Iterator.  The None value
+        will be when no elements match in the given callable.
+
+        """
         return filter(fn, self._singleton_dict.keys())
 
     def get(self, list_uri: str, key: int) -> D:
