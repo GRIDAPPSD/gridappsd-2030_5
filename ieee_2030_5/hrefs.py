@@ -20,6 +20,7 @@ LOG = "log"
 DERC = "derc"
 DDERC = "dderc"
 DERCA = "derca"
+DERCURVE = "dc"
 FSA = "fsa"
 TIME = "tm"
 

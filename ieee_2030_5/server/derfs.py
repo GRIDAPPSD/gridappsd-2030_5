@@ -122,6 +122,8 @@ class DERProgramRequests(RequestOp):
             retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
         elif parsed.at(2) == hrefs.DDERC:
             retval = adpt.ListAdapter.get_single(request.path)
+        elif parsed.at(2) == hrefs.DERCURVE:
+            retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
         # elif parsed.at(2) == hrefs.DDERC:
         #     retval = adpt.DERControlAdapter.fetch_at(parsed.at(3))
         else:

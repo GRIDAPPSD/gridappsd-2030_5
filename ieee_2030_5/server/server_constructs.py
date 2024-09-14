@@ -7,7 +7,6 @@ from blinker import Signal
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint
 from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration
 from ieee_2030_5.data.indexer import add_href, get_href
-from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 
 _log = logging.getLogger(__name__)
 
@@ -182,10 +181,11 @@ def create_der_program_and_control(default_der_program: m.DERProgram,
     derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
     derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
     derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
-    # derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
+    derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
 
     dderc.href = derp.DefaultDERControlLink.href
 
+    adpt.ListAdapter.initialize_uri(program_hrefs.der_curve_list_href, m.DERCurve)
     adpt.ListAdapter.append(hrefs.DEFAULT_DDERC_ROOT, dderc)
     adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
     return derp, dderc
@@ -402,10 +402,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     adpt.ListAdapter.set_single(obj=dderc, uri=dderc.href)
                     derp_derc_list_href = hrefs.SEP.join((derp.href, "derc"))
                     adpt.ListAdapter.initialize_uri(list_uri=derp_derc_list_href, obj=m.DERControl)
-                    derp_derc: m.DERControl = m.DERControl(DERControlBase=dderc.DERControlBase)
-                    adpt.ListAdapter.append(list_uri=derp_derc_list_href, obj=derp_derc)
+                    #derp_derc: m.DERControl = m.DERControl(DERControlBase=dderc.DERControlBase)
+                    #adpt.ListAdapter.append(list_uri=derp_derc_list_href, obj=derp_derc)
 
-                    adpt.ListAdapter.set_single(uri=derp_derc.href, obj=derp_derc)
+                    #adpt.ListAdapter.set_single(uri=derp_derc.href, obj=derp_derc)
 
                     if fsa_list := adpt.ListAdapter.get_list(ed_href.function_set_assignments):
                         # Create a new der program for this specific fsa
