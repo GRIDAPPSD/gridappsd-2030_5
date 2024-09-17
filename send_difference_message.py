@@ -15,15 +15,15 @@ simulation_id = ""
 send_topic = topics.application_input_topic(application_id=service_name, simulation_id=simulation_id)
 
 builder = DifferenceBuilder()
-builder.add_difference(object_id="_0F73668E-74FC-4C8C-9FC2-2BB6777548E1",
+builder.add_difference(object_id="_4C4846A8-312B-4D03-BFF8-BCB58CAB4366",
                        attribute="DERControl.DERControlBase.opModTargetW",
                        forward_value=dict(multiplier=5, value=1),
                        reverse_value=dict(multiplier=1, value=1))
 
-builder.add_difference(object_id="_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595",
-                       attribute="DERControl.description",
-                       forward_value="This is a change!",
-                       reverse_value="")
+# builder.add_difference(object_id="_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595",
+#                        attribute="DERControl.description",
+#                        forward_value="This is a change!",
+#                        reverse_value="")
 
 message = builder.get_message()
 
@@ -32,4 +32,4 @@ print(f"Message: {json.dumps(message, indent=2)}")
 
 gapps.send(send_topic, message)
 
-time.sleep(10)
+time.sleep(2)

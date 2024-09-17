@@ -6,6 +6,7 @@ from pprint import pprint
 import logging
 import typing
 from typing import Callable, Iterator
+from uuid import uuid4
 from copy import deepcopy
 from dataclasses import dataclass, fields, is_dataclass, asdict
 from enum import Enum
@@ -16,6 +17,7 @@ from typing import (Any, ClassVar, Dict, Generic, List, Optional, Protocol, Type
 import yaml
 from blinker import Signal
 
+from ieee_2030_5.utils import uuid_2030_5
 import ieee_2030_5.config as cfg
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
@@ -254,6 +256,8 @@ class ResourceListAdapter:
         if list_uri not in self._container_dict:
             self._container_dict[list_uri] = {}
         self._container_dict[list_uri][len(self._container_dict[list_uri])] = obj
+        if hasattr(obj, "mRID"):
+            GlobalmRIDs.add_item_with_mrid(obj.mRID, obj)
         store_event.send(self)
 
     def get_by_mrid(self, list_uri: str, mrid: str) -> Optional[T]:
@@ -460,6 +464,16 @@ class ResourceListAdapter:
 class _GlobalAdapter:
     def __init__(self):
         self._mrid_to_object: dict[str, object] = {}
+
+    def new_mrid(self) -> str:
+        """
+        Returns a unique mrid that has not be used in the global object.
+        """
+        while True:
+            _new = uuid_2030_5().lower()
+            if _new not in self._mrid_to_object:
+                return _new
+
 
     def add_item(self, value: object):
         if hasattr(value, 'mRID'):

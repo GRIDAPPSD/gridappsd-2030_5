@@ -125,7 +125,7 @@ if ENABLED:
             rev_diffs = message['input']['message']['reverse_differences']
 
             for item in forward_diffs:
-                obj = adpt.GlobalmRIDs.get_item(item['object'])
+
                 if not item.get('attribute'):
                     _log.error(f"INVALID attribute detected!")
                     continue
@@ -136,6 +136,22 @@ if ENABLED:
 
                 if  not item['attribute'].startswith("DERControl"):
                     _log.error(f"INVALID attribute.  Must start with DERControl but was {item['attribute']}")
+                    continue
+
+                # Test the attribute object and object_id because we could have either.  Not sure why
+                # but I have seen it both ways in the docs so handle it
+                if item.get('object'):
+                    object_key = 'object'
+                elif item.get('object_id'):
+                    object_key = 'object_id'
+                else:
+                    _log.error(f"INVALID object_id.  The 'object_id' field must be set in order to use this function.")
+                    continue
+
+                obj = adpt.GlobalmRIDs.get_item(item[object_key])
+
+                if not isinstance(obj, m.EndDevice):
+                    _log.error(f"Couldn't find end device with object_id {object_key} returned {type(obj)} instead.")
                     continue
 
                 if isinstance(obj, m.EndDevice):
@@ -149,6 +165,7 @@ if ENABLED:
                     # Should be something like ['DERControl', 'DERControlBase', 'opModTargetW']
                     obj_path = item['attribute'].split('.')
 
+                    _log.debug(f"Updating dderc mrid: {dderc.mRID}")
                     # Depending on whether we are controlling the outer default control or the inner base control
                     # this will be set so we can use hasattr and setattr on it.
                     controller = dderc
@@ -161,8 +178,10 @@ if ENABLED:
                         _log.error(f"Property {prop} is not on obj type {type(controller)}")
                         continue
                     _log.debug(f"Before {der.href} Setting property {prop} with value: {getattr(controller, prop)}")
-                    setattr(controller, prop, item["value"])
-                    _log.debug(f"After {der.href} Setting property {prop} with value: {item['value']}")
+                    # TODO: We are only going to use active power values here though we need more dynamic!
+                    active_power = m.ActivePower(**item['value'])
+                    setattr(controller, prop, active_power)
+                    _log.debug(f"After {der.href} Setting property {prop} with value: {active_power}")
 
 
 

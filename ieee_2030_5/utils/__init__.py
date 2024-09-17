@@ -217,4 +217,4 @@ class TLSWrap:
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
 
-__all__ = ['OpensslWrapper', 'CryptographyWrapper']
+__all__ = ['OpensslWrapper', 'CryptographyWrapper', 'uuid_2030_5']

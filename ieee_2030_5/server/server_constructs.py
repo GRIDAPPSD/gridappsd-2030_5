@@ -175,6 +175,8 @@ def create_der_program_and_control(default_der_program: m.DERProgram,
     derp = deepcopy(default_der_program)
     dderc = deepcopy(default_der_control)
 
+    derp.mRID = adpt.GlobalmRIDs.new_mrid()
+    dderc.mRID = adpt.GlobalmRIDs.new_mrid()
     adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
     program_hrefs = hrefs.DERProgramHref(derp_index)
     derp.href = program_hrefs._root
@@ -238,6 +240,8 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
         # Convienence Reference
         derp = config.default_program
+        if not derp.mRID:
+            derp.mRID = adpt.GlobalmRIDs.new_mrid()
         adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
         program_hrefs = hrefs.DERProgramHref(index)
         derp.href = program_hrefs._root
@@ -249,7 +253,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         if config.default_der_control:
             # Default DER Control
             dderc = config.default_der_control
-
+            dderc.mRID = adpt.GlobalmRIDs.new_mrid()
             dderc.href = derp.DefaultDERControlLink.href
 
             add_href(derp.DefaultDERControlLink.href, dderc)
@@ -266,12 +270,15 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         # Pop off default_der_control if specified.
         default_der_control = program_cfg.pop("DefaultDERControl", None)
         program = m.DERProgram(**program_cfg)
+        if not program.mRID:
+            program.mRID = adpt.GlobalmRIDs.new_mrid()
         program = program_hrefs.fill_hrefs(program)
         adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
 
         # Either set up default control or use the one passed in.
         if not default_der_control:
             default_der_control = m.DefaultDERControl(href=program_hrefs.default_control_href,
+                                                      mRID=adpt.GlobalmRIDs.new_mrid(),
                                                       DERControlBase=m.DERControlBase())
         elif default_der_control:
             der_control_base = None
@@ -279,6 +286,9 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 der_control_base = default_der_control.pop("DERControlBase")
             default_der_control = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
                                                       **default_der_control)
+            if not default_der_control.mRID:
+                default_der_control.mRID = adpt.GlobalmRIDs.new_mrid()
+
             if not der_control_base:
                 default_der_control.DERControlBase = m.DERControlBase()
             else:
@@ -316,6 +326,8 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         curve = m.DERCurve(href=hrefs.SEP.join([hrefs.DEFAULT_CURVE_ROOT,
                                                 str(index)]),
                            **curve_cfg)
+        if not curve.mRID:
+            curve.mRID = adpt.GlobalmRIDs.new_mrid()
         adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
 
     der_global_count = 0
@@ -363,6 +375,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     fsa_index = adpt.ListAdapter.list_size(ed_href.function_set_assignments)
                     fsa = m.FunctionSetAssignments(href=hrefs.SEP.join((ed_href.function_set_assignments,
                                                                         str(fsa_index))),
+                                                   mRID=adpt.GlobalmRIDs.new_mrid(),
                                                    description=fsa_name)
                     adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)
 

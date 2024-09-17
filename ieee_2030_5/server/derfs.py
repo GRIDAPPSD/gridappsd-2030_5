@@ -100,6 +100,7 @@ class DERProgramRequests(RequestOp):
 
     def get(self) -> Response:
 
+        _log.debug(f"Processing get request for: {request.path} with args: {[x for x in request.args.keys()]}")
         start = int(request.args.get('s', 0))
         after = int(request.args.get('a', 0))
         limit = int(request.args.get('l', 1))
@@ -112,17 +113,24 @@ class DERProgramRequests(RequestOp):
         elif parsed.count() == 2:
             retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, parsed.at(1))
         elif parsed.count() == 4:
+            _log.debug("Retrieving DER Control list")
             # Retrieve the list of controls from storage
             dercl = get_href(parsed.join(3))
             assert isinstance(dercl, m.DERControlList)
             # The index that we want to get the control from.
             retval = dercl.DERControl[parsed.at(3)]
         elif parsed.at(2) == hrefs.DERC:
-            #retval = adpt.ListAdapter.get_single(request.path)
+            _log.debug(f"Retrieving DERC")
             retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
+            if hasattr(retval, 'mRID'):
+                retval = adpt.GlobalmRIDs.get_item(retval.mRID)
         elif parsed.at(2) == hrefs.DDERC:
+            _log.debug(f"Retrieving DDERC")
             retval = adpt.ListAdapter.get_single(request.path)
+            if hasattr(retval, 'mRID'):
+                retval = adpt.GlobalmRIDs.get_item(retval.mRID)
         elif parsed.at(2) == hrefs.DERCURVE:
+            _log.debug(f"Retrieving DC")
             retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
         # elif parsed.at(2) == hrefs.DDERC:
         #     retval = adpt.DERControlAdapter.fetch_at(parsed.at(3))
