@@ -244,6 +244,11 @@ if ENABLED:
                     self._inverters.append(
                         HouseLookup(mRID=ec['mRID'], name=match_house.group(0), lfdi=lfdi))
                 elif match_utility := re.match(re_utility, ec['name']):
+                    #lfdi=self.tls.lfdi(ec['mRID'])
+                    try:
+                        lfdi=self.tls.lfdi(ec['mRID'])
+                    except FileNotFoundError:
+                        lfdi = None
                     self._inverters.append(
                         HouseLookup(mRID=ec['mRID'], name=match_utility.group(0), lfdi=lfdi))
 
