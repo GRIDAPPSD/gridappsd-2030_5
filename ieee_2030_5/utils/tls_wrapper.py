@@ -106,13 +106,14 @@ class OpensslWrapper(TLSWrap):
         return ret_value
 
     @staticmethod
-    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
-                                       combined_file: Path):
+    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path, combined_file: Path):
         OpensslWrapper.__set_cnf_from_cert_path___(cert_file)
-        # openssl pkcs12 -export -in certificate.pem -inkey privatekey.pem -out cert-and-key.pfx
+        
+        # Step 1: Generate PKCS#12 (.pfx) file
         tmpfile = Path("/tmp/tmp.p12")
         tmpfile2 = Path("/tmp/all.pem")
         tmpfile.unlink(missing_ok=True)
+
         cmd = [
             "openssl", "pkcs12", "-export", "-in",
             str(cert_file), "-inkey",
@@ -121,25 +122,57 @@ class OpensslWrapper(TLSWrap):
         ]
         subprocess.check_output(cmd, text=True)
 
-        # openssl pkcs12 -in path.p12 -out newfile.pem -nodes
+        # Step 2: Extract certificate & key from PKCS#12 (.p12) file
         cmd = [
             "openssl", "pkcs12", "-in",
             str(tmpfile), "-out",
             str(tmpfile2), "-nodes", "-passin", "pass:"
         ]
-        # cmd = ["openssl", "pkcs12", "-in", str(tmpfile),
-        # "-out", str(combined_file), "-clcerts", "-nokeys", "-passin", "pass:"]
-        # -clcerts -nokeys
         subprocess.check_output(cmd, text=True)
 
+        # Step 3: Read and correctly write all certificate & key contents
         with open(combined_file, "w") as fp:
-            in_between = False
-            for line in tmpfile2.read_text().split("\n"):
-                if not in_between:
-                    if "BEGIN" in line:
-                        fp.write(f"{line}\n")
-                        in_between = True
-                else:
-                    fp.write(f"{line}\n")
-                    if "END" in line:
-                        in_between = False
+            in_certificate = False
+            in_private_key = False
+            buffer = []
+
+            # Ensure full certificate & key are copied
+            with open(tmpfile2, "r") as f:
+                for line in f:
+                    line = line.strip()  # Remove unnecessary spaces/newlines
+
+                    # Detect BEGIN block
+                    if "BEGIN CERTIFICATE" in line:
+                        in_certificate = True
+                        buffer.append(line)
+                        continue
+                    elif "END CERTIFICATE" in line:
+                        buffer.append(line)
+                        in_certificate = False
+
+                        # Write full certificate at once
+                        fp.write("\n".join(buffer) + "\n\n")
+                        buffer = []  # Reset buffer
+                        continue
+
+                    # Detect BEGIN private key
+                    elif "BEGIN PRIVATE KEY" in line:
+                        in_private_key = True
+                        buffer.append(line)
+                        continue
+                    elif "END PRIVATE KEY" in line:
+                        buffer.append(line)
+                        in_private_key = False
+
+                        # Write full private key at once
+                        fp.write("\n".join(buffer) + "\n\n")
+                        buffer = []  # Reset buffer
+                        continue
+
+                    # Store certificate/key lines
+                    if in_certificate or in_private_key:
+                        buffer.append(line)
+
+        # Debug output
+        _log.debug(f"Final combined PEM written to {combined_file}")
+        print(f"✅ Combined PEM written successfully: {combined_file}")
