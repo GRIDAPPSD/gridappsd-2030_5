@@ -222,7 +222,7 @@ if ENABLED:
                 response = self.gapps.get_response(topic='goss.gridappsd.process.request.config',
                                                    message={"configurationType": "CIM Dictionary",
                                                             "parameters": {"model_id": f"{self._model_id}"}})
-
+                _log.debug(f"Response: {response}")
                 # Should have returned only a single feeder
                 feeder = response['data']['feeders'][0]
             else:

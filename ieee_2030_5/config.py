@@ -61,9 +61,9 @@ class DERConfiguration:
 class DeviceConfiguration:
     id: str = None
     lfdi: Lfdi | None = None
-    post_rate: int = 900
+    post_rate: int = 3
     pin: int = None
-    poll_rate: int = 900
+    poll_rate: int = 3
     fsas: List[str] = field(default_factory=list)
     ders: List[str] = field(default_factory=list)
 
@@ -192,6 +192,11 @@ class ServerConfiguration:
 
     server: str
     port: int
+
+    # Handle keep-alive settings
+    connection_idle_timeout: int = 300  # 5 minutes default
+    max_keep_alive_requests: int = 1000
+    keep_alive_timeout: int = 60  # seconds
 
     service_name: str = "IEEE_2030_5"
     simulation_id: str | None = None
