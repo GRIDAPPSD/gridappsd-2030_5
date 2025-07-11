@@ -37,6 +37,7 @@ gridappsd-field-bus = "2024.8.1a1"
 gridappsd-certificate-store = "^0.3.0"
 pyopenssl = "^25.0.0"
 pandas = "^2.2.3"
+zodb = "^6.0.1"
 
 
 [tool.poetry.group.dev.dependencies]
