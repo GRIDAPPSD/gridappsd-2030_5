@@ -37,7 +37,8 @@
 # PACIFIC NORTHWEST NATIONAL LABORATORY operated by BATTELLE for the
 # UNITED STATES DEPARTMENT OF ENERGY under Contract DE-AC05-76RL01830
 # -------------------------------------------------------------------------------
-
+import contextlib
+from dataclasses import asdict
 import logging
 import logging.config
 import os
@@ -45,13 +46,17 @@ import shutil
 import socket
 import sys
 import threading
+import time
 from argparse import ArgumentParser
+from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Process
 from pathlib import Path
-from time import sleep
+from typing import Dict, List, Optional, Union
 
 import yaml
 from werkzeug.serving import BaseWSGIServer
+
+from ieee_2030_5.flask_proxy_integration import IEEE2030_5Proxy
 
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
@@ -59,68 +64,112 @@ from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
 
+# Configure metrics if available (optional)
+try:
+    from prometheus_client import start_http_server, Counter, Summary
+    METRICS_AVAILABLE = True
+    REQUEST_COUNT = Counter('ieee_2030_5_request_count', 'Count of IEEE 2030.5 requests')
+    REQUEST_LATENCY = Summary('ieee_2030_5_request_latency_seconds', 'Latency of IEEE 2030.5 requests')
+except ImportError:
+    METRICS_AVAILABLE = False
+
+# Global logger
+_log = logging.getLogger("ieee_2030_5")
 
 class ServerThread(threading.Thread):
+    """Thread for running the IEEE 2030.5 server."""
 
     def __init__(self, server: BaseWSGIServer):
         threading.Thread.__init__(self, daemon=True)
         self.server = server
+        self.running = True
 
     def run(self):
-        _log.info(f'starting server on {self.server.host}:{self.server.port}')
-        self.server.serve_forever()
+        _log.info(f'Starting server on {self.server.host}:{self.server.port}')
+
+        # Start metrics server if available
+        if METRICS_AVAILABLE:
+            try:
+                metrics_port = int(os.environ.get('IEEE_2030_5_METRICS_PORT', 9630))
+                start_http_server(metrics_port)
+                _log.info(f"Started metrics server on port {metrics_port}")
+            except Exception as e:
+                _log.warning(f"Failed to start metrics server: {e}")
+
+        try:
+            self.server.serve_forever()
+        except Exception as e:
+            if self.running:
+                _log.error(f"Server error: {e}")
 
     def shutdown(self):
-        _log.info("shutting down server")
-        self.server.shutdown()
+        """Gracefully shut down the server."""
+        _log.info("Shutting down server...")
+        self.running = False
+        try:
+            self.server.shutdown()
+        except Exception as e:
+            _log.error(f"Error shutting down server: {e}")
+
+
+@contextlib.contextmanager
+def tls_repository_context(cfg: ServerConfiguration, create_certificates: bool = True):
+    """Context manager for TLS repository."""
+    tlsrepo = get_tls_repository(cfg, create_certificates_for_devices=create_certificates)
+    try:
+        yield tlsrepo
+    finally:
+        _log.debug("Cleaning up TLS repository")
 
 
 def get_tls_repository(cfg: ServerConfiguration,
                        create_certificates_for_devices: bool = True) -> TLSRepository:
+    """Initialize and return a TLS repository."""
+    _log.info(f"Initializing TLS repository at {cfg.tls_repository}")
+    _log.debug(f"Proxy enabled: {cfg.proxy_enabled}, Proxy host: {cfg.proxy_hostname}")
+
     tlsrepo = TLSRepository(cfg.tls_repository,
                             cfg.openssl_cnf,
                             cfg.server_hostname,
-                            cfg.proxy_hostname,
+                            proxyhost=cfg.proxy_hostname if cfg.proxy_enabled else None,
                             clear=create_certificates_for_devices,
                             generate_admin_cert=cfg.generate_admin_cert)
 
     if create_certificates_for_devices:
         already_represented = set()
-
-        # registers the devices, but doesn't initialize_device the end devices here.
+        # Registers the devices, but doesn't initialize_device the end devices here.
         for k in cfg.devices:
             if tlsrepo.has_device(k.id):
                 already_represented.add(k)
             else:
+                _log.debug(f"Creating certificate for device {k.id}")
                 tlsrepo.create_cert(k.id)
+
     return tlsrepo
 
 
-def _shutdown():
-    make_stop_file()
-    sleep(1)
-    remove_stop_file()
-
-
-def should_stop():
+def should_stop() -> bool:
+    """Check if the server should stop."""
     return Path('server.stop').exists()
 
 
 def make_stop_file():
+    """Create a file to signal server stop."""
     with open('server.stop', 'w') as w:
         pass
 
 
 def remove_stop_file():
+    """Remove the server stop signal file."""
     pth = Path('server.stop')
     if pth.exists():
         os.remove(pth)
 
 
-def get_default_logger_config(log_level: str | int = 'INFO'):
+def get_default_logger_config(log_level: Union[str, int] = 'INFO') -> Dict:
+    """Get a default logger configuration."""
     if isinstance(log_level, int):
         log_level = logging.getLevelName(log_level)
-
     return {
         "version": 1,
         "formatters": {
@@ -139,47 +188,95 @@ def get_default_logger_config(log_level: str | int = 'INFO'):
             },
         },
         "handlers": {
-            "wsgi": {
-                "class": "logging.StreamHandler",
-                "stream": "ext: //flask.logging.wsgi_errors_stream",
-                "formatter": "default"
-            },
-            'console': {
+            "console": {
                 'level': log_level,
                 'class': 'logging.StreamHandler',
                 'formatter': 'brief',
-    #'filters': ['my_filter'],
-    # 'stream': 'ext://sys.stdout'
+            },
+            'file': {
+                'level': log_level,
+                'class': 'logging.FileHandler',
+                'formatter': 'single-line',
+                'filename': 'ieee_2030_5_server.log',
+                'mode': 'a',
             }
         },
-        "root": {
-            "level": log_level,
-            "handlers": ["wsgi", "console"]
-        },
-        'loggers': {
-            '': {    # this is root logger
+        "loggers": {
+            '': {    # root logger
                 'level': log_level,
-                'handlers': ['console'],
+                'handlers': ['console', 'file'],
+                'propagate': False
             },
+            'ieee_2030_5.persistance.points': {    # Points logger
+                'level': 'INFO',
+                'handlers': ['console'],
+                'propagate': False
+            },
+            'ieee_2030_5.adapters.base': {    # Points logger
+                'level': 'WARNING',
+                'handlers': ['console'],
+                'propagate': False
+            },
+            'ieee_2030_5.server.server_constructs': {    # Server constructs logger
+                'level': 'INFO',
+                'handlers': ['console', 'file'],
+                'propagate': False
+            },
+            'werkzeug': {    # Flask/Werkzeug logger
+                'level': 'INFO',
+                'handlers': ['console', 'file'],
+                'propagate': False
+            },
+            'ieee_2030_5': {    # Our package logger
+                'level': log_level,
+                'handlers': ['console', 'file'],
+                'propagate': False    # Don't propagate to the root logger
+            },
+            'watchdog': {
+                'level': 'INFO',
+                'handlers': ['console'],
+                'propagate': False
+            }
         }
     }
 
+def setup_storage(config: ServerConfiguration):
+    """Set up and prepare storage for the server."""
+    # Initialize the data storage for the adapters
+    if config.storage_path is None:
+        config.storage_path = Path("data_store")
+    else:
+        config.storage_path = Path(config.storage_path)
 
-_log = logging.getLogger("ieee_2030_5")
+    # Cleanse means we want to reload the storage each time the server
+    # is run. Note this is dependent on the adapter being filestore
+    # not database. I will have to modify later to deal with that.
+    if config.cleanse_storage and config.storage_path.exists():
+        _log.info(f"Removing storage directory {config.storage_path}")
+        shutil.rmtree(config.storage_path)
+
+    data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
+    if config.cleanse_storage and data_store_userdir.exists():
+        _log.info(f"Removing user data directory {data_store_userdir}")
+        shutil.rmtree(data_store_userdir)
+
+    # Create storage directory if it doesn't exist
+    if not config.storage_path.exists():
+        _log.info(f"Creating storage directory {config.storage_path}")
+        config.storage_path.mkdir(parents=True, exist_ok=True)
 
 
 def _main():
+    """Main entry point for the IEEE 2030.5 server."""
     global _log
-    parser = ArgumentParser()
 
+    # Parse command line arguments
+    parser = ArgumentParser(description="IEEE 2030.5 Server")
     parser.add_argument(dest="config", help="Configuration file for the server.")
-    # parser.add_argument("--validate",
-    #                     action="store_true",
-    #                     help="Validate that the client is reachable by an addAllows faster startup since the resolving of addresses is not done!")
     parser.add_argument(
         "--create-certs",
         action="store_true",
-        help="If specified certificates for for client and server will be created.")
+        help="If specified, certificates for client and server will be created.")
     parser.add_argument("--debug", action="store_true", help="Debug level of the server")
     parser.add_argument("--production",
                         action="store_true",
@@ -195,194 +292,237 @@ def _main():
         "--simulation_id",
         help=
         "When running as a service the simulation_id must be passed for it to run in this mode.")
+    parser.add_argument(
+        "--metrics-port",
+        type=int,
+        default=9630,
+        help="Port for metrics server (if prometheus_client is installed)"
+    )
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=4,
+        help="Number of threads to use for the server (requires --production)"
+    )
+    parser.add_argument("--with-proxy", action="store_true", help="Enable proxy mode")
+    parser.add_argument("--proxy-debug", action="store_true", help="Enable proxy debug logging")
+
     opts = parser.parse_args()
 
-    #logconfig = get_default_logger_config(logging.DEBUG if opts.debug else logging.INFO)
-    #logging.config.dictConfig(logconfig)
+    # Configure logging
     log_level = logging.DEBUG if opts.debug else logging.INFO
-    logging.basicConfig(level=log_level)
+
+    # Set up metrics if available
+    if METRICS_AVAILABLE:
+        os.environ['IEEE_2030_5_METRICS_PORT'] = str(opts.metrics_port)
+
+    # Configure logging
+    log_config = get_default_logger_config(log_level)
+    # Remove all existing handlers before configuring
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    logging.config.dictConfig(log_config)
     logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.INFO)
     _log = logging.getLogger("ieee_2030_5")
 
-    _log.debug("Here I am")
+    _log.info("Starting IEEE 2030.5 server")
 
-    os.environ["IEEE_2030_5_CONFIG_FILE"] = str(
-        Path(opts.config).expanduser().resolve(strict=True))
+    # Set environment variables
+    config_path = Path(opts.config).expanduser().resolve(strict=True)
+    os.environ["IEEE_2030_5_CONFIG_FILE"] = str(config_path)
 
-    cfg_dict = yaml.safe_load(Path(opts.config).expanduser().resolve(strict=True).read_text())
+    # Load configuration
+    try:
+        _log.info(f"Loading configuration from {config_path}")
+        cfg_dict = yaml.safe_load(config_path.read_text())
+        config = ServerConfiguration(**cfg_dict)
+    except Exception as e:
+        _log.error(f"Failed to load configuration: {e}")
+        raise InvalidConfigFile(f"Failed to load configuration: {e}")
 
-    config = ServerConfiguration(**cfg_dict)
+    if opts.with_proxy:
+        config.proxy_enabled = True
+    if opts.proxy_debug:
+        config.proxy_debug = True
 
-    os.environ['GRIDAPPSD_SERVICE_NAME'] = config.service_name
+    # Set service environment variables
+    if config.service_name:
+        os.environ['GRIDAPPSD_SERVICE_NAME'] = config.service_name
+
     if config.simulation_id:
         os.environ['GRIDAPPSD_SIMULATION_ID'] = config.simulation_id
+
+    if opts.simulation_id:
+        os.environ['GRIDAPPSD_SIMULATION_ID'] = opts.simulation_id
+        config.simulation_id = opts.simulation_id
 
     if config.lfdi_mode == "lfdi_mode_from_file":
         os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
 
-    assert config.tls_repository
-    assert config.server_hostname
+    # Validate configuration
+    assert config.tls_repository, "TLS repository not specified in configuration"
+    assert config.server_hostname, "Server hostname not specified in configuration"
 
-    add_href(hrefs.get_server_config_href(), config)
-    unknown = []
-    # Only check for resolvability if not passed --no-validate
-    # if not opts.no_validate:
-    #     _log.debug("Validating hostnames and/or ip of devices are resolvable.")
-    #     for i in range(len(config.devices)):
-    #         assert config.devices[i].hostname
-    #
-    #         try:
-    #             socket.gethostbyname(config.devices[i].hostname)
-    #         except socket.gaierror:
-    #             if hasattr(config.devices[i], "ip"):
-    #                 try:
-    #                     socket.gethostbyname(config.devices[i].ip)
-    #                 except socket.gaierror:
-    #                     unknown.append(config.devices[i].hostname)
-    #             else:
-    #                 unknown.append(config.devices[i].hostname)
-    #
-    # if unknown:
-    #     _log.error("Couldn't resolve the following hostnames.")
-    #     for host in unknown:
-    #         _log.error(host)
-    #     sys.exit(1)
-
-    if opts.show_lfdi and opts.create_certs:
-        sys.stderr.write("Can't show lfdi when creating certificates.\n")
-        sys.exit(1)
-
-    tls_repo = get_tls_repository(config, create_certificates_for_devices=opts.create_certs)
-    gridappsd_adpt = None
-
-    if config.gridappsd is not None:
-        _log.info("Loading GridAPPSD devices.")
-
-        import ieee_2030_5.adapters as adpt
-        from gridappsd import GridAPPSD
-
-        gapps = GridAPPSD(stomp_address=config.gridappsd.address,
-                          stomp_port=config.gridappsd.port,
-                          username=config.gridappsd.username,
-                          password=config.gridappsd.password)
-        assert gapps.connected
-
-        gridappsd_adpt = GridAPPSDAdapter(gapps=gapps,
-                                          gridappsd_configuration=config.gridappsd,
-                                          tls=tls_repo)
-
-        gridappsd_devices: list = []
-        if opts.create_certs:
-            _log.debug("Creating certificates for GridAPPSD devices.")
-            gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations(
-            )
+    def format_config_value(value):
+        """Format configuration values for display."""
+        if isinstance(value, dict):
+            if not value:  # Empty dict
+                return "{}"
+            # Format dict as key=value pairs
+            items = [f"{k}={v}" for k, v in value.items()]
+            return "{" + ", ".join(items) + "}"
+        elif isinstance(value, list):
+            if not value:  # Empty list
+                return "[]"
+            return f"[{len(value)} items]"
         else:
-            gridappsd_devices = gridappsd_adpt.get_device_configurations()
+            return str(value)
 
-        config.devices.extend(gridappsd_devices)
+    config_table = ["Configuration", "-" * 60, f"{'Key':<30} | {'Value'}", "-" * 60]
+    config_table.extend([f"{key:<30} | {format_config_value(value)}" for key, value in sorted(asdict(config).items())])
+    config_table.append("-" * 60)
+    _log.info("\n".join(config_table))
 
-    if opts.show_lfdi:
-        for cn in config.devices:
-            sys.stdout.write(f"{cn.id} {tls_repo.lfdi(cn.id)}\n")
-        sys.exit(0)
+    _log.info("Configuration")
+    for key, value in sorted(asdict(config).items()):
+        _log.info(f"Config '{key}': {value}")
 
-    # Puts the server into http single client lfdi mode.
-    if opts.lfdi:
-        config.lfdi_client = opts.lfdi
+    # Add server configuration to URL registry
+    add_href(hrefs.get_server_config_href(), config)
 
-    # Initialize the data storage for the adapters
-    if config.storage_path is None:
-        config.storage_path = Path("data_store")
-    else:
-        config.storage_path = Path(config.storage_path)
+    # Set up TLS repository
+    with tls_repository_context(config, create_certificates=opts.create_certs) as tls_repo:
+        # Show LFDI if requested
+        if opts.show_lfdi:
+            for cn in config.devices:
+                sys.stdout.write(f"{cn.id} {tls_repo.lfdi(cn.id)}\n")
+            return 0
 
-    # Cleanse means we want to reload the storage each time the server
-    # is run.  Note this is dependent on the adapter being filestore
-    # not database.  I will have to modify later to deal with that.
-    if config.cleanse_storage and config.storage_path.exists():
-        _log.debug(f"Removing {config.storage_path}")
-        shutil.rmtree(config.storage_path)
+        # GridAPPSD integration
+        gridappsd_adpt = None
+        if config.gridappsd is not None:
+            _log.info(f"Connecting to GridAPPSD at {config.gridappsd.address}:{config.gridappsd.port}")
 
-    data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
-    if config.cleanse_storage and data_store_userdir.exists():
-        _log.debug(f"Removing {data_store_userdir}")
-        shutil.rmtree(data_store_userdir)
+            try:
+                import ieee_2030_5.adapters as adpt
+                from gridappsd import GridAPPSD
 
-    # Has to be after we remove the storage path if necessary
-    from ieee_2030_5.server.server_constructs import initialize_2030_5
+                gapps = GridAPPSD(stomp_address=config.gridappsd.address,
+                                stomp_port=config.gridappsd.port,
+                                username=config.gridappsd.username,
+                                password=config.gridappsd.password)
 
-    initialize_2030_5(config, tls_repo)
+                assert gapps.connected, "Failed to connect to GridAPPSD"
 
-    from ieee_2030_5.flask_server import run_server
+                gridappsd_adpt = GridAPPSDAdapter(gapps=gapps,
+                                                gridappsd_configuration=config.gridappsd,
+                                                tls=tls_repo)
 
-    #from ieee_2030_5.gui import run_gui
-    #if not opts.production:
-    # #try:
-    # p_server = Process(target=run_server,
-    #                     kwargs=dict(
-    #                         config=config,
-    #                         tlsrepo=tls_repo,
-    #                         debug=opts.debug,
-    #                         use_reloader=False,
-    #                         use_debugger=opts.debug,
-    #                         threaded=False))
-    # p_server.daemon = True
-    # p_server.start()
-    # if __name__ in {"__main__", "__mp_main__"}:
-    #     ui = run_gui()
-    #     ui.run_with(app)
+                gridappsd_devices: list = []
+                if opts.create_certs:
+                    _log.info("Creating certificates for GridAPPSD devices")
+                    gridappsd_devices = gridappsd_adpt.create_2030_5_device_certificates_and_configurations()
+                else:
+                    _log.info("Getting device configurations from GridAPPSD")
+                    gridappsd_devices = gridappsd_adpt.get_device_configurations()
 
-    #run_gui()
+                config.devices.extend(gridappsd_devices)
+                _log.info(f"Added {len(gridappsd_devices)} devices from GridAPPSD")
+            except Exception as e:
+                _log.error(f"Failed to initialize GridAPPSD adapter: {e}")
+                if opts.debug:
+                    import traceback
+                    traceback.print_exc()
 
-    # p_gui = Process(target = run_gui)
-    # p_gui.daemon = True
-    # p_gui.start()
+        # Set LFDI client mode if specified
+        if opts.lfdi:
+            _log.info(f"Running in single client LFDI mode with LFDI {opts.lfdi}")
+            config.lfdi_client = opts.lfdi
 
-    if gridappsd_adpt:
-        gridappsd_adpt.start_publishing()
+        # Set up storage
+        setup_storage(config)
 
-    # # while True:
-    # #     sleep(1)
-    try:
-        run_server(config,
-                tls_repo,
-                debug=opts.debug,
-                use_reloader=False,
-                use_debugger=opts.debug,
-                threaded=False)
-    except KeyboardInterrupt:
-        _log.info("Shutting down server")
-        sys.flush()
+        # Initialize the IEEE 2030.5 server
+        from ieee_2030_5.server.server_constructs import initialize_2030_5
+        _log.info("Initializing IEEE 2030.5 server")
+        initialize_2030_5(config, tls_repo)
 
-    # except KeyboardInterrupt:
-    #     _log.info("Shutting down server")
-    # finally:
-    #     _log.info("Ending Server.")
-    # else:
-    #     server = build_server(config, tls_repo, enddevices=end_devices)
+        # Start GridAPPSD publishing if available
+        if gridappsd_adpt:
+            _log.info("Starting GridAPPSD publishing")
+            gridappsd_adpt.start_publishing()
 
-    #     thread = None
-    #     try:
-    #         remove_stop_file()
-    #         thread = ServerThread(server)
-    #         thread.start()
-    #         while not should_stop():
-    #             sleep(0.5)
-    #     except KeyboardInterrupt as ex:
-    #         _log.info("Exiting program.")
-    #     finally:
-    #         if thread:
-    #             thread.shutdown()
-    #             thread.join()
+        # Run the server
+        from ieee_2030_5.flask_server import run_server, build_server
+
+        if opts.production:
+            _log.info(f"Running in production mode with {opts.num_threads} threads")
+
+            # Create and configure the server
+            server = build_server(config, tls_repo)
+
+            # Start the server in a thread
+            thread = ServerThread(server)
+            thread.start()
+
+            # Monitor for stop signal
+            try:
+                remove_stop_file()
+                _log.info("Server is running. Press Ctrl+C to stop.")
+
+                while not should_stop() and thread.is_alive():
+                    time.sleep(0.5)
+
+                if not thread.is_alive():
+                    _log.error("Server thread died unexpectedly")
+
+            except KeyboardInterrupt:
+                _log.info("Keyboard interrupt received")
+
+            finally:
+                _log.info("Shutting down server")
+                if thread.is_alive():
+                    thread.shutdown()
+                    thread.join(timeout=5.0)
+
+                if thread.is_alive():
+                    _log.warning("Server did not shut down cleanly")
+        else:
+            # Development mode - run directly
+            _log.info("Running in development mode")
+            try:
+                run_server(config,
+                         tls_repo,
+                         debug=opts.debug,
+                         use_reloader=False,
+                         use_debugger=opts.debug,
+                         threaded=True)  # Enable threading for better performance
+            except KeyboardInterrupt:
+                _log.info("Keyboard interrupt received")
+            except Exception as e:
+                _log.error(f"Server error: {e}")
+                if opts.debug:
+                    import traceback
+                    traceback.print_exc()
+            finally:
+                _log.info("Server shutdown complete")
+
+    return 0
 
 
 if __name__ == '__main__':
     try:
-        # from werkzeug.serving import is_running_from_reloader
-        # print(is_running_from_reloader())
-        #if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        _main()
+        sys.exit(_main())
     except InvalidConfigFile as ex:
-        print(ex.args[0])
+        print(ex.args[0], file=sys.stderr)
+        sys.exit(1)
     except KeyboardInterrupt:
-        pass
+        _log.info("Interrupted by user")
+        sys.exit(0)
+    # except Exception as ex:
+    #     if _log:
+    #         _log.exception("Unhandled exception")
+    #     else:
+    #         print(f"Error: {ex}", file=sys.stderr)
+    #     sys.exit(1)

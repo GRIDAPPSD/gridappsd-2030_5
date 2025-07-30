@@ -1,5 +1,36 @@
+"""
+IEEE 2030.5 Basic Proxy Server
+
+This module implements a multi-threaded TLS proxy server that forwards client requests
+to a backend IEEE 2030.5 server while preserving client certificate information.
+
+The proxy acts as an intermediary between IEEE 2030.5 clients and servers, providing:
+- Client certificate forwarding via HTTP headers (Nginx-style)
+- Concurrent client support with HTTP/1.1 persistent connections
+- Dynamic SSL/TLS context selection based on client certificates
+- Proper error handling and logging for production environments
+- Connection pooling and timeout management for optimal performance
+
+Key Components:
+- RequestForwarder: HTTP request handler for client requests
+- ProxyServer: Multi-threaded server supporting concurrent clients
+- HTTPSConnectionWithTimeout: Enhanced HTTPS client for backend connections
+- Certificate management helpers for dynamic context creation
+
+The proxy preserves the security model of IEEE 2030.5 by forwarding client certificates
+as HTTP headers, allowing the backend server to authenticate clients while the proxy
+handles TLS termination and connection multiplexing.
+
+Typical Usage:
+    python basic_proxy.py config.yml --debug
+
+Author: GridAPPS-D Team
+License: See LICENSE file
+"""
+
 from __future__ import annotations
 import logging
+import logging.handlers
 import os
 import socket
 import ssl
@@ -19,7 +50,29 @@ from ieee_2030_5.config import ServerConfiguration
 
 # Create a custom formatter that includes file name and line number
 class DetailedFormatter(logging.Formatter):
+    """
+    Custom logging formatter that includes file name and line number information.
+
+    This formatter enhances log messages by adding the source file name and line number
+    where the log message was generated, making debugging easier in multi-file applications.
+
+    Attributes:
+        Standard logging.Formatter attributes plus:
+        - file_info: Automatically added field containing "filename:lineno"
+
+    Example output:
+        2025-07-30 10:30:45,123 - basic_proxy.py:245 - ieee_2030_5.basic_proxy - INFO - Message
+    """
     def format(self, record):
+        """
+        Format a log record with file information.
+
+        Args:
+            record: LogRecord object containing the log message and metadata
+
+        Returns:
+            str: Formatted log message string with file information
+        """
         # Add file name and line number to the log message
         if hasattr(record, 'pathname'):
             record.file_info = f"{os.path.basename(record.pathname)}:{record.lineno}"
@@ -28,7 +81,34 @@ class DetailedFormatter(logging.Formatter):
         return super().format(record)
 
 # Setup root logger with the detailed formatter
-def setup_logging(debug=False):
+def setup_logging(debug=False, use_syslog=False, syslog_facility='local0'):
+    """
+    Configure the application logging system with enhanced formatting.
+
+    Sets up console and/or syslog logging with detailed formatting that includes
+    file names, line numbers, timestamps, and log levels. Clears any existing
+    handlers to avoid duplicate log messages.
+
+    Args:
+        debug (bool, optional): If True, sets log level to DEBUG for verbose output.
+                               If False, sets log level to INFO. Defaults to False.
+        use_syslog (bool, optional): If True, adds syslog handler for system logging.
+                                    Defaults to False.
+        syslog_facility (str, optional): Syslog facility to use (e.g., 'local0', 'daemon').
+                                        Defaults to 'local0'.
+
+    Returns:
+        logging.Logger: The configured root logger instance
+
+    Syslog Integration:
+        When syslog is enabled, log messages are sent to the system log daemon
+        with the specified facility. This allows integration with system monitoring
+        tools and centralized log management.
+
+    Example:
+        >>> logger = setup_logging(debug=True, use_syslog=True)
+        >>> logger.info("Logging configured successfully")
+    """
     level = logging.DEBUG if debug else logging.INFO
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
@@ -46,20 +126,121 @@ def setup_logging(debug=False):
     console.setFormatter(formatter)
     root_logger.addHandler(console)
 
+    # Add syslog handler if requested
+    if use_syslog:
+        try:
+            # Map facility names to syslog constants
+            facility_map = {
+                'kern': logging.handlers.SysLogHandler.LOG_KERN,
+                'user': logging.handlers.SysLogHandler.LOG_USER,
+                'mail': logging.handlers.SysLogHandler.LOG_MAIL,
+                'daemon': logging.handlers.SysLogHandler.LOG_DAEMON,
+                'auth': logging.handlers.SysLogHandler.LOG_AUTH,
+                'syslog': logging.handlers.SysLogHandler.LOG_SYSLOG,
+                'lpr': logging.handlers.SysLogHandler.LOG_LPR,
+                'news': logging.handlers.SysLogHandler.LOG_NEWS,
+                'uucp': logging.handlers.SysLogHandler.LOG_UUCP,
+                'cron': logging.handlers.SysLogHandler.LOG_CRON,
+                'authpriv': logging.handlers.SysLogHandler.LOG_AUTHPRIV,
+                'ftp': logging.handlers.SysLogHandler.LOG_FTP,
+                'local0': logging.handlers.SysLogHandler.LOG_LOCAL0,
+                'local1': logging.handlers.SysLogHandler.LOG_LOCAL1,
+                'local2': logging.handlers.SysLogHandler.LOG_LOCAL2,
+                'local3': logging.handlers.SysLogHandler.LOG_LOCAL3,
+                'local4': logging.handlers.SysLogHandler.LOG_LOCAL4,
+                'local5': logging.handlers.SysLogHandler.LOG_LOCAL5,
+                'local6': logging.handlers.SysLogHandler.LOG_LOCAL6,
+                'local7': logging.handlers.SysLogHandler.LOG_LOCAL7,
+            }
+
+            facility = facility_map.get(syslog_facility.lower(), logging.handlers.SysLogHandler.LOG_LOCAL0)
+
+            # Try to connect to syslog daemon
+            syslog_handler = logging.handlers.SysLogHandler(address='/dev/log', facility=facility)
+            syslog_handler.setLevel(level)
+
+            # Use a simpler format for syslog (syslog daemon adds timestamp)
+            syslog_formatter = logging.Formatter(
+                'ieee2030_5_proxy[%(process)d]: %(file_info)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            syslog_handler.setFormatter(syslog_formatter)
+            root_logger.addHandler(syslog_handler)
+
+            # Log successful syslog setup after root_logger is configured
+            temp_log = logging.getLogger(__name__)
+            temp_log.info(f"Syslog logging enabled with facility: {syslog_facility}")
+
+        except Exception as e:
+            # Fall back to console-only logging if syslog fails
+            temp_log = logging.getLogger(__name__)
+            temp_log.warning(f"Failed to setup syslog logging: {e}. Continuing with console logging only.")
+
     return root_logger
 
 _log = logging.getLogger(__name__)
 
 @dataclass
 class ContextWithPaths:
+    """
+    Data class containing SSL context and associated certificate file paths.
+
+    This class bundles an SSL context with the file paths of the certificates
+    used to create it, providing a convenient way to track which certificates
+    are being used for a particular connection.
+
+    Attributes:
+        context (ssl.SSLContext): Configured SSL context ready for use
+        certpath (str): Absolute path to the certificate file used
+        keypath (str): Absolute path to the private key file used
+
+    Example:
+        >>> ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        >>> ccp = ContextWithPaths(ctx, "/path/cert.pem", "/path/key.pem")
+        >>> connection = HTTPSConnection(host, context=ccp.context)
+    """
     context: ssl.SSLContext
     certpath: str
     keypath: str
 
 class HTTPSConnectionWithTimeout(HTTPSConnection):
-    """Extended HTTPSConnection with better error handling."""
+    """
+    Enhanced HTTPSConnection with configurable timeouts and better error handling.
+
+    Extends the standard HTTPSConnection to provide:
+    - Separate connect and read timeouts for better control
+    - Enhanced SSL error handling and logging
+    - Context preservation for debugging
+    - Graceful fallback mechanisms
+
+    This class is optimized for use in proxy scenarios where connection reliability
+    and timeout control are critical for maintaining good user experience.
+
+    Attributes:
+        timeout_connect (int): Socket connection timeout in seconds
+        timeout_read (int): Socket read timeout in seconds
+        context (ssl.SSLContext): SSL context for secure connections
+
+    Example:
+        >>> conn = HTTPSConnectionWithTimeout(
+        ...     host="example.com", port=443,
+        ...     context=ssl_context,
+        ...     timeout_connect=10, timeout_read=30
+        ... )
+        >>> conn.connect()
+        >>> conn.request("GET", "/path")
+    """
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize HTTPSConnection with custom timeout settings.
+
+        Args:
+            *args: Positional arguments passed to HTTPSConnection
+            **kwargs: Keyword arguments, with special handling for:
+                timeout_connect (int): Connection timeout in seconds (default: 30)
+                timeout_read (int): Read timeout in seconds (default: 30)
+                context (ssl.SSLContext): SSL context for the connection
+        """
         # Set reasonable timeouts
         self.timeout_connect = kwargs.pop('timeout_connect', 30)
         self.timeout_read = kwargs.pop('timeout_read', 30)
@@ -73,7 +254,17 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
         super().__init__(*args, **kwargs)
 
     def connect(self):
-        """Connect to the host and port specified in __init__."""
+        """
+        Connect to the host and port with enhanced error handling.
+
+        Establishes a socket connection, applies SSL context, and configures timeouts.
+        Provides detailed logging for debugging connection issues in proxy scenarios.
+
+        Raises:
+            ssl.SSLError: For SSL-related connection failures
+            socket.timeout: For connection timeout failures
+            Exception: For other connection failures
+        """
         _log.debug(f"Attempting to connect to {self.host}:{self.port}")
         try:
             # Use connect timeout
@@ -119,7 +310,32 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
             raise
 
 class RequestForwarder(BaseHTTPRequestHandler):
-    """HTTP request handler that forwards requests to a target server while maintaining client connections."""
+    """
+    HTTP request handler that forwards requests to a target server while maintaining client connections.
+
+    This class implements a reverse proxy that:
+    - Accepts client connections with TLS client certificates
+    - Forwards requests to a backend IEEE 2030.5 server
+    - Preserves client certificate information via HTTP headers
+    - Supports HTTP/1.1 persistent connections for performance
+    - Handles multiple concurrent clients safely
+
+    The handler extracts client certificate information and forwards it as HTTP headers
+    similar to how Nginx handles client certificates, allowing the backend server to
+    perform certificate-based authentication.
+
+    Key Features:
+    - HTTP/1.1 keep-alive support for connection reuse
+    - Dynamic SSL context selection based on client certificates
+    - Comprehensive error handling and logging
+    - Support for all standard HTTP methods
+    - Client certificate forwarding via headers
+
+    Attributes:
+        protocol_version (str): HTTP protocol version (HTTP/1.1)
+        timeout (int): Client connection timeout in seconds
+        server (ProxyServer): Reference to the proxy server instance
+    """
 
     # Use HTTP/1.1 to support persistent connections with clients
     protocol_version = 'HTTP/1.1'
@@ -131,7 +347,16 @@ class RequestForwarder(BaseHTTPRequestHandler):
     server: 'ProxyServer'
 
     def setup(self):
-        """Set up the request handler with proper timeouts for concurrent clients"""
+        """
+        Set up the request handler with proper timeouts for concurrent clients.
+
+        Initializes client connection timeouts and verifies that the server has
+        all required attributes for proxy operation. This method is called
+        automatically by the server framework before handling requests.
+
+        Raises:
+            RuntimeError: If server is missing required attributes (tls_repo, proxy_target)
+        """
         super().setup()
         # Set client socket timeout to prevent hanging connections
         if hasattr(self.connection, 'settimeout'):
@@ -149,7 +374,19 @@ class RequestForwarder(BaseHTTPRequestHandler):
         _log.debug(f"RequestForwarder setup complete for {self.client_address}")
 
     def handle(self):
-        """Handle multiple requests if keep-alive is enabled"""
+        """
+        Handle multiple requests if keep-alive is enabled.
+
+        Implements HTTP/1.1 persistent connection handling by processing multiple
+        requests over a single client connection. This improves performance by
+        reducing connection overhead for clients making multiple requests.
+
+        The method continues processing requests until:
+        - Client requests connection close
+        - Connection timeout occurs
+        - Maximum requests per connection reached (1000)
+        - An unrecoverable error occurs
+        """
         self.close_connection = False
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.debug(f"Starting connection handler for client {client_info}")
@@ -177,7 +414,23 @@ class RequestForwarder(BaseHTTPRequestHandler):
             _log.debug(f"Closing connection handler for client {client_info} after {request_count} requests")
 
     def handle_one_request(self):
-        """Handle a single HTTP request with proper keep-alive support"""
+        """
+        Handle a single HTTP request with proper keep-alive support.
+
+        Processes one HTTP request from the client, determining whether to keep
+        the connection open for additional requests based on HTTP version and
+        Connection header values.
+
+        Returns:
+            bool: True if the request was handled successfully and connection
+                 should remain open, False if connection should be closed
+
+        The method handles various error conditions gracefully:
+        - Socket timeouts from slow clients
+        - Client disconnections
+        - Invalid request encoding
+        - Unsupported HTTP methods
+        """
         try:
             # Read the request line with timeout
             self.raw_requestline = self.rfile.readline(65537)
@@ -236,7 +489,23 @@ class RequestForwarder(BaseHTTPRequestHandler):
             return False
 
     def _extract_client_certificate_cn(self) -> str | None:
-        """Extract the Common Name from the client certificate, if available."""
+        """
+        Extract the Common Name from the client certificate, if available.
+
+        Attempts to retrieve and parse the client's X.509 certificate from the
+        TLS connection to extract the Common Name (CN) field from the certificate
+        subject. This CN is typically used to identify the client device.
+
+        Returns:
+            str | None: The client certificate's Common Name if available and
+                       parseable, None if no certificate was provided or if
+                       parsing failed
+
+        The method handles various error conditions gracefully:
+        - No client certificate provided
+        - Certificate parsing errors
+        - SSL errors during certificate access
+        """
         try:
             x509_binary = self.connection.getpeercert(True)
             if not x509_binary:
@@ -263,7 +532,21 @@ class RequestForwarder(BaseHTTPRequestHandler):
             return None
 
     def _find_certificate_pair(self, client_cn: str) -> tuple[str | None, str | None]:
-        """Find certificate pair for the given client CN."""
+        """
+        Find certificate pair for the given client CN.
+
+        Searches the TLS repository for a certificate and private key pair
+        matching the provided client Common Name. This allows the proxy to
+        use client-specific certificates when connecting to the backend server.
+
+        Args:
+            client_cn (str): The Common Name from the client certificate
+
+        Returns:
+            tuple[str | None, str | None]: A tuple of (cert_file_path, key_file_path)
+                                          Both will be None if the certificate pair
+                                          is not found or an error occurs
+        """
         try:
             cert_file, key_file = self.server.tls_repo.get_file_pair(client_cn)
             _log.debug(f"Found cert file for CN {client_cn}: {cert_file}, key file: {key_file}")
@@ -277,7 +560,21 @@ class RequestForwarder(BaseHTTPRequestHandler):
             return None, None
 
     def _get_default_certificate_pair(self) -> tuple[str, str]:
-        """Get the default server certificate pair."""
+        """
+        Get the default server certificate pair.
+
+        Retrieves the default server certificate and private key file paths
+        from the TLS repository. This is used as a fallback when no client-specific
+        certificate is available or when client certificate extraction fails.
+
+        Returns:
+            tuple[str, str]: A tuple of (cert_file_path, key_file_path) for the
+                           default server certificate
+
+        Raises:
+            RuntimeError: If the TLS repository is not properly configured or
+                         if the default certificate files cannot be accessed
+        """
         try:
             cert_file = self.server.tls_repo.server_cert_file
             key_file = self.server.tls_repo.server_key_file
@@ -294,7 +591,28 @@ class RequestForwarder(BaseHTTPRequestHandler):
     def get_context_cert_pair(self) -> ContextWithPaths:
         """
         Dynamically establish SSL/TLS context based on the client's certificate.
-        Falls back to a default certificate if client certificate is not available.
+
+        Creates an SSL context for connecting to the backend server, using either
+        a client-specific certificate (if available) or falling back to the default
+        server certificate. This enables certificate-based authentication where
+        the proxy presents appropriate credentials to the backend server.
+
+        The method follows this logic:
+        1. Extract client certificate CN from the TLS connection
+        2. Search for client-specific certificate pair in repository
+        3. Fall back to default server certificate if needed
+        4. Create and configure SSL context with chosen certificate
+
+        Returns:
+            ContextWithPaths: SSL context with associated certificate file paths
+
+        Raises:
+            RuntimeError: If SSL context creation fails or server is misconfigured
+            FileNotFoundError: If required certificate files are missing
+
+        The SSL context is configured for client mode (connecting to server)
+        with verification disabled for test environments and permissive
+        cipher suites for compatibility.
         """
         _log.debug("Getting SSL context and certificate pair for client connection")
 
@@ -365,7 +683,28 @@ class RequestForwarder(BaseHTTPRequestHandler):
     def __create_server_connection__(self) -> HTTPSConnectionWithTimeout:
         """
         Creates a new connection to the server with proper error handling.
-        Optimized for concurrent client requests.
+
+        Establishes a fresh HTTPS connection to the backend server for each client
+        request, using the appropriate SSL context based on the client's certificate.
+        This approach ensures isolation between client requests and enables proper
+        certificate-based authentication.
+
+        The method is optimized for concurrent client requests with:
+        - Reduced retry attempts for faster response under load
+        - Shorter timeouts for better responsiveness
+        - Comprehensive error handling and logging
+
+        Returns:
+            HTTPSConnectionWithTimeout: An established connection to the backend server
+
+        Raises:
+            RuntimeError: If SSL context creation fails or all connection attempts fail
+
+        Connection Strategy:
+        - Creates SSL context once per request (cached for retries)
+        - Uses shorter timeouts for better concurrency
+        - Implements retry logic with exponential backoff
+        - Provides detailed logging for debugging connection issues
         """
         max_retries = 2  # Reduced retries for faster response under load
         retry_delay = 0.5  # Shorter delay for better responsiveness
@@ -528,7 +867,21 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.warning(f"Error closing server connection: {e}")
 
     def _read_request_body(self) -> bytes:
-        """Read request body based on Content-Length header"""
+        """
+        Read request body based on Content-Length header.
+
+        Reads the HTTP request body from the client connection, using the
+        Content-Length header to determine how many bytes to read. This is
+        essential for HTTP methods like POST and PUT that include request bodies.
+
+        Returns:
+            bytes: The request body data, or empty bytes if no body is present
+
+        The method safely handles:
+        - Missing Content-Length headers (treats as no body)
+        - Zero-length bodies
+        - Large request bodies (limited by available memory)
+        """
         content_length = int(self.headers.get('Content-Length', 0))
         _log.debug(f"Reading request body, Content-Length: {content_length}")
 
@@ -539,7 +892,34 @@ class RequestForwarder(BaseHTTPRequestHandler):
         return b''
 
     def _forward_request(self, method: str) -> None:
-        """Common method to forward requests of any type"""
+        """
+        Common method to forward requests of any type.
+
+        Handles the complete request forwarding process including:
+        - Creating backend server connection
+        - Reading request body for applicable methods
+        - Processing and filtering headers
+        - Adding client certificate information as headers
+        - Forwarding request to backend server
+        - Handling response and sending to client
+
+        Args:
+            method (str): HTTP method (GET, POST, PUT, DELETE, etc.)
+
+        The method implements the core proxy functionality:
+        1. Establishes connection to backend server
+        2. Extracts client certificate and adds as HTTP headers
+        3. Forwards the request with proper header filtering
+        4. Handles the response and forwards back to client
+        5. Ensures proper connection cleanup
+
+        Client certificate information is added as HTTP headers in Nginx style:
+        - SSL-Client-Cert: PEM-encoded certificate
+        - SSL-Client-S-DN: Subject Distinguished Name
+        - SSL-Client-I-DN: Issuer Distinguished Name
+        - SSL-Client-Serial: Certificate serial number
+        - SSL-Client-Fingerprint: SHA256 fingerprint
+        """
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"Forwarding {method} {self.path} for client {client_info}")
         conn = None
@@ -651,35 +1031,48 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     _log.warning(f"Error closing connection for client {client_info}: {e}")
 
     def do_GET(self):
+        """Handle HTTP GET requests by forwarding to backend server."""
         _log.debug(f"Received GET request for {self.path}")
         self._forward_request('GET')
 
     def do_HEAD(self):
+        """Handle HTTP HEAD requests by forwarding to backend server."""
         _log.debug(f"Received HEAD request for {self.path}")
         self._forward_request('HEAD')
 
     def do_POST(self):
+        """Handle HTTP POST requests by forwarding to backend server."""
         _log.debug(f"Received POST request for {self.path}")
         self._forward_request('POST')
 
     def do_PUT(self):
+        """Handle HTTP PUT requests by forwarding to backend server."""
         _log.debug(f"Received PUT request for {self.path}")
         self._forward_request('PUT')
 
     def do_DELETE(self):
+        """Handle HTTP DELETE requests by forwarding to backend server."""
         _log.debug(f"Received DELETE request for {self.path}")
         self._forward_request('DELETE')
 
     def do_OPTIONS(self):
+        """Handle HTTP OPTIONS requests by forwarding to backend server."""
         _log.debug(f"Received OPTIONS request for {self.path}")
         self._forward_request('OPTIONS')
 
     def do_PATCH(self):
+        """Handle HTTP PATCH requests by forwarding to backend server."""
         _log.debug(f"Received PATCH request for {self.path}")
         self._forward_request('PATCH')
 
     def log_request(self, code='-', size='-'):
-        """Custom request logging"""
+        """
+        Custom request logging with appropriate log levels.
+
+        Args:
+            code: HTTP response code (string or integer)
+            size: Response size (string or integer)
+        """
         if isinstance(code, str):
             _log.info(f"{self.command} {self.path} {code} {size}")
         elif code < 400:
@@ -688,21 +1081,51 @@ class RequestForwarder(BaseHTTPRequestHandler):
             _log.warning(f"{self.command} {self.path} {code} {size}")
 
     def log_error(self, format, *args):
-        """Override to use our logger instead"""
+        """Override to use our logger instead of stderr."""
         _log.error(format % args)
 
     def log_message(self, format, *args):
-        """Override to use our logger instead"""
+        """Override to use our logger instead of stderr."""
         _log.info(format % args)
 
 class ProxyServer(ThreadingHTTPServer):
-    """Multi-threaded proxy server that can handle multiple clients simultaneously."""
+    """
+    Multi-threaded proxy server that can handle multiple clients simultaneously.
+
+    Extends ThreadingHTTPServer to provide concurrent client support for IEEE 2030.5
+    proxy operations. Each client connection is handled in a separate thread, enabling
+    multiple devices to communicate through the proxy simultaneously without blocking.
+
+    Key Features:
+    - Thread-per-client architecture for true concurrency
+    - TCP keep-alive for improved connection performance
+    - Configurable request queue for handling connection bursts
+    - Proper resource cleanup with daemon threads
+    - Socket reuse for quick restart capability
+
+    Attributes:
+        allow_reuse_address (bool): Enable SO_REUSEADDR for quick restart
+        daemon_threads (bool): Don't wait for threads on shutdown
+        request_queue_size (int): Maximum pending connections (50)
+
+    The server maintains references to:
+    - tls_repo: TLS repository for certificate management
+    - proxy_target: Backend server address tuple (host, port)
+    """
 
     # Allow connection reuse and set reasonable limits
     allow_reuse_address = True
     daemon_threads = True  # Don't wait for threads to finish on shutdown
 
     def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int], **kwargs):
+        """
+        Initialize the proxy server with TLS repository and target configuration.
+
+        Args:
+            tls_repo (TLSRepository): Certificate repository for SSL operations
+            proxy_target (Tuple[str, int]): Backend server (host, port) tuple
+            **kwargs: Additional arguments passed to ThreadingHTTPServer
+        """
         _log.debug(f"Initializing ProxyServer with target {proxy_target}")
         # Store our custom attributes before calling super().__init__
         self._tls_repo = tls_repo
@@ -723,14 +1146,21 @@ class ProxyServer(ThreadingHTTPServer):
 
     @property
     def proxy_target(self) -> Tuple[str, int]:
+        """Get the backend server target address."""
         return self._proxy_target
 
     @property
     def tls_repo(self) -> TLSRepository:
+        """Get the TLS repository for certificate operations."""
         return self._tls_repo
 
     def server_bind(self):
-        """Override to set additional socket options"""
+        """
+        Override to set additional socket options for optimal performance.
+
+        Configures TCP keep-alive parameters (Linux-specific) to maintain
+        long-lived connections and detect dead connections efficiently.
+        """
         super().server_bind()
 
         # Set TCP keep-alive parameters if available (Linux-specific)
@@ -746,7 +1176,16 @@ class ProxyServer(ThreadingHTTPServer):
             _log.debug(f"Could not set TCP keep-alive parameters: {e}")
 
     def process_request(self, request, client_address):
-        """Override to add better logging and error handling for concurrent requests"""
+        """
+        Override to add better logging and error handling for concurrent requests.
+
+        Args:
+            request: The client socket connection
+            client_address: Tuple of (host, port) for the client
+
+        Provides enhanced error handling and logging for debugging issues
+        with concurrent client connections in production environments.
+        """
         try:
             _log.debug(f"Processing new request from {client_address}")
             super().process_request(request, client_address)
@@ -764,6 +1203,30 @@ class ProxyServer(ThreadingHTTPServer):
 
 def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
                 proxy_target: Tuple[str, int]):
+    """
+    Start the proxy server with SSL/TLS configuration.
+
+    Creates and starts a multi-threaded proxy server that accepts client connections
+    with TLS client certificates and forwards requests to a backend IEEE 2030.5 server.
+    The server requires client certificates for authentication.
+
+    Args:
+        server_address (Tuple[str, int]): Address to bind the proxy server (host, port)
+        tls_repo (TLSRepository): Certificate repository containing CA, server certs
+        proxy_target (Tuple[str, int]): Backend server address (host, port)
+
+    The function configures:
+    - TLS server context requiring client certificates
+    - Certificate chain loading for server identity
+    - Permissive cipher suites for compatibility
+    - Graceful shutdown handling
+
+    Server Operation:
+    - Binds to the specified address and port
+    - Loads server certificates from TLS repository
+    - Requires client certificates (CERT_REQUIRED)
+    - Runs until KeyboardInterrupt or fatal error
+    """
     _log.info(f"Serving proxy at {server_address} -> {proxy_target}")
     try:
         _log.debug(f"Creating ProxyServer instance at {server_address}")
@@ -838,9 +1301,34 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
         _log.info("Proxy server shut down")
 
 def build_address_tuple(hostname: str) -> Tuple[str, int]:
-    """Create a Tuple[str, int] from the passed hostname.
-    The hostname can be formatted using https://server:port or server:port
-    :param: hostname
+    """
+    Create a Tuple[str, int] from the passed hostname.
+
+    Parses various hostname formats to extract host and port information,
+    providing sensible defaults for IEEE 2030.5 applications.
+
+    Args:
+        hostname (str): Hostname in various formats:
+                       - "https://server:port" (URL format)
+                       - "http://server:port" (URL format)
+                       - "server:port" (host:port format)
+                       - "server" (host only, defaults to port 443)
+
+    Returns:
+        Tuple[str, int]: A tuple of (hostname, port) with guaranteed integer port
+
+    Default Ports:
+        - HTTPS URLs without port: 443
+        - HTTP URLs without port: 80
+        - Plain hostnames without port: 443 (secure default for IEEE 2030.5)
+
+    Examples:
+        >>> build_address_tuple("https://example.com:8443")
+        ('example.com', 8443)
+        >>> build_address_tuple("example.com")
+        ('example.com', 443)
+        >>> build_address_tuple("http://example.com")
+        ('example.com', 80)
     """
     _log.debug(f"Parsing hostname: {hostname}")
     parsed = urlparse(hostname)
@@ -862,18 +1350,69 @@ def build_address_tuple(hostname: str) -> Tuple[str, int]:
     return hostname_tuple
 
 def _main():
+    """
+    Main entry point for the IEEE 2030.5 proxy server application.
+
+    Parses command line arguments, loads configuration, initializes the TLS
+    repository, and starts the proxy server. This function handles the complete
+    application lifecycle including error handling and graceful shutdown.
+
+    Command Line Arguments:
+        config: Path to YAML configuration file (required)
+        --debug: Enable debug logging (optional)
+        --syslog: Enable syslog logging in addition to console (optional)
+        --syslog-facility: Syslog facility to use (default: local0)
+
+    Configuration File Format:
+        The YAML config file must contain:
+        - proxy_hostname: Address for proxy to bind to
+        - server_hostname: Backend server address
+        - tls_repository: Path to certificate directory
+        - openssl_cnf: Path to OpenSSL configuration template
+
+    Returns:
+        int: Exit code (0 for success, 1 for error)
+
+    The function performs these steps:
+    1. Parse command line arguments
+    2. Configure logging based on debug and syslog flags
+    3. Load and validate configuration file
+    4. Initialize TLS repository with certificates
+    5. Parse server and proxy addresses
+    6. Start the proxy server
+    7. Handle shutdown and cleanup
+    """
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="IEEE 2030.5 proxy server with client certificate forwarding"
+    )
     parser.add_argument(dest="config", help="Configuration file for the server.")
     parser.add_argument("--debug",
                       action="store_true",
                       default=False,
                       help="Turns debugging on for logging of the proxy.")
+    parser.add_argument("--syslog",
+                      action="store_true",
+                      default=False,
+                      help="Enable syslog logging in addition to console logging.")
+    parser.add_argument("--syslog-facility",
+                      default="local0",
+                      choices=['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr',
+                              'news', 'uucp', 'cron', 'authpriv', 'ftp', 'local0', 'local1',
+                              'local2', 'local3', 'local4', 'local5', 'local6', 'local7'],
+                      help="Syslog facility to use (default: local0)")
     opts = parser.parse_args()
 
-    # Setup enhanced logging
-    logger = setup_logging(debug=opts.debug)
+    # If syslog facility is specified (and it's not the default), enable syslog automatically
+    use_syslog = opts.syslog or opts.syslog_facility != 'local0'
+
+    # Setup enhanced logging with optional syslog
+    logger = setup_logging(debug=opts.debug, use_syslog=use_syslog,
+                          syslog_facility=opts.syslog_facility)
     _log.debug(f"Starting 2030.5 proxy server with config: {opts.config}")
+
+    if use_syslog:
+        _log.info(f"Syslog enabled with facility: {opts.syslog_facility}")
 
     try:
         _log.debug(f"Loading configuration from {opts.config}")
@@ -910,4 +1449,5 @@ def _main():
         return 1
 
 if __name__ == '__main__':
+    _main()
     _main()
