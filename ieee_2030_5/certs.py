@@ -48,7 +48,7 @@ class TLSRepository:
                  repo_dir: PathStr,
                  openssl_cnffile_template: PathStr,
                  serverhost: str,
-                 proxyhost: str = None,
+                 proxyhost: str | None = None,
                  clear=False,
                  **kwargs):
         if isinstance(repo_dir, str):
@@ -65,8 +65,8 @@ class TLSRepository:
         self._common_names = {serverhost: serverhost}
         if proxyhost:
             self._common_names[proxyhost] = proxyhost
-        self._client_common_name_set = set()
-        
+        self._client_common_name_set: set[str] = set()
+
         if clear and self._repo_dir.exists():
             shutil.rmtree(self._repo_dir)
 
@@ -78,7 +78,7 @@ class TLSRepository:
 
         index_txt = self._repo_dir.joinpath("index.txt")
         serial = self._repo_dir.joinpath("serial")
-        
+
         if not index_txt.exists():
             index_txt.write_text("")
         if not serial.exists():
@@ -86,9 +86,9 @@ class TLSRepository:
 
         self._current_pk: Dict[str, Path] = {}
         self._current_certs: Dict[str, Path] = {}
-        # lfdi -> sfdi and sfdi -> lfdi for devices.
-        self._devices: Dict[str, str] = {}
-        
+        # device_name -> (lfdi, sfdi) for devices.
+        self._devices: Dict[str, Tuple[str, int]] = {}
+
         new_contents = openssl_cnffile_template.read_text().replace(
             "dir = REPLACE_WITH_REPO_PATH", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
@@ -101,24 +101,24 @@ class TLSRepository:
         # self._cert_paths: List[Path] = []
         # self._certificate_specs: Dict[str, Dict[str, str]] = {}
         if not clear:
-            
+
             # creating certs has something screwy so we are going
             # to create the cert_paths based upon the private key
             # files.
             for f in self._private_dir.glob(GLOB_PRIVATE):
                 f = Path(f)
                 self._current_pk[f.stem] = f
-            
+
             for f in self._certs_dir.glob(GLOB_CERT):
                 f = Path(f)
                 self._current_certs[f.stem] = f
-                        
+
         if not self._ca_key.exists() or not self._ca_cert.exists():
             self._tls.tls_create_private_key(self.ca_key_file)
             self._tls.tls_create_ca_certificate("ca", self.ca_key_file, self.ca_cert_file)
             self._current_pk["ca"] = self.ca_key_file
             self._current_certs["ca"] = self.ca_cert_file
-            
+
         if not self.server_cert_file.exists() or not self.server_key_file.exists():
             self._tls.tls_create_private_key(self.server_key_file)
             self._tls.tls_create_signed_certificate(serverhost, self.ca_key_file, self.ca_cert_file,
@@ -126,7 +126,7 @@ class TLSRepository:
                                                     as_server=True)
             self._current_pk[serverhost] = self.server_key_file
             self._current_certs[serverhost] = self.server_cert_file
-        
+
         if proxyhost is not None and (not self.proxy_cert_file.exists() or \
             not self.proxy_key_file.exists()):
             self._tls.tls_create_private_key(self.proxy_key_file)
@@ -146,15 +146,15 @@ class TLSRepository:
                 self.create_cert(admin_cert.stem)
                 self._current_pk["admin"] = admin_key
                 self._current_certs["admin"] = admin_cert
-                
-        
+
+
 
         for crt in self._current_certs:
             if crt not in (serverhost, proxyhost, "ca", "admin"):
                 self._devices[crt] = (self.lfdi(crt), self.sfdi(crt))
 
         assert len(self._current_pk) == len(self._current_certs)
-        
+
         if len(kwargs) > 0:
             raise ValueError(f"Not all kwargs used: {kwargs.keys()}")
 
@@ -168,7 +168,7 @@ class TLSRepository:
 
     def has_device(self, common_name: str) -> bool:
         return common_name in self._devices
-        
+
     def create_cert(self, common_name: str, as_server: bool = False):
 
         if not self.__get_key_file__(common_name).exists():
@@ -179,7 +179,7 @@ class TLSRepository:
                                                 self.__get_key_file__(common_name),
                                                 self.__get_cert_file__(common_name), as_server)
         self._current_certs[common_name] = self.__get_cert_file__(common_name)
-        
+
         self._tls.tls_create_pkcs23_pem_and_cert(self.__get_key_file__(common_name),
                                                  self.__get_cert_file__(common_name),
                                                  self.__get_combined_file__(common_name))
@@ -189,7 +189,7 @@ class TLSRepository:
         # self._certificate_specs[common_name] = dict(common_name=common_name,
         #                                             lFDI=self.lfdi(common_name),
         #                                             path=self.__get_cert_file__(common_name).as_posix())
-        
+
 
     def lfdi(self, device_id: str) -> Lfdi:
         """
@@ -234,21 +234,21 @@ class TLSRepository:
                 self.__get_key_file__(device_id).as_posix())
 
     @property
-    def client_list(self) -> Dict[str, Dict[str, str]]:
+    def client_list(self) -> Dict[str, Dict[str, str | bool]]:
         # TODO: Use precalculated specs rather than this each time.
-        specs: Dict[str, Dict[str, str]] = {}
+        specs: Dict[str, Dict[str, str | bool]] = {}
         for d in self._private_dir.glob(GLOB_PRIVATE):
-            
+
             paths = self.get_file_pair(d.stem)
-            
+
             specs[d.stem] = {'common_name': d.stem,
                              'path': ','.join(paths),
                              'device': False}
-            
+
             if ':' not in d.stem or 'admin' != d.stem:
                 specs[d.stem]['lFID'] = self.lfdi(d.stem)
                 specs[d.stem]['device'] = True
-                         
+
         return specs
 
     @property

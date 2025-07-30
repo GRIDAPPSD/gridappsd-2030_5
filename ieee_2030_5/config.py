@@ -5,7 +5,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple, TypeVar, Union
+from typing import Dict, List, Literal, Tuple, TypeVar, Union, Generic
 
 import yaml
 from dataclasses_json import dataclass_json
@@ -30,11 +30,11 @@ D = TypeVar("D")
 
 
 @dataclass
-class ReturnValue:
+class ReturnValue(Generic[D]):
     success: bool
     an_object: D
     was_update: bool
-    location: str = None
+    location: str | None = None
 
     def get(self, datatype: D) -> D:
         return self.an_object
@@ -59,10 +59,10 @@ class DERConfiguration:
 
 @dataclass
 class DeviceConfiguration:
-    id: str = None
+    id: str | None = None
     lfdi: Lfdi | None = None
     post_rate: int = 3
-    pin: int = None
+    pin: int | None = None
     poll_rate: int = 3
     fsas: List[str] = field(default_factory=list)
     ders: List[str] = field(default_factory=list)
@@ -72,34 +72,36 @@ class DeviceConfiguration:
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
-        return self.id.__hash__()
+        return self.id.__hash__() if self.id else 0
 
 
 @dataclass
 class CurveConfiguration:
+    description: str | None = None
 
     @classmethod
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
-        return self.description.__hash__()
+        return self.description.__hash__() if self.description else 0
 
 
 @dataclass
 class ControlBaseConfiguration:
+    description: str | None = None
 
     @classmethod
     def from_dict(cls, env):
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
-        return self.description.__hash__()
+        return self.description.__hash__() if self.description else 0
 
 
 @dataclass
 class ControlConfiguration:
-    description: str = None
+    description: str | None = None
     base: Dict = field(default_factory=dict)
 
     @classmethod
@@ -112,13 +114,13 @@ class ControlConfiguration:
             })
 
     def __hash__(self):
-        return self.description.__hash__()
+        return self.description.__hash__() if self.description else 0
 
 
 @dataclass
 class ProgramConfiguration:
-
-    default_control: str = None
+    description: str | None = None
+    default_control: str | None = None
     controls: List[str] = field(default_factory=list)
     curves: List[str] = field(default_factory=list)
 
@@ -127,7 +129,7 @@ class ProgramConfiguration:
         return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})
 
     def __hash__(self):
-        return self.description.__hash__()
+        return self.description.__hash__() if self.description else 0
 
 
 @dataclass_json
@@ -144,9 +146,9 @@ class GridappsdConfiguration:
     username: str = 'system'
     password: str = 'manager'
     field_bus_def: MessageBusDefinition | str | None = None
-    feeder_id_file: Optional[str] = None
-    feeder_id: Optional[str] = None
-    simulation_id_file: Optional[str] = None
+    feeder_id_file: str | None = None
+    feeder_id: str | None = None
+    simulation_id_file: str | None = None
 
     @property
     def full_address(self):
@@ -201,7 +203,7 @@ class ServerConfiguration:
     service_name: str = "IEEE_2030_5"
     simulation_id: str | None = None
 
-    ui_port: int = None
+    ui_port: int | None = None
 
     include_default_der_on_all_devices: bool = True
     include_default_der_program_on_ders: bool = True
@@ -210,7 +212,7 @@ class ServerConfiguration:
     default_der_control: m.DefaultDERControl | None = None
 
     cleanse_storage: bool = True
-    storage_path: str = None
+    storage_path: str | None = None
 
     log_event_list_poll_rate: int = 900
     device_capability_poll_rate: int = 900
@@ -246,10 +248,20 @@ class ServerConfiguration:
     # fsa_list: List[FunctionSetAssignments] = field(default_factory=list)
     # curve_list: List[DERCurve] = field(default_factory=list)
 
-    proxy_hostname: Optional[str] = None
-    gridappsd: Optional[GridappsdConfiguration] = None
+    proxy_hostname: str | None = None
+    proxy_enabled: bool = False
+    proxy_debug: bool = False
+
+    gridappsd: GridappsdConfiguration | None = None
     # DefaultDERControl: Optional[DefaultDERControl] = None
     # DERControlList: Optional[DERControl] = field(default=list)
+
+    # ZODB configuration
+    zodb_path: Path | None = None
+    zodb_pool_size: int = 7
+    zodb_cache_size: int = 10000
+    zodb_pack_interval_hours: int = 24
+
 
     @property
     def server_hostname(self) -> str:
@@ -273,6 +285,8 @@ class ServerConfiguration:
         # self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
         # self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
         # self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
+        if self.zodb_path is None:
+            self.zodb_path = Path("~/.ieee_2030_5_data/main.fs").expanduser()
 
         if self.devices is None:
             self.devices = []
@@ -328,7 +342,11 @@ class ServerConfiguration:
 
     def get_device_pin(self, lfdi: Lfdi, tls_repo: TLSRepository) -> int:
         for d in self.devices:
-            test_lfdi = tls_repo.lfdi(d.id)
-            if test_lfdi == int(lfdi):
-                return d.pin
+            if d.id is not None:
+                test_lfdi = tls_repo.lfdi(d.id)
+                if test_lfdi == int(lfdi):
+                    if d.pin is not None:
+                        return d.pin
+                    else:
+                        raise NotFoundError(f"Device {lfdi} found but has no PIN configured.")
         raise NotFoundError(f"The device_id: {lfdi} was not found.")
