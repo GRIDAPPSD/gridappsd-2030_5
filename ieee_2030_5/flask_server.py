@@ -52,11 +52,11 @@ def setup_request_logging():
     # Create file handler for HTTP logs
     http_handler = logging.FileHandler('logs/http_debug.log')
     http_handler.setLevel(logging.DEBUG)
-    
+
     # Create formatter with detailed information
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] [%(thread)d] %(message)s')
     http_handler.setFormatter(formatter)
-    
+
     # Add handler to the logger
     _log_http.setLevel(logging.DEBUG)
     _log_http.addHandler(http_handler)
@@ -72,7 +72,7 @@ def log_socket_info(server):
                     socket_opts[opt_name] = server.socket.getsockopt(socket.SOL_SOCKET, opt_val)
                 except:
                     socket_opts[opt_name] = "Error getting option"
-        
+
         # Try to get TCP keep-alive parameters if available
         if hasattr(socket, "TCP_KEEPIDLE"):
             try:
@@ -80,7 +80,7 @@ def log_socket_info(server):
                     socket.IPPROTO_TCP, socket.TCP_KEEPIDLE)
             except:
                 socket_opts["TCP_KEEPIDLE"] = "Not supported"
-        
+
         _log_http.info(f"Server socket options: {socket_opts}")
     except Exception as e:
         _log_http.error(f"Error logging socket info: {e}")
@@ -105,7 +105,7 @@ class ConnectionManager(threading.Thread):
         self.idle_timeout = idle_timeout
         self.running = True
         self.name = "2030.5-Connection-Manager"
-        
+
     def run(self):
         while self.running:
             try:
@@ -113,38 +113,38 @@ class ConnectionManager(threading.Thread):
             except Exception as e:
                 _log.error(f"Error in connection manager: {e}")
             time.sleep(60)  # Check every minute
-            
+
     def _clean_idle_connections(self):
         now = time.time()
         to_close = []
-        
+
         with IEEE2030_5_RequestHandler.connection_lock:
             for conn_id, info in list(IEEE2030_5_RequestHandler.active_connections.items()):
                 idle_time = now - info['last_activity']
                 if idle_time > self.idle_timeout:
                     to_close.append((conn_id, info))
-        
+
         # Close connections outside the lock to avoid deadlocks
         for conn_id, info in to_close:
             try:
                 _log.info(f"Closing idle connection from {info['client_address']} "
                           f"after {self.idle_timeout}s of inactivity")
                 info['connection'].close()
-                
+
                 with IEEE2030_5_RequestHandler.connection_lock:
                     if conn_id in IEEE2030_5_RequestHandler.active_connections:
                         del IEEE2030_5_RequestHandler.active_connections[conn_id]
-                        
+
             except Exception as e:
                 _log.warning(f"Error closing idle connection: {e}")
-                
+
     def stop(self):
         self.running = False
 
 
 class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
     """Request handler that properly manages HTTP/1.1 persistent connections."""
-    
+
     protocol_version = 'HTTP/1.1'  # Force HTTP/1.1
     connection_lock = threading.Lock()
     active_connections = {}
@@ -170,82 +170,201 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
         _log.debug("Making environment")
         environ = super(IEEE2030_5_RequestHandler, self).make_environ()
 
-        # Assume browser is being hit with things that start with /admin allow
-        # a pass through from web (should be protected via auth but not right now)
-        if IEEE2030_5_RequestHandler.is_admin(
-                environ['PATH_INFO']) and not self.config.generate_admin_cert:
-            raise werkzeug.exceptions.Forbidden()
+        # Check admin access early
+        if IEEE2030_5_RequestHandler.is_admin(environ['PATH_INFO']):
+            if not self.config.generate_admin_cert:
+                raise werkzeug.exceptions.Forbidden()
+            return self._setup_admin_environ(environ)
+
+        # Handle LFDI client mode (HTTP without certificates)
+        if self.config.lfdi_client:
+            return self._setup_lfdi_client_environ(environ)
 
         try:
-            # Short circuit the connection from the client and utilize http rather
-            # than x509 certificates.
-            if self.config.lfdi_client:
-                environ['ieee_2030_5_lfdi'] = self.config.lfdi_client
-                environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(self.config.lfdi_client)
-                return environ
+            # Load certificate from various sources
+            x509 = self._load_client_certificate(environ)
 
-            # For admin use the admin peer even though it's not what is sent in to the client.
-            # This allows admin to login from any api, though not necessarily secure this
-            # allows a way to have the admin be boxed off.
-            if IEEE2030_5_RequestHandler.is_admin(environ['PATH_INFO']):
-                cert, key = self.tlsrepo.get_file_pair("admin")
-                x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
-            else:
-                x509_binary = self.connection.getpeercert(True)
-                x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
+            # Set up certificate environment variables
             environ['ieee_2030_5_peercert'] = x509
             environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
-            if IEEE2030_5_RequestHandler.config.lfdi_mode == "lfdi_mode_from_file":
-                _log.debug("Using hash from combined file.")
-                pth = IEEE2030_5_RequestHandler.tlsrepo.__get_combined_file__(
-                    x509.get_subject().CN)
-                sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
-                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(sha256hash)
-            else:
-                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(
-                    x509.digest("sha256").decode('ascii'))
-            environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
 
-            _log.debug(
-                f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}"
-            )
-            if not IEEE2030_5_RequestHandler.is_admin(environ['PATH_INFO']):
-                # TODO Currently if we are in full file mode there isn't a way to verify that the
-                # device is known.
-                if IEEE2030_5_RequestHandler.config.lfdi_mode == "lfdi_mode_from_cert_fingerprint":
-                    found_device_id = self.tlsrepo.find_device_id_from_sfdi(
-                        environ['ieee_2030_5_sfdi'])
-                    assert found_device_id, "Unknown device found."
+            # Calculate LFDI and SFDI
+            self._calculate_device_identifiers(environ, x509)
 
-        except OpenSSL.crypto.Error:
-            # Only if we have a debug_device do we want to expose this device through the admin page.
-            # if self.debug_device:
-            #     cert_file, key_file = self.tlsrepo.get_file_pair(self.debug_device)
-            #     x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, Path(cert_file).read_bytes())
-            #     environ['ieee_2030_5_peercert'] = x509
-            #     environ['ieee_2030_5_subject'] = x509.get_subject().CN
+            # Verify device is known (for non-admin requests)
+            self._verify_device_authorization(environ)
 
-            # else:
+        except OpenSSL.crypto.Error as e:
+            _log.warning(f"Certificate error: {e}")
             environ['peercert'] = None
+        except Exception as e:
+            _log.error(f"Unexpected error in make_environ: {e}")
+            raise
 
         return environ
 
-    
+    def _setup_admin_environ(self, environ):
+        """Setup environment for admin requests"""
+        try:
+            cert, key = self.tlsrepo.get_file_pair("admin")
+            x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
+            environ['ieee_2030_5_peercert'] = x509
+            environ['ieee_2030_5_serial_number'] = x509.get_serial_number()
+            self._calculate_device_identifiers(environ, x509)
+            return environ
+        except Exception as e:
+            _log.error(f"Failed to setup admin environment: {e}")
+            raise werkzeug.exceptions.InternalServerError("Admin certificate setup failed")
+
+    def _setup_lfdi_client_environ(self, environ):
+        """Setup environment for LFDI client mode (HTTP without certificates)"""
+        environ['ieee_2030_5_lfdi'] = self.config.lfdi_client
+        environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(self.config.lfdi_client)
+        return environ
+
+    def _load_client_certificate(self, environ):
+        """Load client certificate from proxy headers or direct TLS connection"""
+        # Try proxy headers first (with validation)
+        if 'HTTP_SSL_CLIENT_CERT' in environ or 'SSL_CLIENT_CERT' in environ:
+            return self._load_certificate_from_proxy_headers(environ)
+
+        # Fall back to direct TLS connection
+        return self._load_certificate_from_connection()
+
+    def _load_certificate_from_proxy_headers(self, environ):
+        """Load and validate certificate from proxy headers"""
+        cert_header = 'HTTP_SSL_CLIENT_CERT' if 'HTTP_SSL_CLIENT_CERT' in environ else 'SSL_CLIENT_CERT'
+        _log.debug(f"Using {cert_header} from proxy header")
+
+        cert_pem = environ[cert_header]
+        _log.debug(f"Raw certificate from proxy: {cert_pem[:50]}...")
+
+        # Handle certificate format - proxy may send it as a single line with spaces
+        if cert_pem.startswith('-----BEGIN CERTIFICATE-----') and '-----END CERTIFICATE-----' in cert_pem:
+            # Certificate is in single-line format, need to properly format it
+            if '\n' not in cert_pem:
+                _log.debug("Converting single-line certificate to proper PEM format")
+                # Split on the certificate boundaries and base64 content
+                parts = cert_pem.split('-----BEGIN CERTIFICATE-----')
+                if len(parts) == 2:
+                    remaining = parts[1].split('-----END CERTIFICATE-----')
+                    if len(remaining) == 2:
+                        base64_content = remaining[0].strip()
+                        # Remove any spaces from the base64 content and reformat
+                        base64_content = base64_content.replace(' ', '')
+                        # Add newlines every 64 characters for proper PEM format
+                        formatted_lines = []
+                        for i in range(0, len(base64_content), 64):
+                            formatted_lines.append(base64_content[i:i+64])
+
+                        cert_pem = '-----BEGIN CERTIFICATE-----\n' + '\n'.join(formatted_lines) + '\n-----END CERTIFICATE-----'
+                        _log.debug("Reformatted certificate to proper PEM format")
+
+        try:
+            x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert_pem)
+            _log.debug(f"Successfully loaded client certificate from proxy header for CN: {x509.get_subject().CN}")
+
+            # Additional validation using other proxy headers if available
+            self._validate_proxy_certificate_headers(environ, x509)
+
+            return x509
+        except Exception as e:
+            _log.error(f"Failed to load certificate from proxy header: {e}")
+            _log.error(f"Certificate content: {cert_pem}")
+            raise
+
+    def _load_certificate_from_connection(self):
+        """Load certificate directly from TLS connection"""
+        try:
+            x509_binary = self.connection.getpeercert(True)
+            if not x509_binary:
+                raise ValueError("No client certificate provided in TLS connection")
+
+            x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
+            _log.debug(f"Successfully loaded client certificate from TLS connection for CN: {x509.get_subject().CN}")
+            return x509
+        except Exception as e:
+            _log.error(f"Failed to load certificate from TLS connection: {e}")
+            raise
+
+    def _validate_proxy_certificate_headers(self, environ, x509):
+        """Validate certificate using additional proxy headers if available"""
+        # Check if proxy provided additional validation headers
+        if 'HTTP_SSL_CLIENT_S_DN' in environ:
+            expected_subject = str(x509.get_subject())
+            provided_subject = environ['HTTP_SSL_CLIENT_S_DN']
+            if expected_subject != provided_subject:
+                _log.warning(f"Subject DN mismatch: expected {expected_subject}, got {provided_subject}")
+
+        if 'HTTP_SSL_CLIENT_SERIAL' in environ:
+            expected_serial = str(x509.get_serial_number())
+            provided_serial = environ['HTTP_SSL_CLIENT_SERIAL']
+            if expected_serial != provided_serial:
+                _log.warning(f"Serial number mismatch: expected {expected_serial}, got {provided_serial}")
+
+        if 'HTTP_SSL_CLIENT_FINGERPRINT' in environ:
+            expected_fingerprint = x509.digest("sha256").decode('ascii')
+            provided_fingerprint = environ['HTTP_SSL_CLIENT_FINGERPRINT']
+            if expected_fingerprint != provided_fingerprint:
+                _log.warning(f"Fingerprint mismatch: expected {expected_fingerprint}, got {provided_fingerprint}")
+
+    def _calculate_device_identifiers(self, environ, x509):
+        """Calculate LFDI and SFDI from certificate"""
+        if IEEE2030_5_RequestHandler.config.lfdi_mode == "lfdi_mode_from_file":
+            _log.debug("Using hash from combined file")
+            try:
+                pth = IEEE2030_5_RequestHandler.tlsrepo.__get_combined_file__(x509.get_subject().CN)
+                sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
+                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(sha256hash)
+            except Exception as e:
+                _log.error(f"Failed to read combined file for {x509.get_subject().CN}: {e}")
+                raise
+        else:
+            environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha256").decode('ascii'))
+
+        environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
+
+        _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
+
+    def _verify_device_authorization(self, environ):
+        """Verify that the device is authorized to access the server"""
+        # Skip verification for admin requests
+        if IEEE2030_5_RequestHandler.is_admin(environ['PATH_INFO']):
+            return
+
+        # Only verify in certificate fingerprint mode
+        if IEEE2030_5_RequestHandler.config.lfdi_mode != "lfdi_mode_from_cert_fingerprint":
+            _log.debug("Skipping device verification - not in cert fingerprint mode")
+            return
+
+        # Look up device in TLS repository
+        found_device_id = self.tlsrepo.find_device_id_from_sfdi(environ['ieee_2030_5_sfdi'])
+        if not found_device_id:
+            _log.warning(
+                f"Unknown device with SFDI: {environ['ieee_2030_5_sfdi']} "
+                f"from {self.client_address}"
+            )
+            raise werkzeug.exceptions.Forbidden("Unknown device certificate")
+
+        _log.debug(f"Verified device id: {found_device_id}")
+        environ['ieee_2030_5_device_id'] = found_device_id
+
+
     def setup(self):
         """Set up the connection"""
         super().setup()
         # Set a long read timeout
         self.connection.settimeout(300)  # 5 minutes timeout
-    
+
     def finish(self):
         """Finish handling the request"""
         super().finish()
-    
+
     def handle(self):
         """Handle multiple requests if keep-alive is enabled"""
         # Register this as an active connection
         conn_id = id(self.connection)
-        
+
         # Track this connection
         with self.connection_lock:
             self.active_connections[conn_id] = {
@@ -253,26 +372,26 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
                 'last_activity': time.time(),
                 'client_address': self.client_address
             }
-        
+
         try:
             # Process requests
             self.raw_requestline = None
             self.close_connection = True
-            
+
             # Handle first request
             self.handle_one_request()
-            
+
             # Continue handling requests until the connection is closed
             while not self.close_connection:
                 self.raw_requestline = None
                 self.handle_one_request()
-                
+
         finally:
             # Clean up the connection tracking
             with self.connection_lock:
                 if conn_id in self.active_connections:
                     del self.active_connections[conn_id]
-    
+
     def handle_one_request(self):
         """Handle a single HTTP request with proper keep-alive support"""
         try:
@@ -280,29 +399,29 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             self.raw_requestline = self.rfile.readline(MAX_REQUEST_LINE_SIZE)
 
             _log.debug(f"{'*' * 20}Raw Request Line {self.raw_requestline}")
-            
+
             # If no data, close the connection
             if not self.raw_requestline:
                 self.close_connection = True
                 return
-            
+
             # Process the request normally
             if not self.parse_request():
                 self.close_connection = True
                 return
-                
+
             # Parse connection header
             connection_header = self.headers.get('Connection', '').lower()
-            
+
             # Log request
             _log.debug(f"Request: {self.command} {self.path} {self.request_version}")
             _log.debug(f"Connection header: {connection_header}")
-            
+
             # Process the request
             handler = getattr(self, f'do_{self.command}', self.do_GET)
             handler()
             self.wfile.flush()
-            
+
             # For HTTP/1.1, persistent is default unless 'Connection: close'
             if self.request_version >= 'HTTP/1.1' and 'close' not in connection_header:
                 self.close_connection = False
@@ -315,7 +434,7 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             else:
                 self.close_connection = True
                 _log.debug(f"Connection will close for {self.client_address}")
-                
+
         except socket.timeout:
             # Timeout reading from socket - close connection
             _log.debug(f"Socket timeout from {self.client_address}")
@@ -324,17 +443,17 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             # Handle any other errors
             _log.error(f"Error handling request: {e}")
             self.close_connection = True
-            
+
     def send_response(self, code, message=None):
         """Send response with appropriate headers for persistent connections"""
         # Create the HTTP response line
         self.log_request(code)
         self.send_response_only(code, message)
-        
+
         # Add server and date headers
         self.send_header('Server', 'IEEE2030_5/1.0')
         self.send_header('Date', self.date_time_string())
-        
+
         # Add keep-alive headers unless we're closing the connection
         if not self.close_connection:
             self.send_header('Connection', 'keep-alive')
@@ -343,17 +462,17 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
 
 class IEEE2030_5_Server(BaseWSGIServer):
     """Custom WSGI server with optimizations for IEEE 2030.5"""
-    
+
     def __init__(self, host, port, app, **kwargs):
         super().__init__(host, port, app, **kwargs)
         self.protocol_version = 'HTTP/1.1'
-        
+
     def server_bind(self):
         """Set socket options when binding the server socket"""
         # Set socket options for performance
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        
+
         # Set TCP keep-alive options if available
         # These are platform-specific, so use try/except
         try:
@@ -366,7 +485,7 @@ class IEEE2030_5_Server(BaseWSGIServer):
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
         except (AttributeError, OSError):
             pass
-            
+
         # Complete the binding process
         super().server_bind()
 
@@ -375,7 +494,7 @@ def set_socket_options(socket):
     """Configure socket options for optimized keep-alive support"""
     # Enable TCP keep-alive
     socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-    
+
     # Set keep-alive parameters if platform supports them
     # Linux specific, may need to adjust for other platforms
     if hasattr(socket, "TCP_KEEPIDLE") and hasattr(socket, "TCP_KEEPINTVL") and hasattr(socket, "TCP_KEEPCNT"):
@@ -400,35 +519,35 @@ def before_request():
 
     g.SERVER_CONFIG = server_config
     g.TLS_REPOSITORY = tls_repository
-# Add request tracking
+    # Add request tracking
     g.start_time = time.time()
     g.request_id = str(uuid.uuid4())[:8]  # Generate short request ID for tracking
-    
+
     # Log the incoming request details
     client_address = request.remote_addr
     method = request.method
     path = request.path
     protocol = request.environ.get('SERVER_PROTOCOL', '')
-    
+
     # Log basic request info
     _log_http.info(f"[{g.request_id}] {client_address} - {method} {path} {protocol}")
-    
+
     # Log detailed headers
     _log_http.debug(f"[{g.request_id}] Request Headers:")
     for name, value in request.headers.items():
         _log_http.debug(f"[{g.request_id}]   {name}: {value}")
-    
+
     # Log Connection header specifically since it's important for keep-alive
     connection_header = request.headers.get('Connection', 'none')
     _log_http.info(f"[{g.request_id}] Connection header: {connection_header}")
-    
+
     # Log client certificate info if available
     if 'ieee_2030_5_lfdi' in request.environ:
         _log_http.debug(f"[{g.request_id}] Client LFDI: {request.environ.get('ieee_2030_5_lfdi')}")
 
 
 def after_request(response: Response) -> Response:
-# Calculate request processing time
+    # Calculate request processing time
     duration = time.time() - g.start_time
 
     # Log response details
@@ -442,27 +561,27 @@ def after_request(response: Response) -> Response:
     # Add necessary headers for XML responses
     if 'Content-Type' not in response.headers:
         response.headers['Content-Type'] = 'application/sep+xml'
-    
+
     # Force persistent connections for HTTP/1.1
     if request.environ.get('SERVER_PROTOCOL') == 'HTTP/1.1':
         response.headers['Connection'] = 'keep-alive'
         response.headers['Keep-Alive'] = 'timeout=300, max=1000'
-    
+
     _log.debug(f"\nREQ: {request.path}")
     _log.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
     resp = response.get_data().decode('utf-8')
     _log.debug(f"\nRESP: {resp}")
-    
+
     return response
 
     # Log response details
     status_code = response.status_code
     content_length = response.headers.get('Content-Length', 0)
     content_type = response.headers.get('Content-Type', 'unknown')
-    
+
     # Log basic response info
     _log_http.info(f"[{g.request_id}] Response: {status_code} - {content_length} bytes - {content_type} ({duration:.3f}s)")
-    
+
     # Log detailed response headers
     _log_http.debug(f"[{g.request_id}] Response Headers:")
     for name, value in response.headers.items():
@@ -472,7 +591,7 @@ def after_request(response: Response) -> Response:
     if 'keep-alive' in connection_header:
         response.headers['Connection'] = 'keep-alive'
         response.headers['Keep-Alive'] = 'timeout=60, max=1000'
-    
+
     _log.debug(f"\nREQ: {request.path}")
     _log.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
     resp = response.get_data().decode('utf-8')
@@ -482,7 +601,7 @@ def after_request(response: Response) -> Response:
         response.headers['Connection'] = 'keep-alive'
         response.headers['Keep-Alive'] = 'timeout=60, max=1000'
         _log_http.info(f"[{g.request_id}] Forced keep-alive for HTTP/1.1 request")
-    
+
     return response
 
 
@@ -490,19 +609,19 @@ def __build_ssl_context__(tlsrepo: TLSRepository) -> ssl.SSLContext:
     server_key_file = str(tlsrepo.server_key_file)
     server_cert_file = str(tlsrepo.server_cert_file)
     ca_cert = str(tlsrepo.ca_cert_file)
-    
+
     # Create SSL context
     ssl_context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH, cafile=str(ca_cert))
     ssl_context.load_cert_chain(certfile=server_cert_file, keyfile=server_key_file)
     ssl_context.verify_mode = ssl.CERT_OPTIONAL
-    
+
     # Performance optimizations
     ssl_context.options |= ssl.OP_NO_TICKET
-    
+
     # Enable session caching if supported
     if hasattr(ssl_context, 'session_cache_mode'):
         ssl_context.session_cache_mode = ssl.SESS_CACHE_SERVER
-    
+
     return ssl_context
 
 def __build_ssl_context__old(tlsrepo: TLSRepository) -> ssl.SSLContext:
@@ -555,12 +674,12 @@ def __build_http_app__(config: ServerConfiguration) -> Flask:
 
 def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath('templates')))
-    
+
     app.config['PRESERVE_CONTEXT_ON_EXCEPTION'] = False
-    
+
     # Force HTTP/1.1 responses
     app.config['SERVER_PROTOCOL'] = 'HTTP/1.1'
-    
+
     # Debug headers path and request arguments
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.
@@ -700,12 +819,12 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
 
 class HTTP11WSGIServer(BaseWSGIServer):
     """WSGI server that forces HTTP/1.1 protocol."""
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Ensure the handler class knows to use HTTP/1.1
         self.protocol_version = 'HTTP/1.1'
-        
+
     def server_bind(self):
         # Set TCP socket options before binding
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -766,10 +885,10 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
 
     # Build the Flask application
     app = __build_app__(config, tlsrepo)
-    
+
     # Set HTTP/1.1 as the protocol version
     app.config['PROTOCOL_VERSION'] = 'HTTP/1.1'
-    
+
     # Configure SSL context
     ssl_context = __build_ssl_context__(tlsrepo)
 
@@ -779,11 +898,11 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
     except ValueError:
         host = config.server_hostname
         port = 8443
-    
+
     # Configure the request handler
     IEEE2030_5_RequestHandler.config = config
     IEEE2030_5_RequestHandler.tlsrepo = tlsrepo
-    
+
     # Build custom server options
     server_kwargs = {
         'app': app,
@@ -794,13 +913,13 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
         'threaded': True,
         'passthrough_errors': False,
     }
-    
+
     # Add any additional kwargs
     server_kwargs.update(kwargs)
-    
+
     # Create our custom server
     server = IEEE2030_5_Server(**server_kwargs)
-    
+
     # Initialize the connection manager
     if not hasattr(app, 'connection_manager'):
         connection_manager = ConnectionManager(
@@ -808,13 +927,13 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
         )
         connection_manager.start()
         app.connection_manager = connection_manager
-        
+
         # Register shutdown handler
         def shutdown_server():
             if hasattr(app, 'connection_manager'):
                 app.connection_manager.stop()
                 app.connection_manager.join(timeout=5)
-                
+
             with IEEE2030_5_RequestHandler.connection_lock:
                 for info in IEEE2030_5_RequestHandler.active_connections.values():
                     try:
@@ -822,9 +941,9 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
                     except:
                         pass
                 IEEE2030_5_RequestHandler.active_connections.clear()
-                
+
         atexit.register(shutdown_server)
-    
+
     return server
 
 
