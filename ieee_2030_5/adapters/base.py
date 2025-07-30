@@ -1,7 +1,51 @@
 # ieee_2030_5/adapters/base.py
 """
 Thread-safe base adapter classes for IEEE 2030.5 server.
-Provides concurrency control for all adapter operations.
+
+This module provides the foundation for thread-safe data access patterns in the IEEE 2030.5
+server implementation. It includes:
+
+- Base adapter classes with configurable concurrency control
+- Reader-writer locks for high-performance read-heavy workloads
+- Resource-specific locking for fine-grained concurrency
+- Performance tracking and monitoring capabilities
+- Specialized adapters for List and EndDevice resources
+
+Classes:
+    AdapterResult: Result wrapper for adapter operations with metadata
+    ConcurrencyMode: Constants for different concurrency control strategies
+    ResourceLockManager: Fine-grained resource-specific locking
+    ReadWriteLock: Reader-writer lock implementation for concurrent access
+    ThreadSafeAdapter: Abstract base class for all thread-safe adapters
+    ThreadSafeListAdapter: Adapter for IEEE 2030.5 List resources
+    ThreadSafeEndDeviceAdapter: Specialized adapter for EndDevice resources
+
+The adapter pattern allows for consistent, thread-safe access to IEEE 2030.5 resources
+while supporting different concurrency strategies based on usage patterns. Read-heavy
+workloads benefit from reader-writer locks, while write-heavy workloads can use
+traditional mutex locks.
+
+Example:
+    >>> # Initialize adapters (done automatically on import)
+    >>> initialize_adapters()
+    >>>
+    >>> # Access global adapter instances
+    >>> if ListAdapter is not None:
+    ...     result = ListAdapter.fetch_all(0, 10)
+    ...     if result.success:
+    ...         print(f"Found {len(result.data)} items")
+
+Threading Model:
+    All adapters are thread-safe and designed for concurrent access. The concurrency
+    mode can be configured per adapter:
+
+    - READ_WRITE_LOCK: Optimized for read-heavy workloads (default)
+    - MUTEX: Simple mutual exclusion for write-heavy workloads
+    - OPTIMISTIC: Optimistic locking with retry (future enhancement)
+
+Performance:
+    Adapters track operation counts and timing for monitoring and debugging.
+    Use get_adapter_stats() to retrieve performance metrics.
 """
 import logging
 import threading
@@ -9,7 +53,7 @@ import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Callable
+from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Callable, Union
 from collections import defaultdict
 import ieee_2030_5.models as m
 from ieee_2030_5.persistance.points import get_db, atomic_operation
@@ -17,26 +61,125 @@ _log = logging.getLogger(__name__)
 T = TypeVar('T')
 @dataclass
 class AdapterResult:
-    """Result of an adapter operation with metadata."""
+    """Result of an adapter operation with metadata.
+
+    This class provides a standardized way to return results from adapter operations,
+    including success/failure status, data payload, error information, and operation
+    metadata. It enables consistent error handling and result processing across all
+    adapter implementations.
+
+    Attributes:
+        success (bool): Whether the operation completed successfully
+        data (Any, optional): The result data from the operation. For fetch operations,
+            this contains the retrieved object(s). For create/update operations, this
+            may contain the created/updated object or confirmation data.
+        error (str | None, optional): Error message if the operation failed. None if
+            the operation succeeded.
+        was_update (bool, optional): For create/update operations, indicates whether
+            an existing resource was updated (True) or a new resource was created (False).
+            Defaults to False.
+        location (str | None, optional): For create operations, the location (href) of
+            the newly created resource. Used in HTTP responses for proper resource
+            location headers.
+
+    Examples:
+        >>> # Successful fetch operation
+        >>> result = AdapterResult(success=True, data=device_obj)
+        >>>
+        >>> # Failed operation with error
+        >>> result = AdapterResult(success=False, error="Device not found")
+        >>>
+        >>> # Successful create operation
+        >>> result = AdapterResult(
+        ...     success=True,
+        ...     data=new_device,
+        ...     was_update=False,
+        ...     location="/edev/123"
+        ... )
+    """
     success: bool
     data: Any = None
     error: str | None = None
     was_update: bool = False
     location: str | None = None
 class ConcurrencyMode:
-    """Concurrency control modes for adapters."""
+    """Concurrency control modes for adapters.
+
+    This class defines constants for different concurrency control strategies that
+    can be used by ThreadSafeAdapter implementations. The choice of concurrency mode
+    affects performance characteristics and should be selected based on the expected
+    read/write patterns of the adapter.
+
+    Constants:
+        READ_WRITE_LOCK: Uses reader-writer locks that allow multiple concurrent readers
+            but exclusive write access. This is optimal for read-heavy workloads where
+            many threads need to read data simultaneously but writes are infrequent.
+            This is the default mode for most adapters.
+
+        MUTEX: Uses a simple mutual exclusion lock (threading.RLock) that allows only
+            one thread at a time to access the resource. This is simpler but less
+            performant for read-heavy workloads. Use when write operations are frequent
+            or when simpler locking semantics are preferred.
+
+        OPTIMISTIC: Planned for future implementation. Will use optimistic locking
+            with conflict detection and retry logic. Suitable for low-contention
+            scenarios where conflicts are rare.
+
+    Example:
+        >>> adapter = ThreadSafeListAdapter(
+        ...     model_class=MyModel,
+        ...     concurrency_mode=ConcurrencyMode.READ_WRITE_LOCK
+        ... )
+    """
     READ_WRITE_LOCK = "rw_lock"      # Reader-writer locks (best for read-heavy)
     MUTEX = "mutex"                   # Simple mutual exclusion
     OPTIMISTIC = "optimistic"         # Optimistic locking with retry
 class ResourceLockManager:
-    """Manages fine-grained locks for individual resources."""
+    """Manages fine-grained locks for individual resources.
+
+    This class provides a mechanism for creating and managing locks on a per-resource
+    basis, allowing for fine-grained concurrency control. Instead of locking an entire
+    adapter, individual resources can be locked independently, improving concurrency
+    when different threads are working with different resources.
+
+    The manager maintains a dictionary of locks keyed by resource ID and ensures
+    thread-safe creation of new locks when needed. Locks are reentrant (RLock) to
+    allow the same thread to acquire the same resource lock multiple times.
+
+    Attributes:
+        _locks: Dictionary mapping resource IDs to their corresponding locks
+        _locks_lock: Master lock for thread-safe modification of the locks dictionary
+
+    Example:
+        >>> manager = ResourceLockManager()
+        >>> with manager.lock_resource("device_123"):
+        ...     # Perform operations on device_123
+        ...     pass
+    """
 
     def __init__(self):
+        """Initialize the resource lock manager.
+
+        Creates empty lock dictionary and master lock for thread-safe access.
+        """
         self._locks: Dict[str, threading.RLock] = {}
         self._locks_lock = threading.Lock()
 
     def get_resource_lock(self, resource_id: str) -> threading.RLock:
-        """Get or create a lock for a specific resource."""
+        """Get or create a lock for a specific resource.
+
+        This method retrieves an existing lock for the given resource ID, or creates
+        a new one if none exists. The operation is thread-safe.
+
+        Args:
+            resource_id: Unique identifier for the resource to lock
+
+        Returns:
+            threading.RLock: A reentrant lock for the specified resource
+
+        Thread Safety:
+            This method is thread-safe and can be called concurrently from multiple threads.
+        """
         with self._locks_lock:
             if resource_id not in self._locks:
                 self._locks[resource_id] = threading.RLock()
@@ -44,7 +187,28 @@ class ResourceLockManager:
 
     @contextmanager
     def lock_resource(self, resource_id: str):
-        """Context manager for locking a specific resource."""
+        """Context manager for locking a specific resource.
+
+        This provides a convenient way to acquire and automatically release a
+        resource-specific lock using Python's 'with' statement. The lock will
+        be automatically released when the context exits, even if an exception
+        occurs.
+
+        Args:
+            resource_id: Unique identifier for the resource to lock
+
+        Yields:
+            None: Context manager yields control to the caller while holding the lock
+
+        Raises:
+            TimeoutError: If the lock cannot be acquired within 30 seconds
+
+        Example:
+            >>> manager = ResourceLockManager()
+            >>> with manager.lock_resource("device_123"):
+            ...     # Critical section - only one thread can access device_123
+            ...     modify_device("device_123")
+        """
         lock = self.get_resource_lock(resource_id)
         acquired = lock.acquire(timeout=30)  # 30 second timeout
         if not acquired:
@@ -54,9 +218,50 @@ class ResourceLockManager:
         finally:
             lock.release()
 class ReadWriteLock:
-    """Reader-writer lock implementation for read-heavy workloads."""
+    """Reader-writer lock implementation for read-heavy workloads.
+
+    This class implements a reader-writer lock that allows multiple concurrent readers
+    OR a single exclusive writer, but not both simultaneously. This is ideal for
+    scenarios where reads are much more frequent than writes, as it allows multiple
+    threads to read data concurrently while ensuring data consistency during writes.
+
+    The implementation uses condition variables to coordinate between readers and writers:
+    - Multiple readers can acquire the lock simultaneously
+    - Writers wait for all readers to finish before acquiring exclusive access
+    - Readers wait for any active writer to finish before acquiring shared access
+
+    Attributes:
+        _readers: Current number of active readers holding the lock
+        _writers: Current number of active writers (should be 0 or 1)
+        _read_ready: Condition variable for coordinating reader access
+        _write_ready: Condition variable for coordinating writer access
+
+    Thread Safety:
+        This class is fully thread-safe and designed for high-concurrency scenarios.
+
+    Performance:
+        - Read operations scale linearly with the number of CPU cores
+        - Write operations have exclusive access ensuring consistency
+        - No reader starvation under normal conditions
+
+    Example:
+        >>> rw_lock = ReadWriteLock()
+        >>>
+        >>> # Multiple readers can access simultaneously
+        >>> with rw_lock.reader():
+        ...     data = read_shared_data()
+        >>>
+        >>> # Writers get exclusive access
+        >>> with rw_lock.writer():
+        ...     modify_shared_data()
+    """
 
     def __init__(self):
+        """Initialize the reader-writer lock.
+
+        Creates the internal state tracking and condition variables needed
+        for coordinating reader and writer access.
+        """
         self._readers = 0
         self._writers = 0
         self._read_ready = threading.Condition(threading.RLock())
@@ -64,7 +269,27 @@ class ReadWriteLock:
 
     @contextmanager
     def reader(self):
-        """Acquire reader lock."""
+        """Acquire reader lock for shared read access.
+
+        This context manager allows multiple threads to acquire read access
+        simultaneously. The calling thread will block if there are any active
+        writers, but can proceed immediately if only other readers are active.
+
+        Yields:
+            None: Context manager yields control while holding the reader lock
+
+        Blocking Behavior:
+            - Blocks if any writer is active
+            - Proceeds immediately if no writers are active
+            - Multiple readers can be active simultaneously
+
+        Example:
+            >>> rw_lock = ReadWriteLock()
+            >>> with rw_lock.reader():
+            ...     # Safe to read shared data
+            ...     # Multiple threads can be in this section simultaneously
+            ...     data = shared_resource.read()
+        """
         with self._read_ready:
             while self._writers > 0:
                 self._read_ready.wait()
@@ -79,7 +304,28 @@ class ReadWriteLock:
 
     @contextmanager
     def writer(self):
-        """Acquire writer lock."""
+        """Acquire writer lock for exclusive write access.
+
+        This context manager provides exclusive access for write operations.
+        The calling thread will block until all readers and any other writers
+        have released their locks. Once acquired, no other readers or writers
+        can access the resource.
+
+        Yields:
+            None: Context manager yields control while holding the exclusive writer lock
+
+        Blocking Behavior:
+            - Blocks if any readers are active
+            - Blocks if any other writer is active
+            - Provides exclusive access once acquired
+
+        Example:
+            >>> rw_lock = ReadWriteLock()
+            >>> with rw_lock.writer():
+            ...     # Exclusive access to shared data
+            ...     # No other readers or writers can be active
+            ...     shared_resource.modify()
+        """
         with self._write_ready:
             while self._writers > 0 or self._readers > 0:
                 self._write_ready.wait()
@@ -93,13 +339,73 @@ class ReadWriteLock:
             with self._read_ready:
                 self._read_ready.notify_all()
 class ThreadSafeAdapter(Generic[T], ABC):
-    """Base class for all thread-safe adapters."""
+    """Base class for all thread-safe adapters.
 
-    _lock: ReadWriteLock | threading.RLock
+    This abstract base class provides the foundation for all thread-safe data access
+    adapters in the IEEE 2030.5 server. It implements configurable concurrency control,
+    performance tracking, and common data access patterns that are inherited by all
+    concrete adapter implementations.
+
+    The adapter pattern provides a consistent interface for CRUD operations while
+    abstracting the underlying storage mechanism and ensuring thread safety through
+    various concurrency control strategies.
+
+    Type Parameters:
+        T: The model type that this adapter manages (e.g., EndDevice, List, etc.)
+
+    Attributes:
+        model_class: The Python class of the model this adapter manages
+        concurrency_mode: The concurrency control strategy (READ_WRITE_LOCK, MUTEX, etc.)
+        _lock: The primary lock for this adapter (ReadWriteLock or RLock based on mode)
+        _resource_locks: Manager for fine-grained resource-specific locks
+        _db: Database connection for persistence operations
+        _operation_count: Performance tracking for operation counts by type
+        _last_operation_time: Performance tracking for operation timing
+
+    Concurrency Control:
+        The adapter supports multiple concurrency strategies:
+        - READ_WRITE_LOCK: Optimized for read-heavy workloads (default)
+        - MUTEX: Simple mutual exclusion for write-heavy workloads
+        - OPTIMISTIC: Planned for future conflict detection and retry
+
+    Performance Tracking:
+        All operations are tracked for monitoring and debugging:
+        - Operation counts by type (fetch, create, update, delete)
+        - Last operation timestamps for each operation type
+        - Available via get_stats() method
+
+    Subclass Requirements:
+        Concrete subclasses must implement abstract methods for their specific
+        data access patterns. Common patterns include list-based storage and
+        specialized indexed storage for complex objects.
+
+    Thread Safety:
+        All public methods are thread-safe and can be called concurrently from
+        multiple threads. Internal methods starting with underscore may require
+        external synchronization.
+
+    Example:
+        >>> class MyAdapter(ThreadSafeAdapter[MyModel]):
+        ...     def fetch_all(self, start, limit):
+        ...         # Implementation specific to MyModel
+        ...         pass
+        >>>
+        >>> adapter = MyAdapter(MyModel, ConcurrencyMode.READ_WRITE_LOCK)
+        >>> result = adapter.fetch_by_href("/my/resource/123")
+    """
+
+    _lock: Union[ReadWriteLock, threading.RLock]
 
     def __init__(self,
                  model_class: Type[T],
                  concurrency_mode: str = ConcurrencyMode.READ_WRITE_LOCK):
+        """Initialize the thread-safe adapter.
+
+        Args:
+            model_class: The Python class of the model this adapter manages
+            concurrency_mode: The concurrency control strategy to use
+                (defaults to READ_WRITE_LOCK for optimal read performance)
+        """
         self.model_class = model_class
         self.concurrency_mode = concurrency_mode
 
@@ -116,15 +422,29 @@ class ThreadSafeAdapter(Generic[T], ABC):
         self._operation_count: dict[str, int] = defaultdict(int)
         self._last_operation_time: dict[str, float] = {}
 
-    def fetch_index(self, href: str) -> Optional[int]:
+    def fetch_index(self, href: str) -> int | None:
         """Extract and return the resource index from its href.
-        This method is provided for backward compatibility with older code.
+
+        This method provides backward compatibility for older code that expects
+        to work with numeric indices. It attempts to extract the index from the
+        href path, and if that fails, it will fetch the object and extract the
+        index from the object's href.
 
         Args:
-            href: The resource href string
+            href: The resource href string (e.g., "/edev/123" or "/list/456")
 
         Returns:
             The resource index if found, otherwise None
+
+        Performance:
+            This method is tracked for performance monitoring. For new code,
+            consider using fetch_by_href() directly instead of relying on
+            numeric indices.
+
+        Example:
+            >>> adapter = SomeAdapter(SomeModel)
+            >>> index = adapter.fetch_index("/edev/123")  # Returns 123
+            >>> index = adapter.fetch_index("/invalid")   # Returns None
         """
         self._track_operation("fetch_index")
         try:
@@ -145,18 +465,34 @@ class ThreadSafeAdapter(Generic[T], ABC):
             _log.error(f"Failed to fetch index for href {href}: {e}")
             return None
 
-    def fetch_by_href(self, href: str) -> Optional[T]:
+    def fetch_by_href(self, href: str) -> T | None:
         """Fetch an object by its href.
 
-        This is a generic method that can be used by any adapter to find
-        objects by their href. It will use an optimized index lookup if available,
-        or fall back to property-based search.
+        This is a fundamental method for retrieving resources by their unique href
+        identifier. It's used extensively throughout the IEEE 2030.5 server for
+        resource lookups and cross-references. The method uses optimized index
+        lookups when available and falls back to property-based searches.
 
         Args:
-            href: The href to search for
+            href: The href to search for (e.g., "/edev/123", "/list/456")
 
         Returns:
             The object if found, otherwise None
+
+        Thread Safety:
+            This method acquires a read lock and is safe for concurrent access
+            by multiple threads.
+
+        Performance:
+            - Uses index-based lookup for O(1) performance when available
+            - Falls back to linear search for O(n) when index not available
+            - All calls are tracked for performance monitoring
+
+        Example:
+            >>> adapter = EndDeviceAdapter()
+            >>> device = adapter.fetch_by_href("/edev/123")
+            >>> if device:
+            ...     print(f"Found device: {device.lFDI}")
         """
         with self._read_lock():
             self._track_operation("fetch_by_href")
@@ -187,18 +523,40 @@ class ThreadSafeAdapter(Generic[T], ABC):
                 _log.error(f"Failed to fetch object by href {href}: {e}")
                 return None
 
-    def fetch_by_property(self, prop_name: str, prop_value: Any) -> Optional[T]:
-        """Fetch an object by a specific property.
+    def fetch_by_property(self, prop_name: str, prop_value: Any) -> T | None:
+        """Fetch an object by a specific property value.
 
-        This is a base implementation that should be overridden by subclasses
-        with more efficient lookup mechanisms if available.
+        This is a generic property-based lookup method that can be used when
+        href-based lookups are not applicable. The base implementation is a
+        placeholder that should be overridden by subclasses with optimized
+        lookup mechanisms such as indexes or property-specific search logic.
 
         Args:
-            prop_name: The name of the property to search by
-            prop_value: The value to search for
+            prop_name: The name of the property to search by (e.g., "lFDI", "href")
+            prop_value: The value to search for. Type should match the property type.
 
         Returns:
-            The object if found, otherwise None
+            The first object found with the matching property value, or None if
+            no match is found.
+
+        Thread Safety:
+            This method is thread-safe when overridden properly in subclasses.
+            The base implementation does not perform any actual search.
+
+        Performance:
+            Base implementation has O(1) performance (returns None immediately).
+            Subclass implementations should provide appropriate performance
+            characteristics based on their indexing strategies.
+
+        Example:
+            >>> adapter = EndDeviceAdapter()
+            >>> device = adapter.fetch_by_property("lFDI", b"some_lfdi_bytes")
+            >>> if device:
+            ...     print(f"Found device at {device.href}")
+
+        Note:
+            This base implementation logs a warning and returns None. Subclasses
+            should override this method to provide actual functionality.
         """
         _log.warning(f"Using unimplemented base fetch_by_property for {self.model_class.__name__}")
         return None
@@ -235,7 +593,40 @@ class ThreadSafeAdapter(Generic[T], ABC):
         self._last_operation_time[operation] = time.time()
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get adapter performance statistics."""
+        """Get adapter performance statistics.
+
+        This method returns comprehensive performance and monitoring data
+        for the adapter instance. The statistics are useful for debugging,
+        performance monitoring, and system health checks.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing performance statistics:
+                - 'operation_counts': Dict mapping operation names to their
+                  execution count (e.g., {"fetch_by_href": 42, "put": 15})
+                - 'last_operation_times': Dict mapping operation names to their
+                  last execution timestamp (Unix timestamp)
+                - 'concurrency_mode': The current concurrency control mode
+                  (READ_WRITE_LOCK, MUTEX, etc.)
+
+        Thread Safety:
+            This method is thread-safe and can be called concurrently.
+
+        Performance:
+            O(1) operation that returns snapshots of internal counters.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(MyModel)
+            >>> # ... perform some operations ...
+            >>> stats = adapter.get_stats()
+            >>> print(f"Fetch operations: {stats['operation_counts'].get('fetch_by_href', 0)}")
+            >>> print(f"Concurrency mode: {stats['concurrency_mode']}")
+            >>>
+            >>> # Check if operations happened recently
+            >>> import time
+            >>> last_fetch = stats['last_operation_times'].get('fetch_by_href', 0)
+            >>> if time.time() - last_fetch < 60:
+            ...     print("Recent fetch activity detected")
+        """
         return {
             'operation_counts': dict(self._operation_count),
             'last_operation_times': dict(self._last_operation_time),
@@ -244,7 +635,51 @@ class ThreadSafeAdapter(Generic[T], ABC):
 
 
 class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
-    """Thread-safe adapter for managing lists of IEEE 2030.5 objects."""
+    """Thread-safe adapter for managing lists of IEEE 2030.5 objects.
+
+    This adapter provides thread-safe access to list-based collections of IEEE 2030.5
+    resources. It supports dynamic list creation, atomic operations on list items,
+    and efficient list management with automatic sizing and metadata tracking.
+
+    The adapter is optimized for scenarios where multiple threads need to access
+    and modify lists of objects concurrently. It provides both list-level operations
+    (get entire list, set entire list) and item-level operations (get/put individual
+    items by index).
+
+    Key Features:
+        - Dynamic list initialization with configurable parameters
+        - Thread-safe append, get, put, and delete operations
+        - Automatic list sizing and metadata management
+        - Support for both list and single-object storage patterns
+        - Property-based object lookups with optional filtering
+        - Comprehensive error handling and result reporting
+
+    Storage Model:
+        Lists are stored with metadata including size, object type, and creation
+        parameters. Individual items are stored separately for efficient access.
+        The storage keys follow patterns like:
+        - List metadata: "{list_uri}:meta"
+        - List items: "{list_uri}:{index}"
+        - Single objects: "{uri}"
+
+    Thread Safety:
+        All public methods are thread-safe using reader-writer locks for optimal
+        performance on read-heavy workloads. Write operations use exclusive locks.
+
+    Example:
+        >>> adapter = ThreadSafeListAdapter(EndDevice)
+        >>>
+        >>> # Initialize a new list
+        >>> adapter.initialize_uri("/edev", EndDevice, all=10, results=5)
+        >>>
+        >>> # Add items to the list
+        >>> device = EndDevice(href="/edev/0")
+        >>> result = adapter.append("/edev", device)
+        >>>
+        >>> # Retrieve items
+        >>> devices = adapter.get_list("/edev")
+        >>> device = adapter.get("/edev", 0)
+    """
 
     def __init__(self, model_class: Type[T]):
         super().__init__(model_class, ConcurrencyMode.READ_WRITE_LOCK)
@@ -259,14 +694,50 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         return f"list_meta:{list_uri}"
 
     def initialize_uri(self, list_uri: str, obj_type: Type[T] | None = None, **kwargs) -> bool:
-        """Initialize a new list URI.
+        """Initialize a new list URI with metadata and configuration.
+
+        This method creates a new list at the specified URI with initial metadata
+        and configuration parameters. It's used to set up list storage before
+        adding items to the list.
 
         Args:
-            list_uri: The URI to initialize
-            obj_type: The object type for this list
-            **kwargs: Additional arguments for backward compatibility
-                - list_uri: Alternative way to specify the URI
-                - obj: Alternative way to specify the object type
+            list_uri: The URI path for the list (e.g., "/edev", "/dr/programs")
+            obj_type: The type of objects that will be stored in this list.
+                If None, uses the adapter's model_class.
+            **kwargs: Additional configuration parameters:
+                - all: Maximum number of items the list can contain
+                - results: Number of results to return by default in queries
+                - subscribable: Whether the list supports subscriptions
+                - list_uri: Alternative way to specify the URI (backward compatibility)
+                - obj: Alternative way to specify the object type (backward compatibility)
+
+        Returns:
+            bool: True if the list was successfully initialized, False if it
+                already exists or initialization failed.
+
+        Thread Safety:
+            This method is thread-safe and uses write locks to ensure exclusive
+            access during list creation.
+
+        Storage:
+            Creates metadata entry with configuration and initializes empty list.
+            The metadata includes object type, creation parameters, and timestamps.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>>
+            >>> # Initialize a list for end devices with capacity of 100
+            >>> success = adapter.initialize_uri("/edev", EndDevice, all=100, results=20)
+            >>> if success:
+            ...     print("List initialized successfully")
+            >>>
+            >>> # Initialize with backward compatibility parameters
+            >>> adapter.initialize_uri("/programs", obj=Program, all=50)
+
+        Note:
+            If a list already exists at the URI, this method returns False without
+            modifying the existing list.
+
 
         Returns:
             bool: True if initialized, False if already existed
@@ -309,7 +780,48 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 raise
 
     def append(self, list_uri: str, obj: T) -> AdapterResult:
-        """Append an object to a list."""
+        """Append an object to the end of a list.
+
+        This method adds a new object to the end of the specified list in a
+        thread-safe manner. If the list does not exist, it will be automatically
+        initialized with default parameters.
+
+        Args:
+            list_uri: The URI of the list to append to (e.g., "/edev", "/programs")
+            obj: The object to append to the list. Must be of type T.
+
+        Returns:
+            AdapterResult: Result of the append operation containing:
+                - success: True if the object was successfully appended
+                - data: The appended object with updated href if applicable
+                - location: The href/location of the newly added object
+                - error: Error message if the operation failed
+
+        Thread Safety:
+            This method is thread-safe and uses resource-specific locking to
+            prevent concurrent modifications to the same list.
+
+        Performance:
+            O(n) where n is the current list size, due to list serialization.
+            For better performance with large lists, consider using indexed
+            storage patterns.
+
+        Auto-initialization:
+            If the target list does not exist, it will be automatically created
+            with the object type inferred from the appended object.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> device = EndDevice(href="/edev/0")
+            >>> result = adapter.append("/edev", device)
+            >>> if result.success:
+            ...     print(f"Added device at {result.location}")
+            >>> else:
+            ...     print(f"Failed: {result.error}")
+
+        Raises:
+            Exception: If database operations fail or object serialization fails
+        """
         list_key = self._get_list_key(list_uri)
 
         with self._resource_lock(list_uri):
@@ -353,7 +865,37 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 return AdapterResult(success=False, error=str(e))
 
     def get_list(self, list_uri: str) -> List[T]:
-        """Get the complete list."""
+        """Get the complete list of objects from the specified URI.
+
+        This method retrieves all objects stored in a list at the given URI.
+        It's useful for operations that need to process all items in a collection
+        or when implementing pagination at a higher level.
+
+        Args:
+            list_uri: The URI of the list to retrieve (e.g., "/edev", "/programs")
+
+        Returns:
+            List[T]: A list containing all objects of type T stored at the URI.
+                Returns an empty list if the URI doesn't exist or contains no items.
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(n) where n is the number of items in the list. For large lists,
+            consider using pagination with get_resource_list() instead.
+
+        Memory Usage:
+            Loads the entire list into memory. For very large lists, this may
+            cause memory pressure. Monitor usage for lists with thousands of items.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> devices = adapter.get_list("/edev")
+            >>> print(f"Found {len(devices)} devices")
+            >>> for device in devices:
+            ...     print(f"Device: {device.href}")
+        """
         list_key = self._get_list_key(list_uri)
 
         with self._read_lock():
@@ -371,7 +913,34 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 return []
 
     def get_list_size(self, list_uri: str) -> int:
-        """Get the size of a list efficiently."""
+        """Get the size of a list efficiently without loading all items.
+
+        This method retrieves the number of items in a list by checking the
+        metadata rather than loading and counting all items. This is much more
+        efficient for large lists.
+
+        Args:
+            list_uri: The URI of the list to check (e.g., "/edev", "/programs")
+
+        Returns:
+            int: The number of items in the list. Returns 0 if the list
+                doesn't exist or is empty.
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(1) operation that only reads metadata, making it very efficient
+            even for large lists.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> size = adapter.get_list_size("/edev")
+            >>> print(f"EndDevice list contains {size} devices")
+            >>>
+            >>> # Much more efficient than len(adapter.get_list("/edev"))
+            >>> # for large lists
+        """
         with self._read_lock():
             self._track_operation("get_list_size")
 
@@ -384,7 +953,44 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         return self.get_list_size(list_uri)
 
     def set_list(self, list_uri: str, items: List[T]) -> AdapterResult:
-        """Replace the entire list with new items."""
+        """Replace the entire list with new items atomically.
+
+        This method replaces all items in a list with a new set of items in a
+        single atomic operation. This is useful for bulk updates or when you
+        need to ensure the list contains exactly the specified items.
+
+        Args:
+            list_uri: The URI of the list to replace (e.g., "/edev", "/programs")
+            items: The new list of items to store. All items must be of type T.
+
+        Returns:
+            AdapterResult: Result of the operation containing:
+                - success: True if the list was successfully replaced
+                - data: The new list items if successful
+                - error: Error message if the operation failed
+
+        Thread Safety:
+            This method is thread-safe and uses resource-specific locking to
+            ensure atomic replacement of the entire list.
+
+        Performance:
+            O(n) where n is the number of items in the new list. The operation
+            is atomic, so other threads will see either the old list or the
+            new list, never a partial state.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> new_devices = [device1, device2, device3]
+            >>> result = adapter.set_list("/edev", new_devices)
+            >>> if result.success:
+            ...     print(f"Replaced list with {len(new_devices)} devices")
+            >>> else:
+            ...     print(f"Failed to replace list: {result.error}")
+
+        Note:
+            This operation completely replaces the list contents. Any existing
+            items not in the new list will be lost.
+        """
         list_key = self._get_list_key(list_uri)
 
         with self._resource_lock(list_uri):
@@ -411,8 +1017,39 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to set list {list_uri}: {e}")
                 return AdapterResult(success=False, error=str(e))
 
-    def get(self, list_uri: str, index: int) -> Optional[T]:
-        """Get an object by index."""
+    def get(self, list_uri: str, index: int) -> T | None:
+        """Get an object from a list by its index.
+
+        This method retrieves a specific object from a list using its zero-based
+        index position. It provides thread-safe access to list items without
+        requiring retrieval of the entire list.
+
+        Args:
+            list_uri: The URI of the list to retrieve from (e.g., "/edev", "/programs")
+            index: Zero-based index of the item to retrieve
+
+        Returns:
+            T | None: The object at the specified index, or None if:
+                - The index is out of bounds
+                - The list does not exist
+                - An error occurred during retrieval
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(n) where n is the list size, as it needs to deserialize the entire
+            list to access a single element. For frequent random access, consider
+            using direct object storage with href-based keys.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> device = adapter.get("/edev", 0)  # Get first device
+            >>> if device:
+            ...     print(f"Device href: {device.href}")
+            >>> else:
+            ...     print("Device not found or index out of bounds")
+        """
         with self._read_lock():
             self._track_operation("get")
 
@@ -426,7 +1063,42 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 return None
 
     def put(self, list_uri: str, index: int, obj: T) -> AdapterResult:
-        """Update an object at a specific index."""
+        """Update an object at a specific index in a list.
+
+        This method replaces the object at the specified index with a new object.
+        The operation is atomic and thread-safe. If the index is out of bounds,
+        the operation will fail.
+
+        Args:
+            list_uri: The URI of the list to modify (e.g., "/edev", "/programs")
+            index: Zero-based index of the item to replace
+            obj: The new object to store at the specified index
+
+        Returns:
+            AdapterResult: Result of the operation containing:
+                - success: True if the object was successfully updated
+                - data: The updated object if successful
+                - was_update: Always True for successful put operations
+                - error: Error message if the operation failed (e.g., index out of bounds)
+
+        Thread Safety:
+            This method is thread-safe and uses resource-specific locking to
+            prevent concurrent modifications to the same list.
+
+        Performance:
+            O(n) where n is the list size, due to list serialization and
+            deserialization. For better performance with frequent updates,
+            consider using direct object storage patterns.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> updated_device = EndDevice(href="/edev/0", updated_field="new_value")
+            >>> result = adapter.put("/edev", 0, updated_device)
+            >>> if result.success:
+            ...     print("Device updated successfully")
+            >>> else:
+            ...     print(f"Update failed: {result.error}")
+        """
         with self._resource_lock(list_uri):
             self._track_operation("put")
 
@@ -457,7 +1129,45 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 return AdapterResult(success=False, error=str(e))
 
     def set_single(self, uri: str, obj: Any) -> AdapterResult:
-        """Store a single object at a URI (not part of a list)."""
+        """Store a single object at a URI (not part of a list).
+
+        This method stores an individual object directly at a URI, independent
+        of any list structure. This is useful for singleton resources, configuration
+        objects, or other resources that don't belong to collections.
+
+        Args:
+            uri: The URI where the object should be stored (e.g., "/config", "/status")
+            obj: The object to store. Can be any serializable object.
+
+        Returns:
+            AdapterResult: Result of the operation containing:
+                - success: True if the object was successfully stored
+                - data: The stored object if successful
+                - location: The URI where the object was stored
+                - error: Error message if the operation failed
+
+        Thread Safety:
+            This method is thread-safe and uses write locks for exclusive access
+            during the storage operation.
+
+        Performance:
+            O(1) operation for storing the object directly at the specified URI.
+
+        Storage Model:
+            Single objects are stored directly using the URI as the storage key,
+            without any list metadata or indexing overhead.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(Any)
+            >>> config = {"server_name": "ieee2030_5", "port": 8443}
+            >>> result = adapter.set_single("/config", config)
+            >>> if result.success:
+            ...     print(f"Config stored at {result.location}")
+            >>>
+            >>> # For device-specific settings
+            >>> device_settings = DeviceSettings(polling_rate=30)
+            >>> adapter.set_single("/edev/123/settings", device_settings)
+        """
         with self._write_lock():
             self._track_operation("set_single")
 
@@ -481,7 +1191,39 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 return AdapterResult(success=False, error=str(e))
 
     def get_single(self, uri: str) -> Any:
-        """Get a single object from a URI."""
+        """Retrieve a single object stored at a URI.
+
+        This method retrieves an individual object that was stored directly at
+        a URI using set_single(). It's the counterpart to set_single() for
+        accessing singleton resources and non-list objects.
+
+        Args:
+            uri: The URI where the object is stored (e.g., "/config", "/status")
+
+        Returns:
+            Any: The object stored at the URI, or None if:
+                - No object exists at the specified URI
+                - An error occurred during retrieval
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(1) operation for direct URI-based object retrieval.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(Any)
+            >>>
+            >>> # Retrieve configuration object
+            >>> config = adapter.get_single("/config")
+            >>> if config:
+            ...     print(f"Server port: {config['port']}")
+            >>>
+            >>> # Retrieve device-specific settings
+            >>> settings = adapter.get_single("/edev/123/settings")
+            >>> if settings:
+            ...     print(f"Polling rate: {settings.polling_rate}")
+        """
         with self._read_lock():
             self._track_operation("get_single")
 
@@ -501,7 +1243,43 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 return None
 
     def delete_single(self, uri: str) -> bool:
-        """Delete a single object from a URI."""
+        """Delete a single object stored at a URI.
+
+        This method removes an individual object that was stored directly at
+        a URI using set_single(). It permanently removes the object from storage.
+
+        Args:
+            uri: The URI of the object to delete (e.g., "/config", "/status")
+
+        Returns:
+            bool: True if the object was successfully deleted or didn't exist,
+                False if an error occurred during deletion.
+
+        Thread Safety:
+            This method is thread-safe and uses write locks for exclusive access
+            during the deletion operation.
+
+        Performance:
+            O(1) operation for direct URI-based object deletion.
+
+        Idempotent Operation:
+            This method is idempotent - calling it multiple times with the same
+            URI will not cause errors, even if the object doesn't exist.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(Any)
+            >>>
+            >>> # Delete configuration object
+            >>> success = adapter.delete_single("/config")
+            >>> if success:
+            ...     print("Configuration deleted")
+            >>>
+            >>> # Delete device-specific settings
+            >>> adapter.delete_single("/edev/123/settings")
+            >>>
+            >>> # Safe to call even if object doesn't exist
+            >>> adapter.delete_single("/nonexistent")  # Returns True
+        """
         with self._write_lock():
             self._track_operation("delete_single")
 
@@ -513,7 +1291,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to delete single object from {uri}: {e}")
                 return False
 
-    def fetch_by_property(self, prop_name: str, prop_value: Any) -> Optional[T]:
+    def fetch_by_property(self, prop_name: str, prop_value: Any) -> T | None:
         """Fetch an object by property from lists and single objects.
 
         This implementation searches through all lists and single objects
@@ -571,7 +1349,52 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                          limit: int = 0,
                          sort_by: str | None = None,
                          reverse: bool = False) -> Any:
-        """Get a paginated resource list."""
+        """Get a paginated resource list with sorting and filtering capabilities.
+
+        This method provides advanced list retrieval with pagination, sorting,
+        and filtering capabilities. It's designed to support IEEE 2030.5 list
+        resource requirements including proper pagination metadata.
+
+        Args:
+            list_uri: The URI of the list to retrieve (e.g., "/edev", "/programs")
+            start: Zero-based starting index for pagination (default: 0)
+            after: Alternative pagination parameter, items after this index (default: 0)
+            limit: Maximum number of items to return. 0 means no limit (default: 0)
+            sort_by: Name of the attribute to sort by (e.g., "href", "lFDI")
+            reverse: If True, sort in descending order (default: False)
+
+        Returns:
+            Any: A list-like object containing the requested items with pagination
+                metadata. The exact type depends on the list type but typically
+                includes fields like 'all', 'results', and the item collection.
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(n log n) if sorting is requested, O(n) otherwise, where n is the
+            total list size. For large lists with frequent pagination, consider
+            implementing server-side pagination.
+
+        Pagination:
+            Supports both 'start' and 'after' style pagination:
+            - start: Returns items starting from the specified index
+            - after: Returns items after the specified index
+            - limit: Caps the number of returned items
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(EndDevice)
+            >>> # Get first 10 devices
+            >>> page1 = adapter.get_resource_list("/edev", start=0, limit=10)
+            >>>
+            >>> # Get next 10 devices sorted by href
+            >>> page2 = adapter.get_resource_list("/edev", start=10, limit=10,
+            ...                                   sort_by="href")
+            >>>
+            >>> # Get devices in reverse order
+            >>> recent = adapter.get_resource_list("/edev", limit=5,
+            ...                                    sort_by="href", reverse=True)
+        """
         with self._read_lock():
             self._track_operation("get_resource_list")
 
@@ -716,8 +1539,44 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
         return {'count': 0, 'created': time.time()}
 
-    def print_all(self):
-        """Print all resources for debugging purposes."""
+    def print_all(self) -> None:
+        """Print all resources stored in the adapter for debugging purposes.
+
+        This method provides a comprehensive overview of all stored resources,
+        including both lists and single objects. It's primarily intended for
+        debugging and development purposes.
+
+        Thread Safety:
+            - Uses read lock to prevent modifications during listing
+            - Safe to call from multiple threads simultaneously
+
+        Performance:
+            - O(n log n) due to sorting of keys
+            - May be slow for large datasets due to deserialization
+
+        Output Format:
+            - List resources: Shows count and individual item hrefs
+            - Single resources: Shows object href
+            - Errors are logged as warnings for robustness
+
+        Example Usage:
+            ```python
+            # Debug adapter contents
+            adapter.print_all()
+
+            # Typical output in logs:
+            # --- Resource Listing ---
+            # list:derlc: 5 items
+            #   [0] /derlc/1
+            #   [1] /derlc/2
+            # single:dcap: /dcap
+            # --- End Resource Listing ---
+            ```
+
+        Note:
+            Output is written to the logger, not stdout. Check log files
+            or configure logging to see the output.
+        """
         with self._read_lock():
             self._track_operation("print_all")
 
@@ -756,22 +1615,89 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             except Exception as e:
                 _log.error(f"Failed to print all resources: {e}")
 class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
-    """Thread-safe adapter for EndDevice objects."""
+    """Thread-safe adapter specialized for IEEE 2030.5 EndDevice objects.
+
+    This adapter provides optimized storage and retrieval for EndDevice objects
+    with specialized indexing based on lFDI (Long Form Device Identifier) and
+    href values. It's designed to handle the specific requirements of IEEE 2030.5
+    end device management including efficient lookups and device registration.
+
+    Key Features:
+        - Specialized lFDI-based indexing for fast device lookups
+        - href-based indexing for REST API compatibility
+        - Thread-safe device registration and updates
+        - Automatic index maintenance during device operations
+        - Support for device property-based searches
+
+    Indexing Strategy:
+        The adapter maintains two specialized indexes:
+        - lFDI index: Maps device lFDI bytes to storage indices
+        - href index: Maps device href strings to storage indices
+
+        These indexes enable O(1) lookups by the most commonly used device
+        identifiers in IEEE 2030.5 protocols.
+
+    Storage Model:
+        Devices are stored using a key pattern "enddevice:{index}" where index
+        is an auto-incrementing integer. The indexes map device identifiers
+        to these storage indices.
+
+    Thread Safety:
+        All operations are thread-safe using reader-writer locks optimized
+        for read-heavy workloads typical in device management scenarios.
+
+    Example:
+        >>> adapter = ThreadSafeEndDeviceAdapter()
+        >>>
+        >>> # Register a new device
+        >>> device = EndDevice(lFDI=b"device123", href="/edev/0")
+        >>> result = adapter.add(device)
+        >>>
+        >>> # Look up by lFDI
+        >>> found_device = adapter.fetch_by_lfdi(b"device123")
+        >>>
+        >>> # Look up by href
+        >>> same_device = adapter.fetch_by_href("/edev/0")
+    """
 
     def __init__(self):
         super().__init__(m.EndDevice, ConcurrencyMode.READ_WRITE_LOCK)
         self._lfdi_index_key = "index:enddevice:lfdi"
         self._href_index_key = "index:enddevice:href"
 
-    def fetch_index(self, href: str) -> Optional[int]:
-        """Extract and return the device index from its href.
-        Uses the optimized href index for faster lookups.
+    def fetch_index(self, href: str) -> int | None:
+        """Extract and return the device index from its href using optimized index lookup.
+
+        This method provides an optimized version of index extraction that uses
+        the specialized href index for O(1) lookups instead of string parsing.
+        It falls back to the base implementation for compatibility.
 
         Args:
-            href: The device href string
+            href: The device href string (e.g., "/edev/123", "/enddevice/456").
+                Should be a valid IEEE 2030.5 resource href.
 
         Returns:
-            The device index if found, otherwise None
+            int | None: The numeric device index if found, None if:
+                - The href is not found in the index
+                - The href index is not initialized
+                - An error occurred during lookup
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for index access.
+
+        Performance:
+            - Primary path: O(1) using dedicated href index
+            - Fallback path: O(1) string parsing via base implementation
+            - Much faster than linear searches for large device collections
+
+        Example:
+            >>> adapter = ThreadSafeEndDeviceAdapter()
+            >>> index = adapter.fetch_index("/edev/123")  # Returns 123
+            >>> if index is not None:
+            ...     print(f"Device index: {index}")
+            >>>
+            >>> # Handle missing device
+            >>> missing = adapter.fetch_index("/edev/999")  # Returns None
         """
         self._track_operation("fetch_index")
         try:
@@ -792,7 +1718,43 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             return None
 
     def add(self, device: m.EndDevice) -> m.EndDevice:
-        """Add a new end device."""
+        """Add a new EndDevice to the adapter with automatic indexing.
+
+        This method registers a new EndDevice in the system, automatically
+        assigning it a unique index and updating the specialized indexes for
+        efficient lookups. The device's href will be generated if not provided.
+
+        Args:
+            device: The EndDevice object to add. The device should have at least
+                an lFDI (Long Form Device Identifier) set. The href will be
+                automatically generated if not provided.
+
+        Returns:
+            m.EndDevice: The added device with updated href and any other
+                modifications made during the registration process.
+
+        Thread Safety:
+            This method is thread-safe and uses write locks for exclusive access
+            during device registration.
+
+        Automatic Indexing:
+            The method automatically:
+            - Assigns a unique numeric index to the device
+            - Generates an href if not provided (/edev/{index})
+            - Updates the lFDI index for O(1) lFDI-based lookups
+            - Updates the href index for O(1) href-based lookups
+
+        Example:
+            >>> adapter = ThreadSafeEndDeviceAdapter()
+            >>> device = EndDevice(lFDI=b"device_certificate_hash")
+            >>> registered_device = adapter.add(device)
+            >>> print(f"Device registered at: {registered_device.href}")
+            >>> # Device can now be found by lFDI or href
+            >>> same_device = adapter.fetch_by_lfdi(b"device_certificate_hash")
+
+        Raises:
+            Exception: If the device cannot be stored or indexes cannot be updated.
+        """
         with self._write_lock():
             self._track_operation("add")
 
@@ -830,7 +1792,49 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 raise
 
     def put(self, index: int, device: m.EndDevice) -> AdapterResult:
-        """Update an existing end device."""
+        """Update an existing EndDevice at a specific index.
+
+        This method updates an EndDevice that is already registered in the system.
+        It maintains the specialized indexes and ensures data consistency during
+        the update operation.
+
+        Args:
+            index: The numeric index of the device to update
+            device: The updated EndDevice object. Should contain the new state
+                of the device including any modified fields.
+
+        Returns:
+            AdapterResult: Result of the update operation containing:
+                - success: True if the device was successfully updated
+                - data: The updated device if successful
+                - was_update: Always True for successful put operations
+                - error: Error message if the operation failed
+
+        Thread Safety:
+            This method is thread-safe and uses write locks for exclusive access
+            during device updates.
+
+        Index Maintenance:
+            The method automatically updates the specialized indexes if the
+            device's lFDI or href changed during the update. This ensures
+            that lookups remain consistent.
+
+        Example:
+            >>> adapter = ThreadSafeEndDeviceAdapter()
+            >>> # Get existing device
+            >>> device = adapter.fetch_by_href("/edev/5")
+            >>> if device:
+            ...     # Modify device
+            ...     device.some_field = "new_value"
+            ...     # Update in storage
+            ...     result = adapter.put(5, device)
+            ...     if result.success:
+            ...         print("Device updated successfully")
+
+        Note:
+            The index must correspond to an existing device. Use add() for
+            new devices.
+        """
         with self._write_lock():
             self._track_operation("put")
 
@@ -871,8 +1875,57 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 _log.error(f"Failed to update end device: {e}")
                 return AdapterResult(success=False, error=str(e))
 
-    def fetch_all(self, list_obj=None, start: int = 0, after: int = 0, limit: int = 0) -> Any:
-        """Fetch all end devices with pagination."""
+    def fetch_all(self, list_obj: m.EndDeviceList | None = None, start: int = 0, after: int = 0, limit: int = 0) -> m.EndDeviceList:
+        """Fetch all EndDevice resources with pagination support.
+
+        This method retrieves EndDevice objects from storage with comprehensive
+        pagination support. It's optimized for large device collections and
+        supports both offset-based and cursor-based pagination patterns.
+
+        Args:
+            list_obj: Optional pre-allocated EndDeviceList to populate. If None,
+                a new EndDeviceList will be created and returned.
+            start: Zero-based starting index for pagination (offset-based).
+                Must be >= 0. Default is 0 (start from beginning).
+            after: Alternative cursor-based pagination. When specified, starts
+                from the device after this index. Takes precedence over start.
+            limit: Maximum number of devices to return. If 0 or negative,
+                returns all devices from the starting position.
+
+        Returns:
+            m.EndDeviceList: A populated EndDeviceList containing:
+                - EndDevice: List of retrieved EndDevice objects
+                - all: Total count of all devices in storage
+                - results: Count of devices returned in this response
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+            Multiple threads can safely call this method simultaneously.
+
+        Performance:
+            - O(k) where k is the number of devices retrieved
+            - Index-based access provides efficient pagination
+            - Handles large device collections efficiently
+
+        Pagination Behavior:
+            - `after` parameter enables cursor-based pagination
+            - `start + limit` enables offset-based pagination
+            - Returns empty list if no devices exist
+            - Gracefully handles out-of-bounds requests
+
+        Example:
+            >>> adapter = ThreadSafeEndDeviceAdapter()
+            >>>
+            >>> # Fetch first 10 devices
+            >>> devices = adapter.fetch_all(start=0, limit=10)
+            >>> print(f"Retrieved {devices.results} of {devices.all} devices")
+            >>>
+            >>> # Cursor-based pagination
+            >>> next_page = adapter.fetch_all(after=9, limit=10)
+            >>>
+            >>> # Fetch all devices (use with caution for large datasets)
+            >>> all_devices = adapter.fetch_all()
+        """
         with self._read_lock():
             self._track_operation("fetch_all")
 
@@ -927,8 +1980,44 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                     list_obj = m.EndDeviceList(EndDevice=[], all=0, results=0)
                 return list_obj
 
-    def fetch_by_lfdi(self, lfdi: bytes) -> Optional[m.EndDevice]:
-        """Fetch end device by LFDI."""
+    def fetch_by_lfdi(self, lfdi: bytes) -> m.EndDevice | None:
+        """Fetch an EndDevice by its Long Form Device Identifier (lFDI).
+
+        This method provides efficient O(1) lookup of EndDevice objects using
+        their lFDI, which is the primary identifier used in IEEE 2030.5 protocols
+        for device authentication and identification.
+
+        Args:
+            lfdi: The Long Form Device Identifier as bytes. This is typically
+                derived from the device's certificate or other cryptographic
+                material and uniquely identifies the device.
+
+        Returns:
+            m.EndDevice | None: The EndDevice object if found, None if:
+                - No device exists with the specified lFDI
+                - The lFDI index is not initialized
+                - An error occurred during retrieval
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(1) average case lookup using a dedicated lFDI index. This is much
+            faster than linear searches through device lists.
+
+        Example:
+            >>> adapter = ThreadSafeEndDeviceAdapter()
+            >>> device_lfdi = b"\\x01\\x02\\x03..."  # Device certificate-derived lFDI
+            >>> device = adapter.fetch_by_lfdi(device_lfdi)
+            >>> if device:
+            ...     print(f"Found device: {device.href}")
+            >>> else:
+            ...     print("Device not registered")
+
+        Note:
+            The lFDI must match exactly (case-sensitive byte comparison).
+            IEEE 2030.5 lFDIs are typically derived from certificate fingerprints.
+        """
         with self._read_lock():
             self._track_operation("fetch_by_lfdi")
 
@@ -959,8 +2048,52 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 _log.error(f"Failed to fetch device by LFDI: {e}")
                 return None
 
-    def fetch_by_property(self, prop_name: str, prop_value: Any) -> Optional[m.EndDevice]:
-        """Fetch end device by property (optimized for common properties)."""
+    def fetch_by_property(self, prop_name: str, prop_value: Any) -> m.EndDevice | None:
+        """Fetch an EndDevice by any property with optimized lookups for common properties.
+
+        This method provides efficient property-based lookups with specialized
+        optimizations for frequently accessed properties like lFDI and href.
+        It automatically routes to the most efficient lookup strategy based
+        on the property being searched.
+
+        Args:
+            prop_name: The name of the property to search by. Common properties
+                include "lFDI", "href", "enabled", "changedTime", etc.
+            prop_value: The value to search for. Type should match the expected
+                property type (e.g., bytes for lFDI, str for href).
+
+        Returns:
+            m.EndDevice | None: The first EndDevice found with the matching
+            property value, or None if no match exists.
+
+        Thread Safety:
+            This method is thread-safe and uses appropriate locking for all
+            lookup strategies including index-based and linear searches.
+
+        Performance:
+            - lFDI property: O(1) using dedicated lFDI index
+            - href property: O(1) using dedicated href index
+            - Other properties: O(n) linear search through all devices
+
+        Optimization Notes:
+            For frequently accessed properties other than lFDI/href, consider
+            creating specialized methods or indexes to improve performance.
+
+        Example:
+            >>> adapter = ThreadSafeEndDeviceAdapter()
+            >>>
+            >>> # Optimized O(1) lookups
+            >>> device = adapter.fetch_by_property("lFDI", device_lfdi_bytes)
+            >>> device = adapter.fetch_by_property("href", "/edev/123")
+            >>>
+            >>> # Linear search for other properties
+            >>> enabled_device = adapter.fetch_by_property("enabled", True)
+            >>> recent_device = adapter.fetch_by_property("changedTime", timestamp)
+
+        Warning:
+            Linear searches can be slow for large device collections. Consider
+            using specialized index-based methods when available.
+        """
         if prop_name == "lFDI":
             return self.fetch_by_lfdi(prop_value)
 
@@ -1065,7 +2198,35 @@ ListAdapter: ThreadSafeListAdapter | None = None
 EndDeviceAdapter: ThreadSafeEndDeviceAdapter | None = None
 
 def initialize_adapters():
-    """Initialize all global adapter instances."""
+    """Initialize all global adapter instances.
+
+    This function creates and configures the global adapter instances that are
+    used throughout the IEEE 2030.5 server. It ensures that adapters are
+    initialized exactly once, even in multi-threaded environments.
+
+    The function is idempotent - it can be called multiple times safely and
+    will only perform initialization on the first call.
+
+    Global Adapters Created:
+        ListAdapter: Generic adapter for IEEE 2030.5 List resources
+        EndDeviceAdapter: Specialized adapter for EndDevice resources with indexing
+
+    Thread Safety:
+        This function is thread-safe and uses a lock to ensure adapters are
+        initialized exactly once even if called concurrently.
+
+    Initialization:
+        This function is automatically called when the module is imported,
+        so manual calls are typically not necessary.
+
+    Example:
+        >>> # Usually not needed - called automatically on import
+        >>> initialize_adapters()
+        >>>
+        >>> # Access global adapters
+        >>> if EndDeviceAdapter is not None:
+        ...     device = EndDeviceAdapter.fetch_by_href("/edev/123")
+    """
     global ListAdapter, EndDeviceAdapter, _initialized
 
     if _initialized:
@@ -1085,7 +2246,34 @@ def initialize_adapters():
         _log.info("Thread-safe adapters initialized")
 
 def get_adapter_stats() -> Dict[str, Any]:
-    """Get performance statistics from all adapters."""
+    """Get performance statistics from all adapters.
+
+    This function collects and returns performance metrics from all global
+    adapter instances. The statistics include operation counts, timing
+    information, and other performance-related data useful for monitoring
+    and debugging.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing statistics for each adapter:
+            - 'list_adapter': Statistics from the global ListAdapter
+            - 'enddevice_adapter': Statistics from the global EndDeviceAdapter
+
+        Each adapter statistics include:
+            - operation_count: Count of operations by type
+            - last_operation_time: Timestamp of last operation by type
+            - Additional adapter-specific metrics
+
+    Thread Safety:
+        This function is thread-safe and can be called concurrently.
+
+    Example:
+        >>> stats = get_adapter_stats()
+        >>> print(f"EndDevice operations: {stats['enddevice_adapter']['operation_count']}")
+        >>> print(f"List operations: {stats['list_adapter']['operation_count']}")
+
+    Note:
+        Returns empty dict if adapters have not been initialized yet.
+    """
     if not _initialized:
         return {}
 
