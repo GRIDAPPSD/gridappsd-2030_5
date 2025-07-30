@@ -127,6 +127,9 @@ class RequestForwarder(BaseHTTPRequestHandler):
     # Set reasonable timeouts for client connections
     timeout = 300  # 5 minutes for client socket timeout
 
+    # Type annotation for the server to ensure it has our required attributes
+    server: 'ProxyServer'
+
     def setup(self):
         """Set up the request handler with proper timeouts for concurrent clients"""
         super().setup()
@@ -134,6 +137,16 @@ class RequestForwarder(BaseHTTPRequestHandler):
         if hasattr(self.connection, 'settimeout'):
             self.connection.settimeout(self.timeout)
             _log.debug(f"Set client connection timeout to {self.timeout}s for {self.client_address}")
+
+        # Verify server has required attributes
+        if not hasattr(self.server, 'tls_repo'):
+            _log.error(f"Server {type(self.server)} does not have tls_repo attribute")
+            raise RuntimeError("Server missing tls_repo attribute")
+        if not hasattr(self.server, 'proxy_target'):
+            _log.error(f"Server {type(self.server)} does not have proxy_target attribute")
+            raise RuntimeError("Server missing proxy_target attribute")
+
+        _log.debug(f"RequestForwarder setup complete for {self.client_address}")
 
     def handle(self):
         """Handle multiple requests if keep-alive is enabled"""
@@ -222,6 +235,62 @@ class RequestForwarder(BaseHTTPRequestHandler):
             self.close_connection = True
             return False
 
+    def _extract_client_certificate_cn(self) -> str | None:
+        """Extract the Common Name from the client certificate, if available."""
+        try:
+            x509_binary = self.connection.getpeercert(True)
+            if not x509_binary:
+                _log.debug("Client did not provide a certificate")
+                return None
+
+            _log.debug("Client provided a certificate in binary format")
+
+            try:
+                x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
+                client_cn = x509.get_subject().CN
+                _log.debug(f"Extracted client certificate CN: {client_cn}")
+                return client_cn
+
+            except OpenSSL.crypto.Error as e:
+                _log.warning(f"Failed to parse client certificate: {e}")
+                return None
+
+        except ssl.SSLError as e:
+            _log.warning(f"SSL error accessing client certificate: {e}")
+            return None
+        except Exception as e:
+            _log.warning(f"Error accessing client certificate: {e}")
+            return None
+
+    def _find_certificate_pair(self, client_cn: str) -> tuple[str | None, str | None]:
+        """Find certificate pair for the given client CN."""
+        try:
+            cert_file, key_file = self.server.tls_repo.get_file_pair(client_cn)
+            _log.debug(f"Found cert file for CN {client_cn}: {cert_file}, key file: {key_file}")
+            return str(cert_file), str(key_file)
+
+        except FileNotFoundError as e:
+            _log.warning(f"Certificate pair not found for CN {client_cn}: {e}")
+            return None, None
+        except Exception as e:
+            _log.warning(f"Failed to get certificate pair for CN {client_cn}: {e}")
+            return None, None
+
+    def _get_default_certificate_pair(self) -> tuple[str, str]:
+        """Get the default server certificate pair."""
+        try:
+            cert_file = self.server.tls_repo.server_cert_file
+            key_file = self.server.tls_repo.server_key_file
+            _log.debug(f"Using default cert: {cert_file}, key: {key_file}")
+            return str(cert_file), str(key_file)
+
+        except AttributeError as e:
+            _log.error(f"TLS repository not properly configured: {e}")
+            raise RuntimeError("TLS repository not available") from e
+        except Exception as e:
+            _log.error(f"Failed to get default certificate: {e}")
+            raise RuntimeError("No valid certificate found for server connection") from e
+
     def get_context_cert_pair(self) -> ContextWithPaths:
         """
         Dynamically establish SSL/TLS context based on the client's certificate.
@@ -229,54 +298,26 @@ class RequestForwarder(BaseHTTPRequestHandler):
         """
         _log.debug("Getting SSL context and certificate pair for client connection")
 
+        # Ensure we have access to the TLS repository
+        if not hasattr(self.server, 'tls_repo'):
+            raise RuntimeError("Server does not have tls_repo attribute")
+
         # Initialize with default certificate paths
         cert_file = None
         key_file = None
         client_cn = None
 
         # Try to get client certificate
-        try:
-            x509_binary = self.connection.getpeercert(True)
-            if x509_binary:
-                _log.debug("Client provided a certificate in binary format")
-                try:
-                    x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
-                    client_cn = x509.get_subject().CN
-                    _log.debug(f"Extracted client certificate CN: {client_cn}")
+        client_cn = self._extract_client_certificate_cn()
 
-                    if client_cn:
-                        try:
-                            cert_file, key_file = self.server.tls_repo.get_file_pair(client_cn)
-                            _log.debug(f"Found cert file for CN {client_cn}: {cert_file}, key file: {key_file}")
-                        except FileNotFoundError as e:
-                            _log.warning(f"Certificate pair not found for CN {client_cn}: {e}")
-                        except Exception as e:
-                            _log.warning(f"Failed to get certificate pair for CN {client_cn}: {e}")
-                except OpenSSL.crypto.Error as e:
-                    _log.warning(f"Failed to parse client certificate: {e}")
-                except Exception as e:
-                    _log.warning(f"Failed to extract CN from client certificate: {e}")
-            else:
-                _log.debug("Client did not provide a certificate in binary format")
-        except ssl.SSLError as e:
-            _log.warning(f"SSL error accessing client certificate: {e}")
-        except Exception as e:
-            _log.warning(f"Error accessing client certificate: {e}")
+        # Try to find certificate pair for the client
+        if client_cn:
+            cert_file, key_file = self._find_certificate_pair(client_cn)
 
         # Fall back to default certificate if needed
         if not cert_file or not key_file:
             _log.debug("Using default certificate")
-            try:
-                # Use the server certificate as a fallback
-                cert_file = self.server.tls_repo.server_cert_file
-                key_file = self.server.tls_repo.server_key_file
-                _log.debug(f"Using default cert: {cert_file}, key: {key_file}")
-            except AttributeError as e:
-                _log.error(f"TLS repository not properly configured: {e}")
-                raise RuntimeError("TLS repository not available") from e
-            except Exception as e:
-                _log.error(f"Failed to get default certificate: {e}")
-                raise RuntimeError("No valid certificate found for server connection") from e
+            cert_file, key_file = self._get_default_certificate_pair()
 
         # Create the SSL context
         try:
@@ -663,9 +704,12 @@ class ProxyServer(ThreadingHTTPServer):
 
     def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int], **kwargs):
         _log.debug(f"Initializing ProxyServer with target {proxy_target}")
-        super().__init__(**kwargs)
+        # Store our custom attributes before calling super().__init__
         self._tls_repo = tls_repo
         self._proxy_target = proxy_target
+
+        # Call parent constructor
+        super().__init__(**kwargs)
 
         # Set socket options for better concurrent performance
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -723,11 +767,23 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
     _log.info(f"Serving proxy at {server_address} -> {proxy_target}")
     try:
         _log.debug(f"Creating ProxyServer instance at {server_address}")
-        httpd = ProxyServer(server_address=server_address,
+        httpd = ProxyServer(tls_repo=tls_repo,
                             proxy_target=proxy_target,
-                            tls_repo=tls_repo,
+                            server_address=server_address,
                             RequestHandlerClass=RequestForwarder)
         _log.debug("ProxyServer instance created successfully")
+
+        # Verify the server has the required attributes
+        if hasattr(httpd, 'tls_repo'):
+            _log.debug(f"Server tls_repo verified: {type(httpd.tls_repo)}")
+        else:
+            _log.error("Server missing tls_repo attribute after creation")
+
+        if hasattr(httpd, 'proxy_target'):
+            _log.debug(f"Server proxy_target verified: {httpd.proxy_target}")
+        else:
+            _log.error("Server missing proxy_target attribute after creation")
+
     except Exception as e:
         _log.error(f"Error initializing ProxyServer: {e}", exc_info=True)
         raise
@@ -789,11 +845,19 @@ def build_address_tuple(hostname: str) -> Tuple[str, int]:
     _log.debug(f"Parsing hostname: {hostname}")
     parsed = urlparse(hostname)
     if parsed.hostname:
-        hostname_tuple = (parsed.hostname, parsed.port)
+        port = parsed.port
+        if port is None:
+            # Default port based on scheme
+            port = 443 if parsed.scheme == 'https' else 80
+        hostname_tuple = (parsed.hostname, port)
         _log.debug(f"Parsed URL format: {hostname_tuple}")
     else:
         parts = hostname.split(":")
-        hostname_tuple = (parts[0], int(parts[1]) if len(parts) > 1 else None)
+        if len(parts) > 1:
+            hostname_tuple = (parts[0], int(parts[1]))
+        else:
+            # Default to port 443 if no port specified
+            hostname_tuple = (parts[0], 443)
         _log.debug(f"Parsed host:port format: {hostname_tuple}")
     return hostname_tuple
 
