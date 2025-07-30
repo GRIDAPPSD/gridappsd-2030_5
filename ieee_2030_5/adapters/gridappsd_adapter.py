@@ -9,7 +9,7 @@ import typing
 from typing import get_type_hints
 
 import re
-from threading import Timer
+from threading import Timer, Lock
 
 _log = logging.getLogger("ieee_2030_5.gridappsd.adapter")
 ENABLED = True
@@ -69,6 +69,7 @@ if ENABLED:
         _power_electronic_connections: list[cim.PowerElectronicsConnection] | None = None
         _timer: PublishTimer | None = None
         __field_bus_connection__: FieldMessageBus | None = None
+        _lock: Lock = field(default=Lock(), init=False)
 
 
         def start_publishing(self):
@@ -117,6 +118,8 @@ if ENABLED:
 
             self.gapps.subscribe(topics.application_input_topic(application_id=service_id,
                                                                 simulation_id=simulation_id), callback=self._input_detected)
+
+
 
         def _input_detected(self, header: dict | None, message: dict | None):
 
@@ -312,53 +315,55 @@ if ENABLED:
         def get_message_for_bus(self) -> dict:
             import random
             import ieee_2030_5.models.output as mo
-
             msg = {}
-
-            # TODO Get from list adapter for each house.
-            # TODO This might not be the right way to do this
-            # Filter for availability
-            # for dev in self._devices:
-            #     if inverter := next(filter(lambda x: x.lfdi == dev.lfdi, self._inverters):
-
 
             def detect(v):
                 if v:
                     return v.endswith("ders")
 
-            der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
+            with self._lock:
+                try:
+                    der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
 
+                    for uri in der_status_uris:
+                        _log.debug(f"Testing uri: {uri}")
 
-            for uri in der_status_uris:
-                _log.debug(f"Testing uri: {uri}")
+                        try:
+                            meta_data = adpt.ListAdapter.get_single_meta_data(uri)
+                            status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
+                            inverter: HouseLookup | None = None
 
-                meta_data = adpt.ListAdapter.get_single_meta_data(uri)
-                status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
+                            _log.debug(f"Status is: {status}")
+                            if status and meta_data.get('lfdi') and self._inverters:
+                                _log.debug(f"Status found: {status}")
+                                _log.debug(f"Looking for: {meta_data['lfdi']}")
 
-                inverter: HouseLookup | None = None
+                                for x in self._inverters:
+                                    if x.lfdi == meta_data['lfdi']:
+                                        inverter = x
+                                        _log.debug(f"Found inverter: {inverter}")
+                                        break
 
-                _log.debug(f"Status is: {status}")
-                if status:
-                    _log.debug(f"Status found: {status}")
-                    _log.debug(f"Looking for: {meta_data['lfdi']}")
-                    for x in self._inverters:
-                        if x.lfdi == meta_data['lfdi']:
-                            inverter = x
-                            _log.debug(f"Found inverter: {inverter}")
-                            break
+                                if inverter:
+                                    # Convert to cim object measurement as analog value.
+                                    analog_value = mo.AnalogValue(mRID=inverter.mRID, name=inverter.name)
 
-                    if inverter:
-                        # Convert to cim object measurement as analog value.
-                        analog_value = mo.AnalogValue(mRID=inverter.mRID, name=inverter.name)
-                        if status.readingTime is not None:
-                            analog_value.timeStamp = status.readingTime
-                        if status.stateOfChargeStatus is not None:
-                            if status.stateOfChargeStatus.value is not None:
-                                analog_value.value = status.stateOfChargeStatus.value
-                        msg[inverter.mRID] = asdict(analog_value)
+                                    if status.readingTime is not None:
+                                        analog_value.timeStamp = status.readingTime
+
+                                    if status.stateOfChargeStatus is not None:
+                                        if status.stateOfChargeStatus.value is not None:
+                                            analog_value.value = status.stateOfChargeStatus.value
+
+                                    msg[inverter.mRID] = asdict(analog_value)
+                        except Exception as e:
+                            _log.warning(f"Error processing URI {uri}: {e}")
+                            continue
+
+                except Exception as e:
+                    _log.error(f"Error in get_message_for_bus: {e}")
 
             return msg
-
         def create_2030_5_device_certificates_and_configurations(self) -> list[DeviceConfiguration]:
 
             self._devices = []
