@@ -842,7 +842,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
                     # Add href to object if not present
                     if not hasattr(obj, 'href') or not obj.href:
-                        obj.href = f"{list_uri}/{len(current_list)}"  # type: ignore[attr-defined]
+                        obj.href = f"{list_uri}_{len(current_list)}"  # type: ignore[attr-defined]
 
                     # Append object
                     current_list.append(obj)
@@ -1421,8 +1421,10 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 else:
                     page_items = current_list[start:]
 
-                # Create appropriate list type based on model class
-                list_class_name = f"{self.model_class.__name__}List"
+                # Create appropriate list type based on metadata
+                metadata = self._get_list_metadata(list_uri)
+                model_type_name = metadata.get('type', self.model_class.__name__)
+                list_class_name = f"{model_type_name}List"
                 list_class = getattr(m, list_class_name, None)
 
                 if list_class:
@@ -1431,8 +1433,8 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     result.all = total_count
                     result.results = len(page_items)
 
-                    # Set the list items
-                    list_attr = self.model_class.__name__
+                    # Set the list items using the metadata type name
+                    list_attr = model_type_name
                     setattr(result, list_attr, page_items)
 
                     return result

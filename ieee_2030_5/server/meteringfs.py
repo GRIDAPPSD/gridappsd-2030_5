@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
+import werkzeug.exceptions
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
@@ -17,6 +18,8 @@ from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+
+_log = logging.getLogger(__name__)
 
 
 class Error(Exception):
@@ -144,8 +147,10 @@ class MirrorUsagePointRequest(RequestOp):
                     # Default value if not configured
                     mup.pollRate = 900
         else:
-            # /mup_0
+            # /mup/0
             mup = adpt.ListAdapter.get(hrefs.DEFAULT_MUP_ROOT, mup_href.usage_point_index)
+            if mup is None:
+                raise werkzeug.exceptions.NotFound(f"Mirror usage point at index {mup_href.usage_point_index} not found")
 
         return self.build_response_from_dataclass(mup)
 
@@ -180,6 +185,6 @@ class MirrorUsagePointRequest(RequestOp):
         if status.startswith('20'):
             if result.location:
                 return Response(headers={'Location': result.location}, status=status)
-            return Response(headers={'Location': result.an_object.href}, status=status)
+            return Response(headers={'Location': result.data.href}, status=status)
         else:
-            return Response(result.an_object, status=status)
+            return Response(result.data, status=status)
