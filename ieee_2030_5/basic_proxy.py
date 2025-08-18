@@ -1641,6 +1641,11 @@ def _main():
 
         config = ServerConfiguration(**cfg_dict)
 
+        # Set environment variable for LFDI calculation mode
+        if config.lfdi_mode == "lfdi_mode_from_file":
+            os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
+            _log.info("Using LFDI calculation from combined certificate file")
+
         if config.proxy_hostname is None:
             _log.error("Invalid proxy_hostname in config file.")
             return
