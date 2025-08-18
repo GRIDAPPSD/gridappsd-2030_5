@@ -1,720 +1,545 @@
-from __future__ import annotations
-import os
-
-import inspect
-from pprint import pprint
+# ieee_2030_5/adapters/__init__.py
+"""
+Thread-safe adapters for IEEE 2030.5 server.
+"""
+import threading
 import logging
-import typing
-from typing import Callable, Iterator
-from uuid import uuid4
-from copy import deepcopy
-from dataclasses import dataclass, fields, is_dataclass, asdict
-from enum import Enum
 from pathlib import Path
-from typing import (Any, ClassVar, Dict, Generic, List, Optional, Protocol, Type, TypeVar, Union,
-                    get_args, get_origin)
-
-import yaml
-from blinker import Signal
-
-from ieee_2030_5.utils import uuid_2030_5
-import ieee_2030_5.config as cfg
-import ieee_2030_5.hrefs as hrefs
+from typing import Any
+import OpenSSL
+from flask import Response, request, g
+from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 import ieee_2030_5.models as m
-from ieee_2030_5.certs import TLSRepository
+from ieee_2030_5 import hrefs
+from ieee_2030_5.config import DeviceConfiguration, ServerConfiguration
+from ieee_2030_5.persistance.points import atomic_operation, get_db
+from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
+from blinker import Signal
+from .base import (ThreadSafeListAdapter, ThreadSafeEndDeviceAdapter, initialize_adapters,
+                   get_adapter_stats, AdapterResult)
+# Import the global instances
+from .base import ListAdapter, EndDeviceAdapter
 
 _log = logging.getLogger(__name__)
 
-
-class AlreadyExists(Exception):
-    pass
-
-
-class NotFoundError(Exception):
-    pass
-
-
-load_event = Signal("load-store-event")
-store_event = Signal("store-data-event")
+# Create additional specialized adapters
+DERControlAdapter = ThreadSafeListAdapter(m.DERControl)
+DERProgramAdapter = ThreadSafeListAdapter(m.DERProgram)
+DERCurveAdapter = ThreadSafeListAdapter(m.DERCurve)
+FunctionSetAssignmentsAdapter = ThreadSafeListAdapter(m.FunctionSetAssignments)
+DeviceCapabilityAdapter = ThreadSafeListAdapter(m.DeviceCapability)
+RegistrationAdapter = ThreadSafeListAdapter(m.Registration)
 
 
-def __get_store__(store_name: str) -> Path:
-    if cfg.ServerConfiguration.storage_path is None:
-        cfg.ServerConfiguration.storage_path = Path("data_store")
-    elif isinstance(cfg.ServerConfiguration.storage_path, str):
-        cfg.ServerConfiguration.storage_path = Path(cfg.ServerConfiguration.storage_path)
-
-    store_path = cfg.ServerConfiguration.storage_path
-    store_path.mkdir(parents=True, exist_ok=True)
-    store_path = store_path / f"{store_name}.yml"
-
-    return store_path
+# Add compatibility method for list_size
+def list_size(list_uri: str) -> int:
+    """Compatibility method for existing code that uses list_size."""
+    return ListAdapter.get_list_size(list_uri)
 
 
-def do_load_event(caller: Union[Adapter, ResourceListAdapter]) -> None:
-    """Load an adaptor type from the data_store path.
-    """
-    _log.debug("No-op load")
-    # store_file = None
-    # if isinstance(caller, Adapter):
-    #     _log.debug(f"Loading store {caller.generic_type_name}")
-    #     store_file = __get_store__(caller.generic_type_name)
-    # elif isinstance(caller, ResourceListAdapter):
-    #     store_file = __get_store__(caller.__class__.__name__)
-    # else:
-    #     raise ValueError(f"Invalid caller type {type(caller)}")
-    #
-    # if not store_file.exists():
-    #     _log.debug(f"Store {store_file.as_posix()} does not exist at present.")
-    #     return
-    #
-    # # Load from yaml unsafe values etc.
-    # with open(store_file, "r") as f:
-    #     items = yaml.load(f, Loader=yaml.UnsafeLoader)
-    #
-    #     caller.__dict__.update(items)
-
-    # _log.debug(f"Loaded {caller.count} items from store")
+# Add method directly to the ListAdapter instance
+ListAdapter.list_size = lambda uri: ListAdapter.get_list_size(uri)
 
 
-def do_save_event(caller: Union[Adapter, ResourceListAdapter]) -> None:
-
-    _log.debug("Store no op")
-    # store_file = None
-    # if isinstance(caller, Adapter):
-    #     _log.debug(f"Loading store {caller.generic_type_name}")
-    #     store_file = __get_store__(caller.generic_type_name)
-    #     _log.debug(f"Storing: {caller.generic_type_name}")
-    # elif isinstance(caller, ResourceListAdapter):
-    #     store_file = __get_store__(caller.__class__.__name__)
-    # else:
-    #     raise ValueError(f"Invalid caller type {type(caller)}")
-    #
-    # with open(store_file, 'w') as f:
-    #     yaml.dump(caller.__dict__, f, default_flow_style=False, allow_unicode=True)
-
-
-load_event.connect(do_load_event)
-store_event.connect(do_save_event)
-
-
-class ReturnCode(Enum):
-    OK = 200
-    CREATED = 201
-    NO_CONTENT = 204
-    BAD_REQUEST = 400
-
-
-def populate_from_kwargs(obj: object, **kwargs) -> Dict[str, Any]:
-
-    if not is_dataclass(obj):
-        raise ValueError(f"The passed object {obj} is not a dataclass.")
-
-    for k in fields(obj):
-        if k.name in kwargs:
-            type_eval = eval(k.type)
-
-            if typing.get_args(type_eval) is typing.get_args(Optional[int]):
-                setattr(obj, k.name, int(kwargs[k.name]))
-            elif typing.get_args(k.type) is typing.get_args(Optional[bool]):
-                setattr(obj, k.name, bool(kwargs[k.name]))
-            # elif bytes in args:
-            #     setattr(obj, k.name, bytes(kwargs[k.name]))
-            else:
-                setattr(obj, k.name, kwargs[k.name])
-            kwargs.pop(k.name)
-    return kwargs
-
-
-class AdapterIndexProtocol(Protocol):
-
-    def fetch_at(self, index: int) -> m.Resource:
-        pass
-
-
-class AdapterListProtocol(AdapterIndexProtocol):
-
-    def fetch_list(self, start: int = 0, after: int = 0, limit: int = 0) -> m.List_type:
-        pass
-
-    def fetch_edev_all(self) -> List:
-        pass
-
-
-ready_signal = Signal("ready-signal")
-
-T = TypeVar('T')
-C = TypeVar('C')
-D = TypeVar('D')
-E = TypeVar('E')
-
-
-class ResourceListAdapter:
-    """
-    A generic list adapter class for storing and retrieving lists of objects of a specific type. The adapter is
-    initialized with an empty list of URLs and an empty dictionary of list containers. The adapter provides methods for
-    adding URLs to the list, retrieving lists of objects from the adapter, and registering types for use with the
-    adapter. The adapter also provides a `load_event` signal that is emitted when the adapter is loaded.
-
-    :ivar _list_urls: A list of URLs for the adapter
-    :vartype _list_urls: list
-    :ivar _list_containers: A dictionary of list containers, indexed by URL
-    :vartype _list_containers: dict
-    :ivar _types: A dictionary of types registered with the adapter, indexed by type name
-    :vartype _types: dict
-    """
+# Create a TimeAdapter for time operations
+class TimeAdapter:
+    """Thread-safe adapter for time operations."""
 
     def __init__(self):
-        self._list_urls = []
-        self._container_dict: Dict[str, Dict[int, D]] = {}
-        self._singleton_dict: Dict[str, D] = {}
-        self._singleton_envelops: Dict[str, E] = {}
-        self._types: Dict[str, D] = {}
-        if not os.environ.get('IEEE_ADAPTER_IGNORE_INITIAL_LOAD'):
-            _log.debug(f"Intializing adapter {self.__class__.__name__}")
-            load_event.send(self)
-        else:
-            _log.debug(
-                f"Skip loading initial store due to IEEE_ADAPTER_IGNORE_INITIAL_LOAD being set")
-
-    def list_size(self, list_uri: str) -> int:
-        alist = self._container_dict.get(list_uri, [])
-        return len(alist)
-
-    def count(self) -> int:
-        count_of = 0
-        for v in self._container_dict.values():
-            count_of += len(v)
-        return count_of
-
-    def get_type(self, list_uri: str) -> D:
-        return self._types.get(list_uri)
-
-    def initialize_uri(self, list_uri: str, obj: D):
-        if self._container_dict.get(list_uri) and self._types.get(list_uri) != obj:
-            _log.error("Must initialize before container has any items.")
-            raise ValueError("Must initialize before container has any items.")
-        self._types[list_uri] = obj
-
-    def append_and_increment_href(self, list_uri: str, obj: D) -> D:
-        url_parts: list[str] = list_uri.split(hrefs.SEP)
-        try:
-            int(url_parts[0])
-            obj.href = hrefs.SEP.join(url_parts[1:].append(str(self.list_size(list_uri))))
-        except ValueError:
-            obj.href = hrefs.SEP.join([list_uri, str(self.list_size(list_uri))])
-
-        GlobalmRIDs.add_item(value=obj)
-
-        self.append(list_uri, obj)
-        return obj
-
-    def append(self, list_uri: str, obj: D):
-        """
-        Appends an object to a list container in the adapter.
-
-        The following rules are used to determine the container of the passed url.
-
-        1. If the list container does not exist, it is created.
-        2. If the list container exists but has not been initialized with a type, the type of the object[D]
-           is used to initialize the list container.
-        3. If the list container exists and has been initialized with a type, the type of the object[D] is
-           validated against the initialized type.  An ValueError is thrown if the types do not match.
-
-        :param list_uri: The URI of the list container
-        :type list_uri: str
-        :param obj: The object to append to the list container
-        :type obj: Generic[D] or DList container
-        :raises AssertionError: If the type of the object does not match the initialized type of the list container
-        """
-        cls = obj.__class__
-        if issubclass(cls, (m.List_type, m.SubscribableList)):
-            expected_type = eval(f'm.{cls.__name__[:cls.__name__.find("List")]}')
-
-            if self._types.get(list_uri) is not None:
-                raise ValueError(f"List for {list_uri} has already been initialized")
-
-            self._types[list_uri] = expected_type
-
-            # Recurse over the list appending to the end for each in the list
-            for ele in getattr(obj, expected_type.__name__):
-                GlobalmRIDs.add_item(value=ele)
-                self.append(list_uri, ele)
-
-            # Exit here as all of the sub-items have been added now.
-            return
-
-        else:    # if there is a type
-            expected_type = self._types.get(list_uri)
-
-        if expected_type:
-            if not isinstance(obj, expected_type):
-                raise ValueError(f"Object {obj} is not of type {expected_type.__name__}")
-        else:
-            self.initialize_uri(list_uri, obj.__class__)
-
-        if list_uri not in self._container_dict:
-            self._container_dict[list_uri] = {}
-        self._container_dict[list_uri][len(self._container_dict[list_uri])] = obj
-        if hasattr(obj, "mRID"):
-            GlobalmRIDs.add_item_with_mrid(obj.mRID, obj)
-        store_event.send(self)
-
-    def get_by_mrid(self, list_uri: str, mrid: str) -> Optional[T]:
-        try:
-            return self.get_item_by_prop(list_uri, "mRID", mrid)
-        except NotFoundError as ex:
-            _log.warning(f"mRID: {mrid} not found in list: {list_uri}")
-            return None
-
-    def get_item_by_prop(self, list_uri: str, prop: str, value: Any) -> D:
-        for item in self._container_dict.get(list_uri, {}).values():
-            if getattr(item, prop) == value:
-                return item
-        raise NotFoundError(f"Uri {list_uri} does not contain {prop} == {value}")
-
-    def has_list(self, list_uri: str) -> bool:
-        return list_uri in self._container_dict
-
-    def get_resource_list(self,
-                          list_uri: str,
-                          start: int = 0,
-                          after: int = 0,
-                          limit: int = 0,
-                          sort_by: List[str] = [],
-                          reverse: bool = False) -> Union[m.List_type, m.SubscribableList]:
-        if isinstance(sort_by, str):
-            sort_by = [sort_by]
-        cls = self.get_type(list_uri)
-        if cls is None:
-            raise KeyError(f"Resource list {list_uri} not found in adapter")
-
-        thelist = eval(f"m.{cls.__name__}List()")
-        try:
-            # Create a new list because the type is known and the uri is already known
-            # there should be no need to add any items to the list, but the list should
-            # exist on first access now.
-            if list_uri not in self._container_dict:
-                self._container_dict[list_uri] = {}
-            thecontainerlist = list(self._container_dict[list_uri].values())
-            for sort in sort_by:
-                subobj = sort.split('.')
-                if len(subobj) == 2:
-                    try:
-                        thecontainerlist = sorted(
-                            thecontainerlist,
-                            key=lambda o: getattr(getattr(o, subobj[0]), subobj[1]),
-                            reverse=reverse)
-                    except AttributeError:
-                        # happens when value is none
-                        pass
-                elif len(subobj) == 1:
-                    thecontainerlist = sorted(thecontainerlist,
-                                              key=lambda o: getattr(o, sort),
-                                              reverse=reverse)
-                else:
-                    raise ValueError("Can only sort through single nested properties.")
-                # if "." in sort:
-
-                # thecontainerlist = sorted(thecontainerlist, key=sort)
-            thelist.href = list_uri
-            thelist.all = len(thecontainerlist)
-            if start == after == limit == 0:
-                setattr(thelist, cls.__name__, thecontainerlist)
-            else:
-                posx = start + after
-                setattr(thelist, cls.__name__, thecontainerlist[posx:posx + limit])
-            thelist.results = len(getattr(thelist, cls.__name__))
-        except KeyError:
-            thelist.all = 0
-            thelist.href = list_uri
-            thelist.results = len(getattr(thelist, cls.__name__))
-        return thelist
-
-    def get_list(self, list_uri: str, start: int = 0, limit: int = 0, after: int = 0) -> D:
-        if list_uri not in self._container_dict:
-            raise KeyError(f"List {list_uri} not found in adapter")
-
-        return list(self._container_dict[list_uri].values())
-
-    def set_single(self, uri: str, obj: D):
-        GlobalmRIDs.add_item(value=obj)
-        self._singleton_dict[uri] = obj
-
-    def get_single(self, uri: str) -> D:
-        return self._singleton_dict.get(uri)
-
-    def set_single_amd_meta_data(self, uri: str, envelop: dict, obj: D):
-        GlobalmRIDs.add_item(value=obj)
-        self.set_single(uri=uri, obj=obj)
-        self._singleton_envelops[uri] = envelop
-
-    def get_single_meta_data(self, uri: str) -> E:
-        return self._singleton_envelops[uri]
-
-    def show_single_dict(self):
-        from pprint import pformat
-        _log.debug(pformat(self._singleton_dict, indent=2))
-
-    def filter_single_dict(self, fn: Callable) -> Iterator:
-        """
-        Filters the single objects using the specified callable.
-
-        The return value will either be None or an Iterator.  The None value
-        will be when no elements match in the given callable.
-
-        """
-        return filter(fn, self._singleton_dict.keys())
-
-    def get(self, list_uri: str, key: int) -> D:
-        if list_uri not in self._container_dict:
-            raise KeyError(f"List {list_uri} not found in adapter")
-        if not isinstance(key, int):
-            key = int(key)
-
-        try:
-            return self._container_dict[list_uri][key]
-        except KeyError:
-            raise NotFoundError(f"Key {key} not found in list {list_uri}")
-
-    def set(self, list_uri: str, key: int, value: D, overwrite: bool = True) -> D:
-        if list_uri not in self._container_dict:
-            raise KeyError(f"List {list_uri} not found in adapter")
-
-        if key in self._container_dict[list_uri] and not overwrite:
-            raise AlreadyExists(
-                f"Key {key} already exists in list {list_uri} but overwrite not set to True")
-
-        self._container_dict[list_uri][key] = value
-        store_event.send(self)
-
-    def store(self):
-        store_event.send(self)
-
-    def get_values(self, list_uri: str, sort_by: Optional[str] = None) -> List[D]:
-        raise ValueError("Hmmmmm refactoring.")
-        cpy = deepcopy(list(self._container_dict[list_uri].values()))
-        if sort_by is not None:
-            return sorted(cpy, key=lambda x: getattr(x, sort_by))
-        else:
-            return cpy
-
-    def remove(self, list_uri: str, index: int):
-        del self._container_dict[list_uri][index]
-        store_event.send(self)
-
-    def render_container(self, list_uri: str, instance: object, prop: str):
-        setattr(instance, prop, deepcopy(self._container_dict[list_uri]))
-
-    def print_container(self, list_uri: str):
-        pprint(self._container_dict[list_uri])
-
-    def print_all(self):
-
-        for k in sorted(self._container_dict.keys()):
-            for index, v in self._container_dict[k].items():
-                print(f"{k} :index:", index)
-                pprint(v.__dict__)
-            #pprint(self._container_dict[k].)
-
-    def get_all_as_dict(self) -> Dict[str, Dict[int, D]]:
-        out = {}
-
-        def replace_bytes(obj: dict) -> dict:
-            for k, v in obj.items():
-                if isinstance(v, dict):
-                    obj[k] = replace_bytes(v)
-                elif isinstance(v, bytearray):
-                    obj[k] = v.hex()
-                elif isinstance(v, bytes):
-                    obj[k] = v.hex()
-            return obj
-
-        for k in sorted(self._container_dict.keys()):
-            for index, v in self._container_dict[k].items():
-                if k not in out:
-                    out[k] = {}
-                a = deepcopy(v)
-                out[k] = asdict(a)
-                out[k] = replace_bytes(out[k])
-
-        data = dict(lists=out)
-
-        single = {}
-
-        for k, v in self._singleton_dict.items():
-            single[k] = asdict(deepcopy(v))
-            single[k] = replace_bytes(single[k])
-
-        data['singletons'] = single
-
-        return data
-
-    def clear_all(self):
-        self._container_dict.clear()
-        self._list_urls.clear()
-        self._types.clear()
-
-    def clear(self, list_uri: str):
-        if list_uri in self._container_dict:
-            self._container_dict[list_uri].clear()
-            self._list_urls[list_uri].clear()
-            self._types[list_uri].clear()
-
-class _GlobalAdapter:
-    def __init__(self):
-        self._mrid_to_object: dict[str, object] = {}
-
-    def new_mrid(self) -> str:
-        """
-        Returns a unique mrid that has not be used in the global object.
-        """
-        while True:
-            _new = uuid_2030_5().lower()
-            if _new not in self._mrid_to_object:
-                return _new
-
-
-    def add_item(self, value: object):
-        if hasattr(value, 'mRID'):
-            mrid = getattr(value, 'mRID')
-            if not mrid:
-                _log.error(f"Invalid mrid specified on object of type {type(value)}\n {value}")
-            else:
-                self._mrid_to_object[mrid] = value
-
-    def get_items(self) -> list[object]:
-        return [deepcopy(x) for x in self._mrid_to_object.values()]
-
-    def add_item_with_mrid(self, mrid: str, value: object):
-        self._mrid_to_object[mrid] = value
-
-    def remove_item(self, mrid: str):
-        self._mrid_to_object.pop(mrid)
-
-    def get_item(self, mrid: str) -> object:
-        return self._mrid_to_object.get(mrid)
-
-    def has_item(self, mrid: str) -> bool:
-        return mrid in self._mrid_to_object
-
-    def clear(self):
-        self._mrid_to_object.clear()
-
-GlobalmRIDs = _GlobalAdapter()
-
-class Adapter(Generic[T]):
-    """
-    A generic adapter class for storing and retrieving objects of a specific type. The adapter is initialized with a
-    URL prefix and a generic type parameter. The adapter maintains an internal dictionary of objects, indexed by an
-    integer ID. The adapter provides methods for adding, updating, and deleting objects, as well as retrieving objects
-    by ID or by a custom filter function. The adapter also provides a `count` property that returns the number of
-    objects currently stored in the adapter.
-
-    :param url_prefix: The URL prefix for the adapter
-    :type url_prefix: str
-    :param kwargs: Additional keyword arguments
-    :type kwargs: dict
-    :raises ValueError: If the `generic_type` parameter is missing from `kwargs`
-    """
-
-    def __init__(self, url_prefix: str, **kwargs):
-        if "generic_type" not in kwargs:
-            raise ValueError("Missing generic_type parameter")
-        self._generic_type: Type = kwargs['generic_type']
-        self._href_prefix: str = url_prefix
-        self._current_index: int = -1
-        self._item_list: Dict[int, T] = {}
-        if not os.environ.get('IEEE_ADAPTER_IGNORE_INITIAL_LOAD'):
-            _log.debug(f"Intializing adapter {self.generic_type_name}")
-            load_event.send(self)
-        else:
-            _log.debug(
-                f"Skip loading initial store due to IEEE_ADAPTER_IGNORE_INITIAL_LOAD being set")
+        self._lock = threading.RLock()
+        # Add the signals
+        self.event_started = Signal()
+        self.event_ended = Signal()
+        self.time_changed = Signal()
 
     @property
-    def count(self) -> int:
-        return len(self._item_list)
-
-    @property
-    def generic_type_name(self) -> str:
-        return self._generic_type.__name__
-
-    @property
-    def href_prefix(self) -> str:
-        return self._href_prefix
-
-    @property
-    def href(self) -> str:
-        return self._href_prefix
-
-    @href.setter
-    def href(self, value: str) -> None:
-        self._href_prefix = value
-
-    def clear(self) -> None:
-        self._current_index = -1
-        self._item_list: Dict[int, T] = {}
-        store_event.send(self)
-
-    def fetch_by_mrid(self, mrid: str) -> Optional[T]:
-        return self.fetch_by_property("mRID", mrid)
-
-    def fetch_by_href(self, href: str) -> Optional[T]:
-        return self.fetch_by_property("href", href)
-
-    def fetch_by_property(self, prop: str, prop_value: Any) -> Optional[T]:
-        for obj in self._item_list.values():
-            # Most properties are pointers to other objects so we are going to
-            # check both the property and the sub object property here, because
-            # that should save some of the time later when we are looking for
-            # hrefs and and can't get to them because they are wrapped in a
-            # Link object.
-            under_test = getattr(obj, prop)
-            if isinstance(under_test, str):
-                if under_test == prop_value:
-                    return obj
-            else:
-                if getattr(under_test, prop) == prop_value:
-                    return obj
-
-    def add(self, item: T) -> T:
-        if not isinstance(item, self._generic_type):
-            raise ValueError(f"Item {item} is not of type {self._generic_type}")
-
-        # Only replace if href is specified.
-        if hasattr(item, 'href') and getattr(item, 'href') is None:
-            setattr(item, 'href', hrefs.SEP.join([self._href_prefix,
-                                                  str(self._current_index + 1)]))
-        self._current_index += 1
-        self._item_list[self._current_index] = item
-
-        if hasattr(item, 'mRID'):
-            GlobalmRIDs.add_item(getattr(item, 'mRID'), item)
-
-        store_event.send(self)
-        return item
-
-    def fetch_all(self,
-                  container: Optional[D] = None,
-                  start: int = 0,
-                  after: int = 0,
-                  limit: int = 1) -> D:
-
-        if container is not None:
-            if not container.__class__.__name__.endswith("List"):
-                raise ValueError("Must have List as the last portion of the name for instance")
-
-            prop_found = container.__class__.__name__[:container.__class__.__name__.find("List")]
-
-            items = list(self._item_list.values())
-            all_len = len(items)
-            all_results = len(items)
-            all_items = items
-
-            if start > len(items):
-                all_items = []
-                all_results = 0
-            else:
-                if limit == 0:
-                    all_items = items[start:]
-                else:
-                    all_items = items[start:start + limit]
-                all_results = len(all_items)
-
-            setattr(container, prop_found, all_items)
-            setattr(container, "all", all_len)
-            setattr(container, "results", all_results)
-        else:
-            container = list(self._item_list.values())
-
-        return container
-
-    def fetch_index(self, obj: T, using_prop: str = None) -> int:
-        found_index = -1
-        for index, obj1 in self._item_list.items():
-            if using_prop is None:
-                if obj1 == obj:
-                    found_index = index
-                    break
-            else:
-                if getattr(obj, using_prop) == getattr(obj1, using_prop):
-                    found_index = index
-                    break
-        if found_index == -1:
-            raise KeyError(f"Object {obj} not found in adapter")
-        return found_index
-
-    def fetch(self, index: int):
-        return self._item_list[index]
-
-    def put(self, index: int, obj: T):
-        self._item_list[index] = obj
-        store_event.send(self)
-
-    def fetch_by_mrid(self, mRID: str):
-        for item in self._item_list.values():
-            if not hasattr(item, 'mRID'):
-                raise ValueError(f"Item of {type(T)} does not have mRID property")
-            if item.mRID == mRID:
-                return item
-
-        raise KeyError(f"mRID ({mRID}) not found.")
-
-    def size(self) -> int:
-        return len(self._item_list)
-
-    def __len__(self) -> int:
-        return len(self._item_list)
-
-    def store(self):
-        store_event.send(self)
-
-    def get_all_as_dict(self) -> Dict[str, Dict[int, D]]:
-        out = {}
-
-        def replace_bytes(obj: dict) -> dict:
-            for k, v in obj.items():
-                if isinstance(v, dict):
-                    obj[k] = replace_bytes(v)
-                elif isinstance(v, bytearray):
-                    obj[k] = v.hex()
-                elif isinstance(v, bytes):
-                    obj[k] = v.hex()
-            return obj
-
-        for k in sorted(self._item_list.keys()):
-            copyofitem = deepcopy(self._item_list[k])
-            out[k] = asdict(copyofitem)
-            out[k] = replace_bytes(out[k])
-
-        return out
+    def current_tick(self):
+        """Get current time tick in a thread-safe manner."""
+        import time
+        with self._lock:
+            return int(time.time())
 
 
-
-from ieee_2030_5.adapters.adapters import (DERAdapter, DERControlAdapter, DERCurveAdapter,
-                                           DERProgramAdapter, DeviceCapabilityAdapter,
-                                           EndDeviceAdapter, FunctionSetAssignmentsAdapter,
-                                           RegistrationAdapter, TimeAdapter, ListAdapter,
-                                           create_mirror_usage_point, create_or_update_meter_reading)
+# Create singleton instance
+TimeAdapter = TimeAdapter()
 
 __all__ = [
-    'DERControlAdapter', 'DERCurveAdapter', 'DERProgramAdapter', 'DeviceCapabilityAdapter',
-    'EndDeviceAdapter', 'FunctionSetAssignmentsAdapter', 'RegistrationAdapter', 'DERAdapter',
-    'TimeAdapter', 'create_mirror_usage_point', 'create_or_update_meter_reading', 'ListAdapter',
-    'GlobalmRIDs'
+    'ListAdapter', 'EndDeviceAdapter', 'DERControlAdapter', 'DERProgramAdapter', 'DERCurveAdapter',
+    'FunctionSetAssignmentsAdapter', 'DeviceCapabilityAdapter', 'RegistrationAdapter',
+    'TimeAdapter', 'initialize_adapters', 'get_adapter_stats', 'AdapterResult'
 ]
 
 
+# Helper function for certificate names
+def normalize_certificate_name(href: str) -> str:
+    """Normalize certificate name from href."""
+    return href.rsplit(hrefs.SEP, 1)[-1]
+
+
+# Helper function to extract LFDI from certificate
+def get_lfdi_from_cert_file(cert_path: str) -> str:
+    """Extract LFDI from certificate file."""
+    try:
+        with open(cert_path, 'rb') as cert_file:
+            cert_data = cert_file.read()
+            x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert_data)
+            fingerprint = x509.digest("sha256").decode('ascii')
+            return lfdi_from_fingerprint(fingerprint)
+    except Exception as e:
+        _log.error(f"Error getting LFDI from certificate: {e}")
+        raise
+
+
+# Thread-safe certificate operations helper
+import fcntl
+from contextlib import contextmanager
+
+_cert_locks = {}
+_cert_locks_lock = threading.Lock()
+
+
+@contextmanager
+def certificate_lock(cert_name: str):
+    """Thread-safe certificate file operations."""
+    with _cert_locks_lock:
+        if cert_name not in _cert_locks:
+            _cert_locks[cert_name] = threading.Lock()
+        lock = _cert_locks[cert_name]
+    with lock:
+        yield
+
+
+def _admin_enddevices(self) -> Response:
+    """Thread-safe version of enddevice management."""
+    if request.method in ('POST', 'PUT'):
+        data = request.data.decode('utf-8')
+        item = xml_to_dataclass(data)
+        if not isinstance(item, m.EndDevice):
+            _log.error("EndDevice was not passed via data.")
+            return Response(status=400)
+        if request.method == 'POST':
+            if item.href:
+                _log.error(f"POST method with existing object {item.href}")
+                return Response(status=400)
+            # Thread-safe add with automatic conflict detection
+            try:
+                # Check if device already exists by LFDI
+                existing = EndDeviceAdapter.fetch_by_property("lFDI", item.lFDI)
+                if existing:
+                    return Response("Device already exists", status=409)
+                # Add new device
+                item = EndDeviceAdapter.add(item)
+                # Create certificate (this should also be made thread-safe)
+                cert_filename = normalize_certificate_name(item.href)
+                tls_repo: TLSRepository = g.TLS_REPOSITORY
+                # Use file locking for certificate operations
+                with certificate_lock(cert_filename):
+                    cert, key = tls_repo.get_file_pair(cert_filename)
+                    # Check if files exist and remove them
+                    Path(cert).unlink(missing_ok=True)
+                    Path(key).unlink(missing_ok=True)
+                    # Create new certificate
+                    tls_repo.create_cert(cert_filename)
+                    # Get LFDI and SFDI from the certificate
+                    item.lFDI = tls_repo.lfdi(cert_filename)
+                    item.sFDI = tls_repo.sfdi(cert_filename)
+                response_status = 201
+            except Exception as e:
+                _log.error(f"Failed to create end device: {e}")
+                return Response("Internal server error", status=500)
+        elif request.method == 'PUT':
+            if not item.href:
+                _log.error("PUT method without an existing object.")
+                return Response(status=400)
+            # Thread-safe update
+            try:
+                index = int(item.href.rsplit(hrefs.SEP)[-1])
+                result = EndDeviceAdapter.put(index, item)
+                if not result.success:
+                    return Response(result.error, status=400)
+                response_status = 200
+            except Exception as e:
+                _log.error(f"Failed to update end device: {e}")
+                return Response("Internal server error", status=500)
+        return Response(dataclass_to_xml(item), status=response_status)
+    # GET request - thread-safe list retrieval
+    start = int(request.args.get('s', 0))
+    after = int(request.args.get('a', 0))
+    limit = int(request.args.get('l', 1))
+    try:
+        # This is now thread-safe
+        allofem = EndDeviceAdapter.fetch_all(m.EndDeviceList(),
+                                             start=start,
+                                             after=after,
+                                             limit=limit)
+        return Response(dataclass_to_xml(allofem), status=200)
+    except Exception as e:
+        _log.error(f"Failed to fetch end devices: {e}")
+        return Response("Internal server error", status=500)
+
+
+def _admin_controls(self) -> Response:
+    """Thread-safe DER control management."""
+    if request.method in ('POST', 'PUT'):
+        data = request.data.decode('utf-8')
+        control = xml_to_dataclass(data)
+        if not isinstance(control, m.DERControl):
+            _log.error("DERControl was not passed via data.")
+            return Response(status=400)
+        if request.method == 'POST':
+            if control.href:
+                _log.error(f"POST method with existing object {control.href}")
+                return Response(status=400)
+            # Thread-safe add
+            try:
+                result = DERControlAdapter.append(hrefs.DEFAULT_CONTROL_ROOT, control)
+                if result.success:
+                    return Response(dataclass_to_xml(result.data),
+                                    status=201,
+                                    headers={'Location': result.location})
+                else:
+                    return Response(result.error, status=400)
+            except Exception as e:
+                _log.error(f"Failed to add DER control: {e}")
+                return Response("Internal server error", status=500)
+        elif request.method == 'PUT':
+            if not control.href:
+                _log.error("PUT method without an existing object.")
+                return Response(status=400)
+            try:
+                index = int(control.href.rsplit(hrefs.SEP)[-1])
+                result = DERControlAdapter.put(hrefs.DEFAULT_CONTROL_ROOT, index, control)
+                if result.success:
+                    return Response(dataclass_to_xml(result.data), status=200)
+                else:
+                    return Response(result.error, status=400)
+            except Exception as e:
+                _log.error(f"Failed to update DER control: {e}")
+                return Response("Internal server error", status=500)
+    # GET request
+    start = int(request.args.get('s', 0))
+    after = int(request.args.get('a', 0))
+    limit = int(request.args.get('l', 1))
+    try:
+        control_list = DERControlAdapter.get_resource_list(hrefs.DEFAULT_CONTROL_ROOT,
+                                                           start=start,
+                                                           after=after,
+                                                           limit=limit)
+        return Response(dataclass_to_xml(control_list), status=200)
+    except Exception as e:
+        _log.error(f"Failed to fetch DER controls: {e}")
+        return Response("Internal server error", status=500)
+
+
+def create_device_capability(end_device_index: int,
+                             device_cfg: DeviceConfiguration) -> m.DeviceCapability:
+    """Thread-safe device capability creation."""
+    try:
+        dcap_href = hrefs.DeviceCapabilityHref(end_device_index)
+        device_capability = m.DeviceCapability()
+        device_capability = dcap_href.fill_hrefs(device_capability)
+        device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
+            href=hrefs.DEFAULT_MUP_ROOT, all=0)
+        device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
+        device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT,
+                                                                    all=0)
+        # Thread-safe adapter operations
+        result = DeviceCapabilityAdapter.append(hrefs.DEFAULT_DCAP_ROOT, device_capability)
+        if not result.success:
+            raise Exception(f"Failed to add device capability: {result.error}")
+        return result.data
+    except Exception as e:
+        _log.error(f"Failed to create device capability for device {end_device_index}: {e}")
+        raise
+
+
+def add_enddevice(device: m.EndDevice) -> m.EndDevice:
+    """Thread-safe enddevice addition with all related resources."""
+    try:
+        # Add the device atomically
+        device = EndDeviceAdapter.add(device)
+        ed_href = hrefs.EndDeviceHref(edev_href=device.href)
+        # Fill hrefs
+        ed_href.fill_hrefs(device)
+        # Create related resources atomically
+        with atomic_operation():
+            # Configuration
+            config = m.Configuration(href=device.ConfigurationLink.href)
+            result = ListAdapter.set_single(uri=device.ConfigurationLink.href, obj=config)
+            # Device Information
+            device_info = m.DeviceInformation(href=device.DeviceInformationLink.href)
+            ListAdapter.set_single(uri=device.DeviceInformationLink.href, obj=device_info)
+            # Device Status
+            device_status = m.DeviceStatus(href=device.DeviceStatusLink.href)
+            ListAdapter.set_single(uri=device.DeviceStatusLink.href, obj=device_status)
+            # Power Status
+            power_status = m.PowerStatus(href=device.PowerStatusLink.href)
+            ListAdapter.set_single(uri=device.PowerStatusLink.href, obj=power_status)
+        # Initialize lists
+        device.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.DEFAULT_MUP_ROOT,
+                                                                     all=0)
+        device.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
+        # Initialize list URIs thread-safely
+        ListAdapter.initialize_uri(hrefs.DEFAULT_MUP_ROOT, m.MirrorUsagePoint)
+        ListAdapter.initialize_uri(hrefs.DEFAULT_UPT_ROOT, m.UsagePoint)
+        ListAdapter.initialize_uri(ed_href.der_list, m.DER)
+        ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
+        return device
+    except Exception as e:
+        _log.error(f"Failed to add end device: {e}")
+        raise
+
+
+# Thread-safe event handling
+_event_processing_lock = threading.RLock()
+
+
+def update_active_der_event_started(event: m.Event):
+    """Thread-safe event processing for DER control events."""
+    with _event_processing_lock:
+        try:
+            assert type(event) == m.DERControl
+            href_parser = hrefs.HrefEventParser(event.href)
+            program = ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, href_parser.program_index)
+            # Get control list thread-safely
+            control_list = ListAdapter.get_resource_list(program.DERControlListLink.href)
+            control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
+            control.EventStatus = event.EventStatus
+            assert control.EventStatus.currentStatus == 1
+            # Atomic update of multiple resources
+            with atomic_operation():
+                # Add to active controls
+                ListAdapter.append(program.ActiveDERControlListLink.href, control)
+                # Update the control in the main list
+                control_index = next(i for i, c in enumerate(control_list.DERControl)
+                                     if c.mRID == event.mRID)
+                ListAdapter.put(program.DERControlListLink.href, control_index, control)
+            _log.info(f"Started DER control event {event.mRID}")
+        except Exception as e:
+            _log.error(f"Failed to process DER event start: {e}")
+            raise
+
+
+def update_active_der_event_ended(event: m.Event):
+    """Thread-safe event processing for ending DER control events."""
+    with _event_processing_lock:
+        try:
+            assert type(event) == m.DERControl
+            href_parser = hrefs.HrefEventParser(event.href)
+            program = ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, href_parser.program_index)
+            control_list = ListAdapter.get_resource_list(program.DERControlListLink.href)
+            control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
+            control.EventStatus = event.EventStatus
+            # Atomic removal from active list
+            with atomic_operation():
+                # Update control in main list
+                control_index = next(i for i, c in enumerate(control_list.DERControl)
+                                     if c.mRID == event.mRID)
+                ListAdapter.put(program.DERControlListLink.href, control_index, control)
+                # Remove from active list if not active
+                if event.EventStatus.currentStatus != 1:
+                    active_list = ListAdapter.get_list(program.ActiveDERControlListLink.href)
+                    updated_active = [c for c in active_list if c.mRID != event.mRID]
+                    # Replace entire active list
+                    ListAdapter.set_list(program.ActiveDERControlListLink.href, updated_active)
+            _log.info(f"Ended DER control event {event.mRID}")
+        except Exception as e:
+            _log.error(f"Failed to process DER event end: {e}")
+            raise
+
+
+# Global mRID management with thread safety
+class ThreadSafeGlobalMRIDs:
+    """Thread-safe global mRID management."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._db = get_db()
+        self._mrid_counter_key = "global:mrid_counter"
+        self._mrid_index_key = "global:mrid_index"
+
+    def new_mrid(self) -> bytes:
+        """Generate a new unique mRID."""
+        with self._lock:
+            try:
+                import pickle
+                # Get current counter
+                counter_data = self._db.get_point(self._mrid_counter_key)
+                current_counter = 0 if counter_data is None else pickle.loads(counter_data)
+                # Generate new mRID
+                new_mrid = f"mrid_{current_counter}".encode()
+                # Update counter
+                self._db.set_point(self._mrid_counter_key, pickle.dumps(current_counter + 1))
+                return new_mrid
+            except Exception as e:
+                _log.error(f"Failed to generate new mRID: {e}")
+                raise
+
+    def add_item_with_mrid(self, key: str, item: Any):
+        """Add an item with its mRID to the global index."""
+        with self._lock:
+            try:
+                import pickle
+                # Get current index
+                index_data = self._db.get_point(self._mrid_index_key)
+                mrid_index = {} if index_data is None else pickle.loads(index_data)
+                # Add item
+                if hasattr(item, 'mRID'):
+                    mrid_index[item.mRID] = key
+                # Store updated index
+                self._db.set_point(self._mrid_index_key, pickle.dumps(mrid_index))
+            except Exception as e:
+                _log.error(f"Failed to add item with mRID: {e}")
+                raise
+
+
+# Add missing method that might be referenced
 def clear_all_adapters():
-    GlobalmRIDs.clear()
-    for adpt in __all__:
-        obj = eval(adpt)
-        if isinstance(obj, Adapter):
-            obj.clear()
-        elif isinstance(obj, ResourceListAdapter):
-            obj.clear_all()
+    """Clear all adapters data."""
+    with atomic_operation():
+        try:
+            _log.info("Clearing all adapter data")
+            get_db().clear_all()
+            initialize_adapters()    # Re-initialize adapters
+        except Exception as e:
+            _log.error(f"Failed to clear adapters: {e}")
+            raise
 
 
-# from ieee_2030_5.adapters.log import LogAdapter
-# from ieee_2030_5.adapters.mupupt import MirrorUsagePointAdapter
+# Global instance
+GlobalmRIDs = ThreadSafeGlobalMRIDs()
+
+
+def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
+    """Thread-safe version of the 2030.5 server initialization."""
+    _log.debug("Initializing 2030.5 with thread safety")
+    # Clear storage if requested (thread-safe)
+    if config.cleanse_storage:
+        with atomic_operation():
+            get_db().clear_all()
+    # Initialize adapters
+    initialize_adapters()
+    # Initialize programs thread-safely
+    with atomic_operation():
+        ListAdapter.initialize_uri(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
+        # Add default program if configured
+        if config.default_program:
+            index = ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
+            derp = config.default_program
+            if not derp.mRID:
+                derp.mRID = GlobalmRIDs.new_mrid()
+            result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+            if not result.success:
+                raise Exception(f"Failed to add default program: {result.error}")
+            program_hrefs = hrefs.DERProgramHref(index)
+            derp.href = program_hrefs._root
+            derp.ActiveDERControlListLink = m.ActiveDERControlListLink(
+                program_hrefs.active_control_href)
+            derp.DefaultDERControlLink = m.DefaultDERControlLink(
+                program_hrefs.default_control_href)
+            derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
+            # Add default control if configured
+            if config.default_der_control:
+                dderc = config.default_der_control
+                dderc.mRID = GlobalmRIDs.new_mrid()
+                dderc.href = derp.DefaultDERControlLink.href
+                ListAdapter.set_single(uri=derp.DefaultDERControlLink.href, obj=dderc)
+            # Initialize sub-lists
+            ListAdapter.initialize_uri(derp.DERControlListLink.href, m.DERControl)
+    # Add configured programs thread-safely
+    for program_cfg in config.programs:
+        try:
+            with atomic_operation():
+                program_hrefs = hrefs.DERProgramHref(
+                    ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT))
+                default_der_control = program_cfg.pop("DefaultDERControl", None)
+                program = m.DERProgram(**program_cfg)
+                if not program.mRID:
+                    program.mRID = GlobalmRIDs.new_mrid()
+                program = program_hrefs.fill_hrefs(program)
+                result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
+                if not result.success:
+                    raise Exception(f"Failed to add program: {result.error}")
+                # Handle default control...
+                if default_der_control:
+                    dderc = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
+                                                **default_der_control)
+                    if not dderc.mRID:
+                        dderc.mRID = GlobalmRIDs.new_mrid()
+                    ListAdapter.set_single(uri=program.DefaultDERControlLink.href, obj=dderc)
+                # Initialize lists
+                ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
+                ListAdapter.set_single(uri=program.ActiveDERControlListLink.href,
+                                       obj=m.DERControlList(DERControl=[]))
+        except Exception as e:
+            _log.error(
+                f"Failed to initialize program {program_cfg.get('description', 'unknown')}: {e}")
+            raise
+    # Add curves thread-safely
+    ListAdapter.initialize_uri(hrefs.DEFAULT_CURVE_ROOT, m.DERCurve)
+    for index, curve_cfg in enumerate(config.curves):
+        try:
+            curve = m.DERCurve(href=hrefs.SEP.join([hrefs.DEFAULT_CURVE_ROOT,
+                                                    str(index)]),
+                               **curve_cfg)
+            if not curve.mRID:
+                curve.mRID = GlobalmRIDs.new_mrid()
+            result = ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
+            if not result.success:
+                raise Exception(f"Failed to add curve: {result.error}")
+        except Exception as e:
+            _log.error(f"Failed to add curve {index}: {e}")
+            raise
+    # Add devices thread-safely
+    der_global_count = 0
+    for index, cfg_device in enumerate(config.devices):
+        try:
+            device_capability = create_device_capability(index, cfg_device)
+            ed_href = hrefs.EndDeviceHref(index)
+            # Check if device already exists
+            existing_device = EndDeviceAdapter.fetch_by_href(str(ed_href))
+            if existing_device is not None:
+                _log.warning(f"End device {cfg_device.id} already exists. Updating...")
+                # Thread-safe update
+                existing_device.lFDI = tlsrepo.lfdi(cfg_device.id)
+                existing_device.sFDI = tlsrepo.sfdi(cfg_device.id)
+                existing_device.postRate = cfg_device.post_rate
+                result = EndDeviceAdapter.put(index, existing_device)
+                if not result.success:
+                    raise Exception(f"Failed to update device: {result.error}")
+            else:
+                _log.debug(f"Adding end device {cfg_device.id} to server")
+                end_device = m.EndDevice(lFDI=tlsrepo.lfdi(cfg_device.id),
+                                         sFDI=tlsrepo.sfdi(cfg_device.id),
+                                         postRate=cfg_device.post_rate,
+                                         enabled=True,
+                                         changedTime=TimeAdapter.current_tick)
+                end_device = add_enddevice(end_device)
+                GlobalmRIDs.add_item_with_mrid(cfg_device.id, end_device)
+                # Add registration
+                reg = m.Registration(href=end_device.RegistrationLink.href,
+                                     pIN=cfg_device.pin,
+                                     pollRate=cfg_device.poll_rate,
+                                     dateTimeRegistered=TimeAdapter.current_tick)
+                ListAdapter.set_single(uri=reg.href, obj=reg)
+                # Handle DERs and FSAs...
+                if cfg_device.ders:
+                    for der in cfg_device.ders:
+                        der_href = hrefs.DERHref(
+                            hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
+                                            str(der_global_count)]))
+                        der_global_count += 1
+                        der_obj = m.DER(
+                            href=der_href.root,
+                            DERStatusLink=m.DERStatusLink(der_href.der_status),
+                            DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
+                            DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
+                            DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
+                        # Add DER thread-safely
+                        result = ListAdapter.append(ed_href.der_list, der_obj)
+                        if not result.success:
+                            raise Exception(f"Failed to add DER: {result.error}")
+        except Exception as e:
+            _log.error(f"Failed to initialize device {cfg_device.id}: {e}")
+            raise
+    _log.info("Thread-safe 2030.5 initialization completed")

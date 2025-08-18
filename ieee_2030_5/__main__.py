@@ -56,8 +56,6 @@ from typing import Dict, List, Optional, Union
 import yaml
 from werkzeug.serving import BaseWSGIServer
 
-from ieee_2030_5.flask_proxy_integration import IEEE2030_5Proxy
-
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
