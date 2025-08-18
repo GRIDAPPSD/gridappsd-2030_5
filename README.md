@@ -487,7 +487,7 @@ poetry install
 ### Run the Server
 
 ```shell
-usage: 2030_5_server [-h] [--no-validate] [--no-create-certs] [--debug] config
+usage: 2030_5_server [-h] [--debug] config
 
 positional arguments:
   config             Configuration file for the server.
