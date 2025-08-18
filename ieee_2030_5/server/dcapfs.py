@@ -67,7 +67,10 @@ class DcapRequest(RequestOp):
                 raise werkzeug.exceptions.NotFound(
                     f"No device capability found for index {device_index}")
 
-            _log.debug(f"Returning DeviceCapability: {getattr(cap, 'href', 'no href')}")
+            # Always return the canonical /dcap href regardless of device index
+            # This is required by IEEE 2030.5 standard
+            cap.href = hrefs.DEFAULT_DCAP_ROOT
+            _log.debug(f"Returning DeviceCapability: {hrefs.DEFAULT_DCAP_ROOT}")
 
             response = self.build_response_from_dataclass(cap)
             _log.info(f"DcapRequest GET {request.path} - Status: {response.status_code}")

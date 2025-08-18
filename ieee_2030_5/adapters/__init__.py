@@ -23,6 +23,7 @@ from .base import ListAdapter, EndDeviceAdapter
 _log = logging.getLogger(__name__)
 
 # Create additional specialized adapters
+DERAdapter = ThreadSafeListAdapter(m.DER)
 DERControlAdapter = ThreadSafeListAdapter(m.DERControl)
 DERProgramAdapter = ThreadSafeListAdapter(m.DERProgram)
 DERCurveAdapter = ThreadSafeListAdapter(m.DERCurve)
@@ -64,7 +65,7 @@ class TimeAdapter:
 TimeAdapter = TimeAdapter()
 
 __all__ = [
-    'ListAdapter', 'EndDeviceAdapter', 'DERControlAdapter', 'DERProgramAdapter', 'DERCurveAdapter',
+    'ListAdapter', 'EndDeviceAdapter', 'DERAdapter', 'DERControlAdapter', 'DERProgramAdapter', 'DERCurveAdapter',
     'FunctionSetAssignmentsAdapter', 'DeviceCapabilityAdapter', 'RegistrationAdapter',
     'TimeAdapter', 'initialize_adapters', 'get_adapter_stats', 'AdapterResult'
 ]

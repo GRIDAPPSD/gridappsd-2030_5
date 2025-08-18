@@ -175,6 +175,14 @@ class EDevRequests(RequestOp):
                     retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
             elif not edev_href.has_index():
                 _log.debug(f"Getting EndDevice list for path: {request.path}")
+                # Ensure EndDevice has all its links populated
+                if ed and ed.href:
+                    try:
+                        edev_href_helper = hrefs.EndDeviceHref(edev_href=ed.href)
+                        ed = edev_href_helper.fill_hrefs(ed)
+                        _log.debug(f"Populated EndDevice links for {ed.href}")
+                    except Exception as e:
+                        _log.warning(f"Failed to populate EndDevice links: {e}")
                 retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
             else:
                 _log.debug(f"Getting single resource for path: {request.path}")
