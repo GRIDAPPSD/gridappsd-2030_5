@@ -99,27 +99,56 @@ class MirrorUsagePointRequest(RequestOp):
 
     def get(self) -> Response:
         pth_info = request.path
-
         if not pth_info.startswith(hrefs.DEFAULT_MUP_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
-
         mup_href = hrefs.ParsedUsagePointHref(request.path)
-
         if not mup_href.has_usage_point_index():
             # /mup
             try:
-                mup: m.MirrorUsagePointList = adpt.ListAdapter.get_resource_list(request.path)
+                # Try to get the resource list
+                result = adpt.ListAdapter.get_resource_list(request.path)
+
+                # Check if result is a dict (fallback) instead of a MirrorUsagePointList
+                if isinstance(result, dict):
+                    # Convert dict to proper MirrorUsagePointList
+                    mup = m.MirrorUsagePointList(
+                        href=result.get('href', request.path),
+                        MirrorUsagePoint=result.get('items', []),
+                        all=result.get('all', 0),
+                        results=result.get('results', 0)
+                    )
+                else:
+                    # Already a proper MirrorUsagePointList object
+                    mup = result
+
             except KeyError:
+                # Initialize the URI if it doesn't exist yet
                 adpt.ListAdapter.initialize_uri(request.path, m.MirrorUsagePoint)
-            mup: m.MirrorUsagePointList = adpt.ListAdapter.get_resource_list(request.path)
-            # Because our resource_list doesn't include other properties than the list we set
-            # them here before returning.
-            mup.pollRate = self.server_config.mirror_usage_point_post_rate
+
+                # Create an empty MirrorUsagePointList
+                mup = m.MirrorUsagePointList(
+                    href=request.path,
+                    MirrorUsagePoint=[],
+                    all=0,
+                    results=0
+                )
+
+            # Set the pollRate from server configuration
+            if hasattr(self.server_config, 'mirror_usage_point_post_rate'):
+                mup.pollRate = self.server_config.mirror_usage_point_post_rate
+            else:
+                # If server_config is a dict
+                if isinstance(self.server_config, dict):
+                    mup.pollRate = self.server_config.get('mirror_usage_point_post_rate', 900)
+                else:
+                    # Default value if not configured
+                    mup.pollRate = 900
         else:
             # /mup_0
             mup = adpt.ListAdapter.get(hrefs.DEFAULT_MUP_ROOT, mup_href.usage_point_index)
 
         return self.build_response_from_dataclass(mup)
+
 
     def post(self) -> Response:
         xml = request.data.decode('utf-8')

@@ -757,6 +757,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         """
         Handle the response with proper error handling.
         """
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.debug(f"Handling response from {self.command} {self.path}")
         try:
             _log.debug("Getting response from server")
@@ -776,6 +777,25 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     self.close_connection = True
                 return None
 
+            # COMPREHENSIVE RESPONSE LOGGING - Log all response data from backend
+            _log.info(f"=== RESPONSE FROM BACKEND FOR CLIENT {client_info} ===")
+            _log.info(f"Status: {response.status} {response.reason}")
+            _log.info(f"Response Headers from backend:")
+            for header_name, header_value in response.headers.items():
+                _log.info(f"  {header_name}: {header_value}")
+
+            if data:
+                _log.info(f"Response Body from backend ({len(data)} bytes):")
+                try:
+                    # Try to decode as UTF-8 for text content
+                    response_text = data.decode('utf-8')
+                    _log.info(f"  {response_text}")
+                except UnicodeDecodeError:
+                    # Log as hex for binary content
+                    _log.info(f"  [Binary content: {data.hex()}]")
+            else:
+                _log.info("Response Body: [None]")
+
             # Log successful response
             _log.info(f"{self.command} {self.path} {response.status} {response.reason}")
 
@@ -785,15 +805,23 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
             # Send headers, filtering out problematic ones
             skip_headers = {'connection', 'transfer-encoding', 'content-length'}
+
+            # Log what headers we're sending back to client
+            _log.info(f"=== RESPONSE TO CLIENT {client_info} ===")
+            _log.info(f"Status: {response.status} {response.reason}")
+            _log.info(f"Headers being sent to client:")
+
             for k, v in response.headers.items():
                 if k.lower() not in skip_headers:
                     _log.debug(f"Forwarding header: {k}: {v}")
+                    _log.info(f"  {k}: {v}")
                     self.send_header(k, v)
                 else:
                     _log.debug(f"Skipping header: {k}: {v}")
 
             # Set content length
             _log.debug(f"Setting Content-Length: {len(data)}")
+            _log.info(f"  Content-Length: {len(data)}")
             self.send_header('Content-Length', str(len(data)))
 
             # Handle client connection based on request headers
@@ -803,21 +831,38 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 if 'close' not in client_connection:
                     self.send_header('Connection', 'keep-alive')
                     self.send_header('Keep-Alive', 'timeout=300, max=1000')
+                    _log.info(f"  Connection: keep-alive")
+                    _log.info(f"  Keep-Alive: timeout=300, max=1000")
                     _log.debug("Maintaining keep-alive connection with client")
                 else:
                     self.send_header('Connection', 'close')
+                    _log.info(f"  Connection: close")
                     _log.debug("Client requested connection close")
             elif 'keep-alive' in client_connection:
                 # HTTP/1.0 with explicit keep-alive
                 self.send_header('Connection', 'keep-alive')
                 self.send_header('Keep-Alive', 'timeout=300, max=1000')
+                _log.info(f"  Connection: keep-alive")
+                _log.info(f"  Keep-Alive: timeout=300, max=1000")
                 _log.debug("HTTP/1.0 client requested keep-alive")
             else:
                 # HTTP/1.0 default or explicit close
                 self.send_header('Connection', 'close')
+                _log.info(f"  Connection: close")
                 _log.debug("Using connection close for HTTP/1.0 client")
 
             self.end_headers()
+
+            # Log response body being sent to client
+            if data:
+                _log.info(f"Response Body to client ({len(data)} bytes):")
+                try:
+                    response_text = data.decode('utf-8')
+                    _log.info(f"  {response_text}")
+                except UnicodeDecodeError:
+                    _log.info(f"  [Binary content: {data.hex()}]")
+            else:
+                _log.info("Response Body to client: [None]")
 
             # Send response body
             if data:
@@ -825,6 +870,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 try:
                     self.wfile.write(data)
                     _log.debug("Response data written successfully")
+                    _log.info(f"=== TRANSACTION COMPLETED FOR CLIENT {client_info} ===")
                 except (BrokenPipeError, ConnectionResetError) as e:
                     _log.error(f"Client disconnected while writing response: {e}")
                     # Client disconnected, close the connection
@@ -922,6 +968,16 @@ class RequestForwarder(BaseHTTPRequestHandler):
         """
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"Forwarding {method} {self.path} for client {client_info}")
+
+        # COMPREHENSIVE REQUEST LOGGING - Log all incoming request data
+        _log.info(f"=== INCOMING REQUEST FROM CLIENT {client_info} ===")
+        _log.info(f"Method: {method}")
+        _log.info(f"Path: {self.path}")
+        _log.info(f"HTTP Version: {self.request_version}")
+        _log.info(f"Request Headers:")
+        for header_name, header_value in self.headers.items():
+            _log.info(f"  {header_name}: {header_value}")
+
         conn = None
 
         try:
@@ -935,6 +991,19 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.debug(f"Reading body for {method} request from client {client_info}")
                 body = self._read_request_body()
                 _log.debug(f"Request body size: {len(body) if body else 0} bytes for client {client_info}")
+
+                # Log request body content
+                if body:
+                    _log.info(f"Request Body ({len(body)} bytes):")
+                    try:
+                        # Try to decode as UTF-8 for text content
+                        body_text = body.decode('utf-8')
+                        _log.info(f"  {body_text}")
+                    except UnicodeDecodeError:
+                        # Log as hex for binary content
+                        _log.info(f"  [Binary content: {body.hex()}]")
+                else:
+                    _log.info("Request Body: [None]")
 
             # Copy headers but skip hop-by-hop headers
             _log.debug(f"Processing request headers for client {client_info}")
@@ -958,12 +1027,77 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     # Convert to PEM format for header
                     cert_pem = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, x509).decode('ascii')
 
+                    # Get certificate fingerprint for LFDI calculation
+                    fingerprint = x509.digest("sha256").decode('ascii')
+                    cert_common_name = x509.get_subject().CN
+
+                    # Calculate LFDI and SFDI from certificate fingerprint
+                    try:
+                        # Use configuration to determine LFDI calculation method
+                        client_lfdi = None
+                        client_sfdi = None
+                        cert_common_name = x509.get_subject().CN
+
+                        if self.server.config.lfdi_mode == "lfdi_mode_from_file":
+                            # Use combined file method based on configuration
+                            try:
+                                # Use TLSRepository to calculate LFDI from file (like the server does)
+                                client_lfdi = self.server.tls_repo.lfdi(cert_common_name)
+                                client_sfdi = self.server.tls_repo.sfdi(cert_common_name)
+
+                                # Get the file fingerprint for logging
+                                file_fingerprint = self.server.tls_repo.fingerprint(cert_common_name, without_colan=False)
+
+                                _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (FILE-BASED METHOD) ===")
+                                _log.info(f"Client {client_info}:")
+                                _log.info(f"  Certificate CN: {cert_common_name}")
+                                _log.info(f"  LFDI mode: {self.server.config.lfdi_mode}")
+                                _log.info(f"  File fingerprint: {file_fingerprint}")
+                                _log.info(f"  Connection fingerprint: {fingerprint}")
+                                _log.info(f"  LFDI (from file): {client_lfdi}")
+                                _log.info(f"  SFDI (from file): {client_sfdi}")
+
+                            except Exception as file_error:
+                                _log.warning(f"Error calculating LFDI from file for {cert_common_name}: {file_error}")
+                                _log.info(f"Falling back to connection certificate method")
+                                # Fall back to connection method
+                                client_lfdi = lfdi_from_fingerprint(fingerprint)
+                                client_sfdi = sfdi_from_lfdi(client_lfdi)
+
+                                _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (FALLBACK CONNECTION METHOD) ===")
+                                _log.info(f"Client {client_info}:")
+                                _log.info(f"  Certificate CN: {cert_common_name}")
+                                _log.info(f"  LFDI mode: {self.server.config.lfdi_mode} (failed, using fallback)")
+                                _log.info(f"  LFDI (from connection): {client_lfdi}")
+                                _log.info(f"  SFDI (from connection): {client_sfdi}")
+                                _log.info(f"  Fingerprint: {fingerprint}")
+
+                        else:  # lfdi_mode_from_cert_fingerprint
+                            # Use connection certificate method
+                            client_lfdi = lfdi_from_fingerprint(fingerprint)
+                            client_sfdi = sfdi_from_lfdi(client_lfdi)
+
+                            _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (CERTIFICATE-BASED METHOD) ===")
+                            _log.info(f"Client {client_info}:")
+                            _log.info(f"  Certificate CN: {cert_common_name}")
+                            _log.info(f"  LFDI mode: {self.server.config.lfdi_mode}")
+                            _log.info(f"  LFDI (from connection): {client_lfdi}")
+                            _log.info(f"  SFDI (from connection): {client_sfdi}")
+                            _log.info(f"  Fingerprint: {fingerprint}")
+
+                        # Add LFDI and SFDI as custom headers
+                        headers['SSL-Client-LFDI'] = str(client_lfdi)
+                        headers['SSL-Client-SFDI'] = str(client_sfdi)
+
+                    except Exception as lfdi_error:
+                        _log.warning(f"Could not calculate LFDI/SFDI for client {client_info}: {lfdi_error}")
+
                     # Add client certificate headers (Nginx-style)
                     headers['SSL-Client-Cert'] = cert_pem.replace('\n', ' ')
                     headers['SSL-Client-S-DN'] = str(x509.get_subject())
                     headers['SSL-Client-I-DN'] = str(x509.get_issuer())
                     headers['SSL-Client-Serial'] = str(x509.get_serial_number())
-                    headers['SSL-Client-Fingerprint'] = x509.digest("sha256").decode('ascii')
+                    headers['SSL-Client-Fingerprint'] = fingerprint
 
                     _log.debug(f"Added client certificate headers for CN: {x509.get_subject().CN} from client {client_info}")
                 else:
@@ -978,7 +1112,34 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
             _log.info(f"Forwarding {method} {self.path} to {host}:{port} for client {client_info}")
             if 'SSL-Client-Cert' in headers:
-                _log.debug(f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} from client {client_info}")
+                if 'SSL-Client-LFDI' in headers:
+                    _log.debug(f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} (LFDI: {headers['SSL-Client-LFDI']}, SFDI: {headers['SSL-Client-SFDI']}) from client {client_info}")
+                else:
+                    _log.debug(f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} from client {client_info}")
+
+            # COMPREHENSIVE OUTGOING REQUEST LOGGING - Log all data being sent to backend
+            _log.info(f"=== OUTGOING REQUEST TO BACKEND {host}:{port} ===")
+            _log.info(f"Method: {method}")
+            _log.info(f"Path: {self.path}")
+            _log.info(f"Headers being sent to backend:")
+            for header_name, header_value in headers.items():
+                # Truncate SSL-Client-Cert for readability, highlight LFDI/SFDI
+                if header_name == 'SSL-Client-Cert':
+                    _log.info(f"  {header_name}: [Client certificate - {len(header_value)} chars]")
+                elif header_name in ('SSL-Client-LFDI', 'SSL-Client-SFDI'):
+                    _log.info(f"  {header_name}: {header_value} *** IEEE 2030.5 IDENTIFIER ***")
+                else:
+                    _log.info(f"  {header_name}: {header_value}")
+
+            if body:
+                _log.info(f"Body being sent to backend ({len(body)} bytes):")
+                try:
+                    body_text = body.decode('utf-8')
+                    _log.info(f"  {body_text}")
+                except UnicodeDecodeError:
+                    _log.info(f"  [Binary content: {body.hex()}]")
+            else:
+                _log.info("Body: [None]")
 
             # Forward the request to the target server
             try:
@@ -1032,38 +1193,80 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Handle HTTP GET requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW GET REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received GET request for {self.path}")
         self._forward_request('GET')
+        end_time = time.time()
+        _log.info(f"GET request completed in {end_time - start_time:.3f} seconds")
 
     def do_HEAD(self):
         """Handle HTTP HEAD requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW HEAD REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received HEAD request for {self.path}")
         self._forward_request('HEAD')
+        end_time = time.time()
+        _log.info(f"HEAD request completed in {end_time - start_time:.3f} seconds")
 
     def do_POST(self):
         """Handle HTTP POST requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW POST REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received POST request for {self.path}")
         self._forward_request('POST')
+        end_time = time.time()
+        _log.info(f"POST request completed in {end_time - start_time:.3f} seconds")
 
     def do_PUT(self):
         """Handle HTTP PUT requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW PUT REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received PUT request for {self.path}")
         self._forward_request('PUT')
+        end_time = time.time()
+        _log.info(f"PUT request completed in {end_time - start_time:.3f} seconds")
 
     def do_DELETE(self):
         """Handle HTTP DELETE requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW DELETE REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received DELETE request for {self.path}")
         self._forward_request('DELETE')
+        end_time = time.time()
+        _log.info(f"DELETE request completed in {end_time - start_time:.3f} seconds")
 
     def do_OPTIONS(self):
         """Handle HTTP OPTIONS requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW OPTIONS REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received OPTIONS request for {self.path}")
         self._forward_request('OPTIONS')
+        end_time = time.time()
+        _log.info(f"OPTIONS request completed in {end_time - start_time:.3f} seconds")
 
     def do_PATCH(self):
         """Handle HTTP PATCH requests by forwarding to backend server."""
+        import time
+        start_time = time.time()
+        client_info = f"{self.client_address[0]}:{self.client_address[1]}"
+        _log.info(f"=== NEW PATCH REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received PATCH request for {self.path}")
         self._forward_request('PATCH')
+        end_time = time.time()
+        _log.info(f"PATCH request completed in {end_time - start_time:.3f} seconds")
 
     def log_request(self, code='-', size='-'):
         """
@@ -1117,19 +1320,22 @@ class ProxyServer(ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True  # Don't wait for threads to finish on shutdown
 
-    def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int], **kwargs):
+    def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int],
+                 config: ServerConfiguration, **kwargs):
         """
         Initialize the proxy server with TLS repository and target configuration.
 
         Args:
             tls_repo (TLSRepository): Certificate repository for SSL operations
             proxy_target (Tuple[str, int]): Backend server (host, port) tuple
+            config (ServerConfiguration): Server configuration including lfdi_mode
             **kwargs: Additional arguments passed to ThreadingHTTPServer
         """
         _log.debug(f"Initializing ProxyServer with target {proxy_target}")
         # Store our custom attributes before calling super().__init__
         self._tls_repo = tls_repo
         self._proxy_target = proxy_target
+        self._config = config
 
         # Call parent constructor
         super().__init__(**kwargs)
@@ -1153,6 +1359,11 @@ class ProxyServer(ThreadingHTTPServer):
     def tls_repo(self) -> TLSRepository:
         """Get the TLS repository for certificate operations."""
         return self._tls_repo
+
+    @property
+    def config(self) -> ServerConfiguration:
+        """Get the server configuration."""
+        return self._config
 
     def server_bind(self):
         """
@@ -1202,24 +1413,31 @@ class ProxyServer(ThreadingHTTPServer):
 
 
 def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
-                proxy_target: Tuple[str, int]):
+                proxy_target: Tuple[str, int], config: ServerConfiguration):
     """
     Start the proxy server with SSL/TLS configuration.
 
     Creates and starts a multi-threaded proxy server that accepts client connections
     with TLS client certificates and forwards requests to a backend IEEE 2030.5 server.
-    The server requires client certificates for authentication.
+    The server requires client certificates for authentication and calculates LFDI/SFDI
+    based on the configuration's lfdi_mode setting.
 
     Args:
         server_address (Tuple[str, int]): Address to bind the proxy server (host, port)
         tls_repo (TLSRepository): Certificate repository containing CA, server certs
         proxy_target (Tuple[str, int]): Backend server address (host, port)
+        config (ServerConfiguration): Configuration including lfdi_mode setting
 
     The function configures:
     - TLS server context requiring client certificates
     - Certificate chain loading for server identity
     - Permissive cipher suites for compatibility
+    - LFDI calculation method based on config.lfdi_mode
     - Graceful shutdown handling
+
+    LFDI Calculation Modes:
+    - lfdi_mode_from_file: Uses SHA256 of combined certificate file content
+    - lfdi_mode_from_cert_fingerprint: Uses certificate's built-in fingerprint
 
     Server Operation:
     - Binds to the specified address and port
@@ -1233,7 +1451,8 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
         httpd = ProxyServer(tls_repo=tls_repo,
                             proxy_target=proxy_target,
                             server_address=server_address,
-                            RequestHandlerClass=RequestForwarder)
+                            RequestHandlerClass=RequestForwarder,
+                            config=config)
         _log.debug("ProxyServer instance created successfully")
 
         # Verify the server has the required attributes
@@ -1442,7 +1661,8 @@ def _main():
 
         start_proxy(server_address=(proxy_host[0], int(proxy_host[1])),
                   tls_repo=tls_repo,
-                  proxy_target=(server_host[0], int(server_host[1])))
+                  proxy_target=(server_host[0], int(server_host[1])),
+                  config=config)
 
     except Exception as e:
         _log.critical(f"Fatal error in proxy server: {e}", exc_info=True)

@@ -97,7 +97,7 @@ def get_lfdi_from_cert(path: Path) -> t.Lfdi:
 
     # 160 / 4 == 40
     fp = tls.OpensslWrapper.tls_get_fingerprint_from_cert(path)
-    fp = fp.replace(":", "")
+    fp = fp.replace(":", "").lower()
     lfdi = t.Lfdi(fp[:40])
     return lfdi
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional
+from typing import Dict, Callable, Optional, TYPE_CHECKING
 
 import werkzeug
 from flask import request, Response
@@ -9,7 +9,9 @@ from flask import request, Response
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.models import DeviceCategoryType
-import ieee_2030_5.server.server_endpoints as eps
+
+if TYPE_CHECKING:
+    import ieee_2030_5.server.server_endpoints as eps
 
 from ieee_2030_5.types_ import SEP_XML
 from ieee_2030_5.utils import dataclass_to_xml
@@ -56,7 +58,7 @@ class ServerOperation:
 
 
 class RequestOp(ServerOperation):
-    def __init__(self, server_endpoints: eps.ServerEndpoints):
+    def __init__(self, server_endpoints: "eps.ServerEndpoints"):
         super().__init__()
         self._tls_repository = server_endpoints.tls_repo
         self._server_endpoints = server_endpoints

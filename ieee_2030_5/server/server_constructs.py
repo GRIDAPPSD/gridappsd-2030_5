@@ -1,53 +1,50 @@
+# ieee_2030_5/server/server_constructs.py
 from __future__ import annotations
-
 import logging
 from blinker import Signal
-
-# from ieee_2030_5.adapters import BaseAdapter
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint
 from ieee_2030_5.config import ServerConfiguration, DeviceConfiguration
 from ieee_2030_5.data.indexer import add_href, get_href
+from ieee_2030_5.persistance.points import atomic_operation
 
 _log = logging.getLogger(__name__)
-
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 
 
-def create_device_capability(end_device_index: int, device_cfg: DeviceConfiguration) -> m.DeviceCapability:
-    """Create a device capability objecct for the passed device index
+# Define ConfigurationError here since it's not in ieee_2030_5.config
+class ConfigurationError(Exception):
+    """Exception raised for configuration errors."""
+    pass
 
+
+def create_device_capability(end_device_index: int,
+                             device_cfg: DeviceConfiguration) -> m.DeviceCapability:
+    """Create a device capability object for the passed device index
     This function does not verify that there is a device at the passed index.
     """
     dcap_href = hrefs.DeviceCapabilityHref(end_device_index)
     device_capability = m.DeviceCapability()
     device_capability = dcap_href.fill_hrefs(device_capability)
-
-    # device_capability = m.DeviceCapability(href=str(hrefs.DERCapabilitiesHref(end_device_index)))
-    # device_capability.EndDeviceListLink = m.EndDeviceListLink(href=hrefs.DEFAULT_EDEV_ROOT, all=1)
-    # device_capability.DERProgramListLink = m.DERProgramListLink(href=hrefs.DEFAULT_DERP_ROOT,
-    #                                                             all=0)
     device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
         href=hrefs.DEFAULT_MUP_ROOT, all=0)
     device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
     device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
 
-    adpt.DeviceCapabilityAdapter.add(device_capability)
-    return device_capability
-
-#def create_function_set_assignments(index: int, selected_programs: list[str], programs: dict[str, m.DERProgram]) -> m.FunctionSetAssignments:
+    # Use thread-safe append instead of add
+    result = adpt.DeviceCapabilityAdapter.append(hrefs.DEFAULT_DCAP_ROOT, device_capability)
+    if not result.success:
+        raise Exception(f"Failed to add device capability: {result.error}")
+    return result.data
 
 
 def add_enddevice(device: m.EndDevice) -> m.EndDevice:
     """Populates links to EndDevice resources and adds it to the EndDeviceAdapter.
-
     If the link is to a single writable (by the client) resource then create the link
     and the resource with default data.  Otherwise, the link will be to a list.  It is
     expected that the list will be populated at a later point in time in the code execution.
-
     The enddevice is added to the enddevice adapter, and the following links are created and added to the enddevice:
-
     - `DERListLink`: A link to the DER list for the enddevice
     - `FunctionSetAssignmentsListLink`: A link to the function set assignments list for the enddevice
     - `LogEventListLink`: A link to the log event list for the enddevice
@@ -56,112 +53,77 @@ def add_enddevice(device: m.EndDevice) -> m.EndDevice:
     - `DeviceInformationLink`: A link to the device information for the enddevice
     - `DeviceStatusLink`: A link to the device status for the enddevice
     - `PowerStatusLink`: A link to the power status for the enddevice
-
     :param device: The enddevice to add
     :type device: m.EndDevice
     :return: The enddevice object that was added to the adapter
     :rtype: m.EndDevice
     """
-
-    # After adding to the adapter the device will have an href associated with the Adapter Type.
+    # Use thread-safe add method
     device = adpt.EndDeviceAdapter.add(device)
 
     # Create a link object that holds references for linking other objects to the end device.
     ed_href = hrefs.EndDeviceHref(edev_href=device.href)
-
     ed_href.fill_hrefs(device)
 
-    # Store objects in the href cache for retrieval.
-    add_href(ed_href.configuration, m.Configuration(href=device.ConfigurationLink.href))
-    add_href(ed_href.device_information,
-             m.DeviceInformation(href=device.DeviceInformationLink.href))
-    add_href(ed_href.device_status, m.DeviceStatus(href=device.DeviceStatusLink.href))
-    add_href(ed_href.power_status, m.PowerStatus(href=device.PowerStatusLink.href))
+    # Store objects in the href cache for retrieval (wrapped in atomic operation)
+    with atomic_operation():
+        # Configuration
+        config = m.Configuration(href=device.ConfigurationLink.href)
+        adpt.ListAdapter.set_single(uri=device.ConfigurationLink.href, obj=config)
+        add_href(ed_href.configuration, config)
 
+        # Device Information
+        device_info = m.DeviceInformation(href=device.DeviceInformationLink.href)
+        adpt.ListAdapter.set_single(uri=device.DeviceInformationLink.href, obj=device_info)
+        add_href(ed_href.device_information, device_info)
+
+        # Device Status
+        device_status = m.DeviceStatus(href=device.DeviceStatusLink.href)
+        adpt.ListAdapter.set_single(uri=device.DeviceStatusLink.href, obj=device_status)
+        add_href(ed_href.device_status, device_status)
+
+        # Power Status
+        power_status = m.PowerStatus(href=device.PowerStatusLink.href)
+        adpt.ListAdapter.set_single(uri=device.PowerStatusLink.href, obj=power_status)
+        add_href(ed_href.power_status, power_status)
+
+    # Add links to the device
     device.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.DEFAULT_MUP_ROOT,
                                                                  all=0)
     device.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
+
+    # Initialize list URIs
     adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_MUP_ROOT, m.MirrorUsagePoint)
     adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_UPT_ROOT, m.UsagePoint)
+    adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
+    adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
 
     return device
 
 
 def update_active_der_event_started(event: m.Event):
     """Event triggered when a DERControl event starts
-
     Find the control and copy it to the ActiveDERControlList
-
     :param event: The control event
     :type event: m.Event
     """
-
-    assert type(event) == m.DERControl
-
-    href_parser = hrefs.HrefEventParser(event.href)
-
-    program = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, href_parser.program_index)
-
-    control_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
-        program.DERControlListLink.href)
-    control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
-    control.EventStatus = event.EventStatus
-    assert control.EventStatus.currentStatus == 1
-    adpt.ListAdapter.append(program.ActiveDERControlListLink.href, control)
-
-    add_href(control.href, control)
-    add_href(event.href, event)
-    add_href(control_list.href, control_list)
-
-    activel: m.DERControlList = get_href(program.ActiveDERControlListLink.href)
-
-    try:
-        # TODO: if found deal with supersceded eventing.
-        next(filter(lambda x: x.mRID == event.mRID, activel.DERControl))
-    except StopIteration:
-        activel.DERControl.append(event)
-        add_href(program.ActiveDERControlListLink.href, activel)
+    adpt.update_active_der_event_started(event)
 
 
 def update_active_der_event_ended(event: m.Event):
     """Event triggered when a DERControl event ends
-
     Search over the ActiveDERControlListLink for the event that has been triggered
     and remove it from the list.
-
     :param event: The control event
     :type event: m.Event
     """
-    assert type(event) == m.DERControl
-
-    href_parser = hrefs.HrefEventParser(event.href)
-
-    program = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, href_parser.program_index)
-
-    control_list: m.DERControlList = adpt.ListAdapter.get_resource_list(
-        program.DERControlListLink.href)
-    control = next(filter(lambda x: x.mRID == event.mRID, control_list.DERControl))
-    control.EventStatus = event.EventStatus
-    add_href(control.href, control)
-    add_href(event.href, event)
-    add_href(control_list.href, control_list)
-
-    activel: m.DERControlList = get_href(program.ActiveDERControlListLink.href)
-
-    remove = []
-    for index, ctl in enumerate(activel.DERControl):
-        if ctl.mRID == event.mRID:
-            if event.EventStatus.currentStatus != 1:
-                remove.insert(0, index)
-
-    for x in remove:
-        activel.DERControl.pop(x)
-
-    add_href(program.ActiveDERControlListLink.href, activel)
+    adpt.update_active_der_event_ended(event)
 
 
+# Connect event handlers to TimeAdapter signals
 adpt.TimeAdapter.event_started.connect(update_active_der_event_started)
 adpt.TimeAdapter.event_ended.connect(update_active_der_event_ended)
+
 
 def create_der_program_and_control(default_der_program: m.DERProgram,
                                    default_der_control: m.DefaultDERControl,
@@ -170,331 +132,358 @@ def create_der_program_and_control(default_der_program: m.DERProgram,
     Create a new DERProgram based upon the default derp control
     """
     from copy import deepcopy
-    derp_index = adpt.ListAdapter.list_size(hrefs.DEFAULT_DERP_ROOT)
 
+    # Get current list size for index
+    derp_index = adpt.ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
+
+    # Prepare objects
     derp = deepcopy(default_der_program)
     dderc = deepcopy(default_der_control)
-
     derp.mRID = adpt.GlobalmRIDs.new_mrid()
     dderc.mRID = adpt.GlobalmRIDs.new_mrid()
-    adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+
+    # Use thread-safe append
+    result = adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+    if not result.success:
+        raise Exception(f"Failed to add DER program: {result.error}")
+    derp = result.data
+
+    # Set up hrefs
     program_hrefs = hrefs.DERProgramHref(derp_index)
     derp.href = program_hrefs._root
     derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
     derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
     derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
     derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
-
     dderc.href = derp.DefaultDERControlLink.href
 
+    # Initialize curve list
     adpt.ListAdapter.initialize_uri(program_hrefs.der_curve_list_href, m.DERCurve)
-    adpt.ListAdapter.append(hrefs.DEFAULT_DDERC_ROOT, dderc)
-    adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+
+    # Add default control
+    result = adpt.ListAdapter.append(hrefs.DEFAULT_DDERC_ROOT, dderc)
+    if not result.success:
+        raise Exception(f"Failed to add default DER control: {result.error}")
+    dderc = result.data
+
+    # Update program with links
+    result = adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+    if not result.success:
+        raise Exception(f"Failed to update DER program: {result.error}")
+    derp = result.data
+
     return derp, dderc
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
-    """Initialize the 2030.5 server.
-
+    """Initialize the 2030.5 server with thread safety.
     This method initializes the adapters from the configuration objects into
     the persistence adapters.
-
-    The adapters are:
-
-     - EndDeviceAdapter
-     - DERAdapter
-     - DERCurveAdapter
-     - DERProgramAdapter
-     - FunctionSetAssignmentsAdapter
-
-    The EndDevices in the EndDeviceAdapter will link to Lists of other types.  Those
-    Lists will be stored in the ListAdapter object under the List's href (see below /edev_0_der).
-    As an example the following, note the DER href is not /edev_0_der_0, but /der_12 instead.
-
-    <EndDevice href="/edev_0">
-      <DERList href="/edev_0_der" all="1">
-    </EndDevice>
-    <DERList href="/edev_0_der" all="1" result="1">
-      <DER href="/der_12">
-        ...
-      </DER>
-    </DERList
-
-
     """
-    _log.debug("Initializing 2030.5")
+    _log.debug("Initializing 2030.5 with thread safety")
     _log.debug("Adding server level urls to cache")
 
     end_device_ders = {}
 
+    # Clear storage if requested
     if config.cleanse_storage:
-        adpt.clear_all_adapters()
+        with atomic_operation():
+            adpt.clear_all_adapters()
 
     programs_by_description = {}
 
+    # Initialize DER program list
     adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
 
+    # Add default program if configured
     if config.default_program:
+        with atomic_operation():
+            index = adpt.ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
+            derp = config.default_program
 
-        index = adpt.ListAdapter.list_size(hrefs.DEFAULT_DERP_ROOT)
+            if not derp.mRID:
+                derp.mRID = adpt.GlobalmRIDs.new_mrid()
 
-        # Convienence Reference
-        derp = config.default_program
-        if not derp.mRID:
-            derp.mRID = adpt.GlobalmRIDs.new_mrid()
-        adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
-        program_hrefs = hrefs.DERProgramHref(index)
-        derp.href = program_hrefs._root
-        derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
-        derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
-        derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
-        #derp.DERCurveListLink = m.DERCurveListLink(program_hrefs.der_curve_list_href)
+            result = adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
+            if not result.success:
+                raise Exception(f"Failed to add default program: {result.error}")
+            derp = result.data
 
-        if config.default_der_control:
-            # Default DER Control
-            dderc = config.default_der_control
-            dderc.mRID = adpt.GlobalmRIDs.new_mrid()
-            dderc.href = derp.DefaultDERControlLink.href
+            program_hrefs = hrefs.DERProgramHref(index)
+            derp.href = program_hrefs._root
+            derp.ActiveDERControlListLink = m.ActiveDERControlListLink(
+                program_hrefs.active_control_href)
+            derp.DefaultDERControlLink = m.DefaultDERControlLink(
+                program_hrefs.default_control_href)
+            derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
 
-            add_href(derp.DefaultDERControlLink.href, dderc)
+            # Add default DER control if configured
+            if config.default_der_control:
+                dderc = config.default_der_control
+                dderc.mRID = adpt.GlobalmRIDs.new_mrid()
+                dderc.href = derp.DefaultDERControlLink.href
+                adpt.ListAdapter.set_single(uri=derp.DefaultDERControlLink.href, obj=dderc)
 
-        # Controls if there are any should be added to this list.
-        adpt.ListAdapter.initialize_uri(derp.DERControlListLink.href, m.DERControl)
+            # Controls if there are any should be added to this list
+            adpt.ListAdapter.initialize_uri(derp.DERControlListLink.href, m.DERControl)
 
-
-
-
-
+    # Add configured programs
     for index, program_cfg in enumerate(config.programs):
-        program_hrefs = hrefs.DERProgramHref(adpt.ListAdapter.list_size(hrefs.DEFAULT_DERP_ROOT))
-        # Pop off default_der_control if specified.
-        default_der_control = program_cfg.pop("DefaultDERControl", None)
-        program = m.DERProgram(**program_cfg)
-        if not program.mRID:
-            program.mRID = adpt.GlobalmRIDs.new_mrid()
-        program = program_hrefs.fill_hrefs(program)
-        adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
+        with atomic_operation():
+            program_hrefs = hrefs.DERProgramHref(
+                adpt.ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT))
 
-        # Either set up default control or use the one passed in.
-        if not default_der_control:
-            default_der_control = m.DefaultDERControl(href=program_hrefs.default_control_href,
-                                                      mRID=adpt.GlobalmRIDs.new_mrid(),
-                                                      DERControlBase=m.DERControlBase())
-        elif default_der_control:
-            der_control_base = None
-            if "DERControlBase" in default_der_control:
-                der_control_base = default_der_control.pop("DERControlBase")
-            default_der_control = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
-                                                      **default_der_control)
-            if not default_der_control.mRID:
-                default_der_control.mRID = adpt.GlobalmRIDs.new_mrid()
+            # Pop off default_der_control if specified
+            default_der_control = program_cfg.pop("DefaultDERControl", None)
 
-            if not der_control_base:
-                default_der_control.DERControlBase = m.DERControlBase()
-            else:
-                default_der_control.DERControlBase = m.DERControlBase(**der_control_base)
-        adpt.ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
+            program = m.DERProgram(**program_cfg)
+            if not program.mRID:
+                program.mRID = adpt.GlobalmRIDs.new_mrid()
 
+            program = program_hrefs.fill_hrefs(program)
 
-        add_href(program.DefaultDERControlLink.href, default_der_control)
-        add_href(program.ActiveDERControlListLink.href, m.DERControlList(DERControl=[]))
-        add_href(program.DERCurveListLink.href, m.DERCurveList(DERCurve=[]))
-        add_href(program.DERControlListLink.href, m.DERControlList(DERControl=[]))
+            result = adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
+            if not result.success:
+                raise Exception(f"Failed to add program: {result.error}")
 
+            # Either set up default control or use the one passed in
+            if not default_der_control:
+                default_der_control = m.DefaultDERControl(href=program_hrefs.default_control_href,
+                                                          mRID=adpt.GlobalmRIDs.new_mrid(),
+                                                          DERControlBase=m.DERControlBase())
+            elif default_der_control:
+                der_control_base = None
+                if "DERControlBase" in default_der_control:
+                    der_control_base = default_der_control.pop("DERControlBase")
 
-        programs_by_description[program.description] = program
+                default_der_control = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
+                                                          **default_der_control)
 
-    # fsa_with_description = {}
+                if not default_der_control.mRID:
+                    default_der_control.mRID = adpt.GlobalmRIDs.new_mrid()
 
-    # for index, fsa in enumerate(config.fsas):
-    #     programs = fsa.pop("programs", [])
-    #     fsa_obj = m.FunctionSetAssignments(href=hrefs.fsa_href(index), **fsa)
-    #     der_program_link = hrefs.SEP.join([fsa_obj.href, hrefs.DER_PROGRAM])
-    #     fsa_obj.DERProgramListLink = m.DERProgramListLink(href=der_program_link, all=len(programs))
-    #     adpt.ListAdapter.initialize_uri(der_program_link, m.DERProgram)
-    #     for program in programs:
-    #         if program not in programs_by_description:
-    #             raise ValueError(
-    #                 f"Program {program} not found in programs list for fsa {fsa['description']}")
-    #         adpt.ListAdapter.append(der_program_link, programs_by_description[program])
-    #     fsa_with_description[fsa_obj.description] = fsa_obj
-    #     # put the programs back in the config fsa.
-    #     fsa['programs'] = programs
+                if not der_control_base:
+                    default_der_control.DERControlBase = m.DERControlBase()
+                else:
+                    default_der_control.DERControlBase = m.DERControlBase(**der_control_base)
 
-    # Add DERCurves to the ListAdapter under the key hrefs.DEFAULT_CURVE_ROOT.
+            adpt.ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
+
+            # Store objects for retrieval
+            add_href(program.DefaultDERControlLink.href, default_der_control)
+            add_href(program.ActiveDERControlListLink.href, m.DERControlList(DERControl=[]))
+            add_href(program.DERCurveListLink.href, m.DERCurveList(DERCurve=[]))
+            add_href(program.DERControlListLink.href, m.DERControlList(DERControl=[]))
+
+            programs_by_description[program.description] = program
+
+    # Add DER curves
+    adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_CURVE_ROOT, m.DERCurve)
+
     for index, curve_cfg in enumerate(config.curves):
         curve = m.DERCurve(href=hrefs.SEP.join([hrefs.DEFAULT_CURVE_ROOT,
                                                 str(index)]),
                            **curve_cfg)
+
         if not curve.mRID:
             curve.mRID = adpt.GlobalmRIDs.new_mrid()
-        adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
 
+        result = adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
+        if not result.success:
+            raise Exception(f"Failed to add curve {index}: {result.error}")
+
+    # Add devices
     der_global_count = 0
 
     for index, cfg_device in enumerate(config.devices):
+        try:
+            device_capability = create_device_capability(index, cfg_device)
+            ed_href = hrefs.EndDeviceHref(index)
 
-        device_capability: m.DeviceCapability = create_device_capability(index, cfg_device)
-        ed_href = hrefs.EndDeviceHref(index)
-        end_device = adpt.EndDeviceAdapter.fetch_by_href(str(ed_href))
-        if end_device is not None:
-            _log.warning(
-                f"End device {cfg_device.id} already exists.  Updating lfdi, sfdi, and postRate.")
-            end_device.lFDI = tlsrepo.lfdi(cfg_device.id)
-            end_device.sFDI = tlsrepo.sfdi(cfg_device.id)
-            end_device.postRate = cfg_device.post_rate
-            adpt.EndDeviceAdapter.put(index, end_device)
-        else:
-            _log.debug(f"Adding end device {cfg_device.id} to server")
-            end_device = m.EndDevice(lFDI=tlsrepo.lfdi(cfg_device.id),
-                                     sFDI=tlsrepo.sfdi(cfg_device.id),
-                                     postRate=cfg_device.post_rate,
-                                     enabled=True,
-                                     changedTime=adpt.TimeAdapter.current_tick)
-            add_enddevice(end_device)
-            adpt.GlobalmRIDs.add_item_with_mrid(cfg_device.id, end_device)
-            reg = m.Registration(href=end_device.RegistrationLink.href,
-                                 pIN=cfg_device.pin,
-                                 pollRate=cfg_device.poll_rate,
-                                 dateTimeRegistered=adpt.TimeAdapter.current_tick)
-            adpt.RegistrationAdapter.add(reg)
-            add_href(reg.href, reg)
+            # Check if device already exists
+            existing_device = adpt.EndDeviceAdapter.fetch_by_href(str(ed_href))
 
-            # if cfg_device.fsas:
-            #     end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-            #         href=ed_href.function_set_assignments, all=len(cfg_device.fsas))
-            #     for fsa in cfg_device.fsas:
-            #         adpt.ListAdapter.append(ed_href.function_set_assignments,
-            #                                 fsa_with_description[fsa])
-
-            adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
-            adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
-
-            if cfg_device.fsas:
-                for fsa_name in cfg_device.fsas:
-                    fsa_index = adpt.ListAdapter.list_size(ed_href.function_set_assignments)
-                    fsa = m.FunctionSetAssignments(href=hrefs.SEP.join((ed_href.function_set_assignments,
-                                                                        str(fsa_index))),
-                                                   mRID=adpt.GlobalmRIDs.new_mrid(),
-                                                   description=fsa_name)
-                    adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)
-
-                end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-                    href=ed_href.function_set_assignments,
-                    all=adpt.ListAdapter.list_size(ed_href.function_set_assignments),
+            if existing_device is not None:
+                _log.warning(
+                    f"End device {cfg_device.id} already exists. Updating lfdi, sfdi, and postRate."
                 )
+                existing_device.lFDI = tlsrepo.lfdi(cfg_device.id)
+                existing_device.sFDI = tlsrepo.sfdi(cfg_device.id)
+                existing_device.postRate = cfg_device.post_rate
 
-            # If we have ders specified in the configuration file then set those up, otherwise
-            # if we need to create a default der then set that up.
-            if cfg_device.ders:
+                result = adpt.EndDeviceAdapter.put(index, existing_device)
+                if not result.success:
+                    raise Exception(f"Failed to update device {cfg_device.id}: {result.error}")
+            else:
+                _log.debug(f"Adding end device {cfg_device.id} to server")
 
-                # Create references from the main der list to the ed specific list.
-                for der in cfg_device.ders:
-                    der_href = hrefs.DERHref(
-                        hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
-                                        str(der_global_count)]))
-                    der_global_count += 1
-                    der_obj = m.DER(href=der_href.root,
-                                    DERStatusLink=m.DERStatusLink(der_href.der_status),
-                                    DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
-                                    DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
-                                    DERAvailabilityLink=m.DERAvailabilityLink(
-                                        der_href.der_availability))
+                end_device = m.EndDevice(lFDI=tlsrepo.lfdi(cfg_device.id),
+                                         sFDI=tlsrepo.sfdi(cfg_device.id),
+                                         postRate=cfg_device.post_rate,
+                                         enabled=True,
+                                         changedTime=adpt.TimeAdapter.current_tick)
 
-                    # if config.include_default_der_program_on_ders:
-                    #
-                    #     if not config.default_program:
-                    #         raise ConfigurationError("default_program must be set to 'include_default_der_program_on_ders")
-                    #     der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
+                end_device = add_enddevice(end_device)
+                adpt.GlobalmRIDs.add_item_with_mrid(cfg_device.id, end_device)
 
-                    derp, dderc = create_der_program_and_control(default_der_program=config.default_program,
-                                                                 default_der_control=config.default_der_control,
-                                                                 name=f"{der} Program")
-                    der_obj.CurrentDERProgramLink = m.DERProgramLink(derp.href)
-                    adpt.ListAdapter.append(ed_href.der_list, der_obj)
-                    adpt.ListAdapter.set_single(obj=dderc, uri=dderc.href)
-                    derp_derc_list_href = hrefs.SEP.join((derp.href, "derc"))
-                    adpt.ListAdapter.initialize_uri(list_uri=derp_derc_list_href, obj=m.DERControl)
-                    #derp_derc: m.DERControl = m.DERControl(DERControlBase=dderc.DERControlBase)
-                    #adpt.ListAdapter.append(list_uri=derp_derc_list_href, obj=derp_derc)
+                # Add registration
+                reg = m.Registration(href=end_device.RegistrationLink.href,
+                                     pIN=cfg_device.pin,
+                                     pollRate=cfg_device.poll_rate,
+                                     dateTimeRegistered=adpt.TimeAdapter.current_tick)
 
-                    #adpt.ListAdapter.set_single(uri=derp_derc.href, obj=derp_derc)
+                adpt.ListAdapter.set_single(uri=reg.href, obj=reg)
+                add_href(reg.href, reg)
 
-                    if fsa_list := adpt.ListAdapter.get_list(ed_href.function_set_assignments):
-                        # Create a new der program for this specific fsa
-                        fsa: m.FunctionSetAssignments = fsa_list[0]
-                        derp_fsa_href = hrefs.SEP.join((fsa.href, "derp"))
-                        adpt.ListAdapter.initialize_uri(list_uri=derp_fsa_href, obj=m.DERProgram)
-                        adpt.ListAdapter.append(list_uri=derp_fsa_href, obj=derp)
-                        fsa.DERProgramListLink = m.DERProgramListLink(href=derp_fsa_href,
-                                                                      all=adpt.ListAdapter.list_size(derp_fsa_href))
+                # Initialize DER and FSA lists
+                adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
+                adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments,
+                                                m.FunctionSetAssignments)
 
+                # Handle FSAs
+                if cfg_device.fsas:
+                    for fsa_name in cfg_device.fsas:
+                        fsa_index = adpt.ListAdapter.get_list_size(
+                            ed_href.function_set_assignments)
+                        fsa = m.FunctionSetAssignments(href=hrefs.SEP.join(
+                            (ed_href.function_set_assignments, str(fsa_index))),
+                                                       mRID=adpt.GlobalmRIDs.new_mrid(),
+                                                       description=fsa_name)
 
+                        result = adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)
+                        if not result.success:
+                            raise Exception(f"Failed to add FSA {fsa_name}: {result.error}")
 
+                    # Update link to FSA list
+                    end_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                        href=ed_href.function_set_assignments,
+                        all=adpt.ListAdapter.get_list_size(ed_href.function_set_assignments),
+                    )
 
+                # Handle DERs
+                if cfg_device.ders:
+                    # Create references from the main der list to the ed specific list.
+                    for der in cfg_device.ders:
+                        with atomic_operation():
+                            # Create DER object
+                            der_href = hrefs.DERHref(
+                                hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
+                                                str(der_global_count)]))
+                            der_global_count += 1
 
-
-
-
-
-
-                    current_min_primacy = 10000
-                    current_der_program = None
-                    try:
-                        # get_list throws keyerror if a list doesn't exist.  This is ok so
-                        # we capture the error.
-                        for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
-                            for der_program in adpt.ListAdapter.get_list(fsa.DERProgramListLink.href):
-                                if current_der_program is None:
-                                    current_der_program = der_program
-                                if der_program.primacy < current_min_primacy:
-                                    current_min_primacy = der_program.primacy
-                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(current_der_program.href)
-                    except KeyError:
-                        pass
-            elif config.include_default_der_on_all_devices:
-                if not config.default_program:
-                    raise ConfigurationError("Mulst include default_program if include_include_default_der_on_all_devices set!")
-                der_href = hrefs.DERHref(
-                        hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
-                                        str(der_global_count)]))
-                der_global_count += 1
-                der_obj = m.DER(href=der_href.root,
+                            der_obj = m.DER(
+                                href=der_href.root,
                                 DERStatusLink=m.DERStatusLink(der_href.der_status),
                                 DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
                                 DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
                                 DERAvailabilityLink=m.DERAvailabilityLink(
                                     der_href.der_availability))
-                der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
-                adpt.ListAdapter.append(ed_href.der_list, der_obj)
-                current_min_primacy = 10000
-                current_der_program = None
-            # else:
 
-            #     # der_href will manage the url links to other lists/resources for the DER.
-            #     der_href = hrefs.DERHref(ed_href.der_list)
+                            # Create program and control
+                            derp, dderc = create_der_program_and_control(
+                                default_der_program=config.default_program,
+                                default_der_control=config.default_der_control,
+                                name=f"{der} Program")
 
-            #     # Create a reference to the default der list. Add an entry for the end device as
-            #     # a DER object.  Note these are all available for the client to read/write via
-            #     # GET/PUT to/from the server.
-            #     der_list = m.DERList(DER=[
-            #         m.DER(href=der_href.root,
-            #               DERStatusLink=m.DERStatusLink(der_href.der_status),
-            #               DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
-            #               DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
-            #               DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
-            #     ])
-            #     adpt.ListAdapter.append(ed_href.der_list, der_list)
-            #     current_min_primacy = 10000
-            #     current_der_program = None
-            #     if cfg_device.fsas:
-            #         for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
-            #             for der_program in adpt.ListAdapter.get_list(fsa.DERProgramListLink.href):
-            #                 if current_der_program is None:
-            #                     current_der_program = der_program
-            #                 if der_program.primacy < current_min_primacy:
-            #                     current_min_primacy = der_program.primacy
-            #         der_list.DER[0].CurrentDERProgramLink = m.CurrentDERProgramLink(
-            #             current_der_program.href)
+                            der_obj.CurrentDERProgramLink = m.DERProgramLink(derp.href)
 
-    adpt.ListAdapter.print_all()
+                            # Add DER to device
+                            result = adpt.ListAdapter.append(ed_href.der_list, der_obj)
+                            if not result.success:
+                                raise Exception(f"Failed to add DER to device: {result.error}")
+
+                            # Save default DER control
+                            adpt.ListAdapter.set_single(obj=dderc, uri=dderc.href)
+
+                            # Initialize DER control list
+                            derp_derc_list_href = hrefs.SEP.join((derp.href, "derc"))
+                            adpt.ListAdapter.initialize_uri(list_uri=derp_derc_list_href,
+                                                            obj=m.DERControl)
+
+                            # Handle FSAs for this DER
+                            fsa_list = adpt.ListAdapter.get_list(ed_href.function_set_assignments)
+                            if fsa_list:
+                                # Create a new der program for this specific fsa
+                                fsa = fsa_list[0]
+                                derp_fsa_href = hrefs.SEP.join((fsa.href, "derp"))
+                                adpt.ListAdapter.initialize_uri(list_uri=derp_fsa_href,
+                                                                obj=m.DERProgram)
+
+                                result = adpt.ListAdapter.append(list_uri=derp_fsa_href, obj=derp)
+                                if not result.success:
+                                    raise Exception(
+                                        f"Failed to add program to FSA: {result.error}")
+
+                                fsa.DERProgramListLink = m.DERProgramListLink(
+                                    href=derp_fsa_href,
+                                    all=adpt.ListAdapter.get_list_size(derp_fsa_href))
+
+                            # Find program with minimum primacy
+                            # In the try block where we find the program with minimum primacy
+                            try:
+                                current_min_primacy = 10000
+                                current_der_program = None
+
+                                for fsa in adpt.ListAdapter.get_list(ed_href.function_set_assignments):
+                                    if not hasattr(fsa, 'DERProgramListLink') or not fsa.DERProgramListLink:
+                                        _log.debug(f"FSA {fsa.href if hasattr(fsa, 'href') else 'unknown'} has no DERProgramListLink")
+                                        continue
+
+                                    fsa_programs = adpt.ListAdapter.get_list(fsa.DERProgramListLink.href)
+                                    for der_program in fsa_programs:
+                                        if not der_program:
+                                            continue
+
+                                        if current_der_program is None:
+                                            current_der_program = der_program
+
+                                        if hasattr(der_program, 'primacy') and der_program.primacy < current_min_primacy:
+                                            current_min_primacy = der_program.primacy
+                                            current_der_program = der_program
+
+                                if current_der_program:
+                                    der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(current_der_program.href)
+                                else:
+                                    _log.info(f"No program with minimum primacy found for DER {der_obj.href}")
+
+                            except Exception as e:
+                                _log.warning(f"Error finding program with minimum primacy: {e}")
+
+                # Handle default DER on all devices if configured
+                elif config.include_default_der_on_all_devices:
+                    with atomic_operation():
+                        if not config.default_program:
+                            raise ConfigurationError(
+                                "Must include default_program if include_default_der_on_all_devices is set!"
+                            )
+
+                        der_href = hrefs.DERHref(
+                            hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
+                                            str(der_global_count)]))
+                        der_global_count += 1
+
+                        der_obj = m.DER(
+                            href=der_href.root,
+                            DERStatusLink=m.DERStatusLink(der_href.der_status),
+                            DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
+                            DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
+                            DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
+
+                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(
+                            config.default_program.href)
+
+                        result = adpt.ListAdapter.append(ed_href.der_list, der_obj)
+                        if not result.success:
+                            raise Exception(f"Failed to add default DER to device: {result.error}")
+
+        except Exception as e:
+            _log.error(f"Failed to process device {cfg_device.id}: {e}")
+            raise
+
+    # Display all resources for debugging
+    if hasattr(adpt.ListAdapter, "print_all") and callable(adpt.ListAdapter.print_all):
+        adpt.ListAdapter.print_all()
+    else:
+        _log.debug("ListAdapter.print_all method not available")
+
+    _log.info("Thread-safe 2030.5 initialization completed")

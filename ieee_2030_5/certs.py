@@ -28,7 +28,7 @@ GLOB_PRIVATE = f'*.{PRIVATE_EXTENTION}'
 GLOB_CERT = f'*.{CERTIFICATE_EXTENSION}'
 
 def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
-    fp = fingerprint.replace(":", "")
+    fp = fingerprint.replace(":", "").lower()
     return Lfdi(fp[:40])
 
 
@@ -213,9 +213,10 @@ class TLSRepository:
         if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
             # _log.debug("Using hash from combined file.")
             value = Path(self.__get_combined_file__(device_id)).read_text()
-            value = hashlib.sha256(value.encode('utf-8')).hexdigest()
+            value = hashlib.sha256(value.encode('utf-8')).hexdigest().lower()
         else:
             value = self._tls.tls_get_fingerprint_from_cert(self.__get_cert_file__(device_id))
+            value = value.lower()
         if without_colan:
             value = value.replace(":", "")
         if "=" in value:
