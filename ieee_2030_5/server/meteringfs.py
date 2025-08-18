@@ -94,6 +94,28 @@ class UsagePointRequest(RequestOp):
 
         return self.build_response_from_dataclass(obj)
 
+    def post(self) -> Response:
+        xml = request.data.decode('utf-8')
+        data = xml_to_dataclass(request.data.decode('utf-8'))
+        data_type = type(data)
+        if data_type not in (m.MeterReading, m.ReadingSet):
+            raise BadRequest("Only MeterReading and ReadingSet can be posted to UsagePoints")
+
+        # Call the adapter function to handle the reading
+        result = adpt.create_or_update_usage_point_reading(up_href=request.path, reading_input=data)
+
+        if result.success:
+            status = '204' if result.was_update == True else '201'
+        else:
+            status = '405'
+
+        if status.startswith('20'):
+            if result.location:
+                return Response(headers={'Location': result.location}, status=status)
+            return Response(headers={'Location': result.data.href}, status=status)
+        else:
+            return Response(result.data, status=status)
+
 
 class MirrorUsagePointRequest(RequestOp):
 
