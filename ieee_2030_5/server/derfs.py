@@ -61,10 +61,10 @@ class DERRequests(RequestOp):
             #     print(f"----------------------DER PUT {request.path} {data}")
 
             _log.info(f"DER PUT {request.path} {asdict(data)}")
-            meta_data = dict(lfdi=self.lfdi, uri=f"{request.path}")
-            adpt.ListAdapter.set_single_amd_meta_data(uri=f"{request.path}",
-                                                      envelop=meta_data,
-                                                      obj=data)
+            result = adpt.ListAdapter.set_single(uri=f"{request.path}", obj=data)
+            if not result.success:
+                _log.error(f"Failed to store DER object: {result.error}")
+                raise werkzeug.exceptions.InternalServerError(f"Failed to store DER object: {result.error}")
 
             response = self.build_response_from_dataclass(data)
             _log.info(f"DERRequests PUT {request.path} - Status: {response.status_code}")
