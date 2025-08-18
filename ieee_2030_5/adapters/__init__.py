@@ -232,6 +232,58 @@ def _admin_controls(self) -> Response:
         return Response("Internal server error", status=500)
 
 
+def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> AdapterResult:
+    """Thread-safe mirror usage point creation."""
+    try:
+        # Check if MirrorUsagePoint already exists by mRID
+        if mup.mRID:
+            existing_list = ListAdapter.get_list(hrefs.DEFAULT_MUP_ROOT)
+            for existing_mup in existing_list:
+                if hasattr(existing_mup, 'mRID') and existing_mup.mRID == mup.mRID:
+                    # Update existing
+                    if not mup.href:
+                        mup.href = existing_mup.href
+                    result = ListAdapter.set_single(mup.href, mup)
+                    if result.success:
+                        return AdapterResult(success=True, data=mup, was_update=True, location=mup.href)
+                    else:
+                        return AdapterResult(success=False, error=result.error)
+
+        # Create new MirrorUsagePoint
+        result = ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup)
+        if result.success:
+            return AdapterResult(success=True, data=result.data, was_update=False, location=result.location)
+        else:
+            return AdapterResult(success=False, error=result.error)
+            
+    except Exception as e:
+        _log.error(f"Failed to create mirror usage point: {e}")
+        return AdapterResult(success=False, error=str(e))
+
+
+def create_or_update_meter_reading(mup_href: str, mmr_input: m.MirrorMeterReading | m.MirrorReadingSet) -> AdapterResult:
+    """Thread-safe meter reading creation/update."""
+    try:
+        # Store the meter reading data at the specified href path
+        if not mmr_input.href:
+            mmr_input.href = mup_href
+            
+        # Check if it already exists
+        existing = ListAdapter.get_single(mup_href)
+        was_update = existing is not None
+        
+        # Store the data
+        result = ListAdapter.set_single(uri=mup_href, obj=mmr_input)
+        if result.success:
+            return AdapterResult(success=True, data=mmr_input, was_update=was_update, location=mup_href)
+        else:
+            return AdapterResult(success=False, error=result.error)
+            
+    except Exception as e:
+        _log.error(f"Failed to create/update meter reading: {e}")
+        return AdapterResult(success=False, error=str(e))
+
+
 def create_device_capability(end_device_index: int,
                              device_cfg: DeviceConfiguration) -> m.DeviceCapability:
     """Thread-safe device capability creation."""
