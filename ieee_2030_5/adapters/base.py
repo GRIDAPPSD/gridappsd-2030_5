@@ -1128,7 +1128,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to put item {index} in {list_uri}: {e}")
                 return AdapterResult(success=False, error=str(e))
 
-    def set_single(self, uri: str, obj: Any) -> AdapterResult:
+    def set_single(self, uri: str, obj: Any, lfdi: Optional[str] = None) -> AdapterResult:
         """Store a single object at a URI (not part of a list).
 
         This method stores an individual object directly at a URI, independent
@@ -1138,6 +1138,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         Args:
             uri: The URI where the object should be stored (e.g., "/config", "/status")
             obj: The object to store. Can be any serializable object.
+            lfdi: Optional LFDI (Long Form Device Identifier) to associate with the object.
 
         Returns:
             AdapterResult: Result of the operation containing:
@@ -1172,16 +1173,52 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             self._track_operation("set_single")
 
             try:
+                #print(f"!!!! STORAGE DEBUG: Starting set_single for URI: {uri}, LFDI: {lfdi}")
+                _log.info(f"STORAGE_DEBUG: Starting set_single for URI: {uri}, LFDI: {lfdi}")
                 with atomic_operation():
                     import pickle
 
                     # Store the single object directly
                     obj_key = f"single:{uri}"
+                    #print(f"!!!! STORAGE DEBUG: Storing object with key: {obj_key}")
+                    _log.info(f"STORAGE_DEBUG: Storing object with key: {obj_key}")
                     self._db.set_point(obj_key, pickle.dumps(obj))
+                    #print(f"!!!! STORAGE DEBUG: Object stored successfully")
+                    _log.info(f"STORAGE_DEBUG: Object stored successfully")
+
+                    # Store metadata if LFDI is provided
+                    if lfdi is not None:
+                        metadata = {
+                            'uri': uri,
+                            'created': time.time(),
+                            'type': obj.__class__.__name__ if obj else None,
+                            'lfdi': lfdi
+                        }
+                        metadata_key = f"single_meta:{uri}"
+                        #print(f"!!!! STORAGE DEBUG: Storing metadata with key: {metadata_key}")
+                        _log.info(f"STORAGE_DEBUG: Storing metadata with key: {metadata_key}")
+                        self._db.set_point(metadata_key, pickle.dumps(metadata))
+                        #print(f"!!!! STORAGE DEBUG: Metadata stored successfully")
+                        _log.info(f"STORAGE_DEBUG: Metadata stored successfully")
 
                     # Ensure object has the correct href
                     if hasattr(obj, 'href'):
                         obj.href = uri
+
+                # Verify storage immediately after commit
+                #print(f"!!!! STORAGE DEBUG: Verifying storage for key: {obj_key}")
+                _log.info(f"STORAGE_DEBUG: Verifying storage for key: {obj_key}")
+                try:
+                    stored_data = self._db.get_point(obj_key)
+                    if stored_data:
+                        #print(f"!!!! STORAGE DEBUG: Verification successful - data found in database")
+                        _log.info(f"STORAGE_DEBUG: Verification successful - data found in database")
+                    else:
+                        #print(f"!!!! STORAGE DEBUG: Verification FAILED - no data found in database!")
+                        _log.error(f"STORAGE_DEBUG: Verification FAILED - no data found in database!")
+                except Exception as e:
+                    #print(f"!!!! STORAGE DEBUG: Verification error: {e}")
+                    _log.error(f"STORAGE_DEBUG: Verification error: {e}")
 
                 _log.debug(f"Set single object at {uri}")
                 return AdapterResult(success=True, data=obj, location=uri)
@@ -1499,7 +1536,17 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             self._track_operation("get_single_meta_data")
 
             try:
-                # Basic metadata to return
+                # First try to get stored metadata
+                metadata_key = f"single_meta:{uri}"
+                try:
+                    metadata_data = self._db.get_point(metadata_key)
+                    if metadata_data is not None:
+                        import pickle
+                        return pickle.loads(metadata_data)
+                except Exception:
+                    pass  # Fall back to generating metadata from object
+
+                # Basic metadata to return (fallback)
                 metadata = {
                     'uri': uri,
                     'created': time.time(),
