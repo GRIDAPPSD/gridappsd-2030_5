@@ -40,7 +40,7 @@ def create_device_capability(end_device_index: int,
     return result.data
 
 
-def add_enddevice(device: m.EndDevice) -> m.EndDevice:
+def add_enddevice(device: m.EndDevice, device_id: str = None) -> m.EndDevice:
     """Populates links to EndDevice resources and adds it to the EndDeviceAdapter.
     If the link is to a single writable (by the client) resource then create the link
     and the resource with default data.  Otherwise, the link will be to a list.  It is
@@ -56,11 +56,13 @@ def add_enddevice(device: m.EndDevice) -> m.EndDevice:
     - `PowerStatusLink`: A link to the power status for the enddevice
     :param device: The enddevice to add
     :type device: m.EndDevice
+    :param device_id: The device ID (often mRID) associated with this device
+    :type device_id: str
     :return: The enddevice object that was added to the adapter
     :rtype: m.EndDevice
     """
     # Use thread-safe add method
-    device = adpt.EndDeviceAdapter.add(device)
+    device = adpt.EndDeviceAdapter.add(device, device_id=device_id)
 
     # Create a link object that holds references for linking other objects to the end device.
     ed_href = hrefs.EndDeviceHref(edev_href=device.href)
@@ -296,12 +298,19 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             raise Exception(f"Failed to add curve {index}: {result.error}")
 
     # Add devices
-    der_global_count = 0
 
-    for index, cfg_device in enumerate(config.devices):
+    for enum_index, cfg_device in enumerate(config.devices):
         try:
-            device_capability = create_device_capability(index, cfg_device)
-            ed_href = hrefs.EndDeviceHref(index)
+            # Generate stable device index from device_id (same logic as in EndDeviceAdapter.add)
+            if cfg_device.id:
+                import hashlib
+                hash_obj = hashlib.sha256(cfg_device.id.encode('utf-8'))
+                device_index = int(hash_obj.hexdigest()[:8], 16) % 100000  # Limit to 5 digits
+            else:
+                raise ValueError(f"device_id is required for device {enum_index}. Cannot create stable device index.")
+            
+            device_capability = create_device_capability(device_index, cfg_device)
+            ed_href = hrefs.EndDeviceHref(device_index)
 
             # Check if device already exists
             existing_device = adpt.EndDeviceAdapter.fetch_by_href(str(ed_href))
@@ -314,7 +323,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 existing_device.sFDI = tlsrepo.sfdi(cfg_device.id)
                 existing_device.postRate = cfg_device.post_rate
 
-                result = adpt.EndDeviceAdapter.put(index, existing_device)
+                result = adpt.EndDeviceAdapter.put(device_index, existing_device)
                 if not result.success:
                     raise Exception(f"Failed to update device {cfg_device.id}: {result.error}")
             else:
@@ -326,7 +335,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                          enabled=True,
                                          changedTime=adpt.TimeAdapter.current_tick)
 
-                end_device = add_enddevice(end_device)
+                end_device = add_enddevice(end_device, cfg_device.id)
                 adpt.get_global_mrids().add_item_with_mrid(cfg_device.id, end_device)
 
                 # Add registration
@@ -364,15 +373,15 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     )
 
                 # Handle DERs
+                _log.debug(f"Device {cfg_device.id} has ders: {cfg_device.ders}, type: {type(cfg_device.ders)}")
                 if cfg_device.ders:
                     # Create references from the main der list to the ed specific list.
-                    for der in cfg_device.ders:
+                    for der_index, der in enumerate(cfg_device.ders):
                         with atomic_operation():
-                            # Create DER object
+                            # Create DER object with device-scoped href
+                            der_href_path = hrefs.SEP.join([str(device_index), "der", str(der_index)])
                             der_href = hrefs.DERHref(
-                                hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
-                                                str(der_global_count)]))
-                            der_global_count += 1
+                                hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, der_href_path]))
 
                             der_obj = m.DER(
                                 href=der_href.root,
@@ -454,16 +463,17 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
                 # Handle default DER on all devices if configured
                 elif config.include_default_der_on_all_devices:
+                    _log.debug(f"Device {cfg_device.id} using default DER path (no explicit ders configured)")
                     with atomic_operation():
                         if not config.default_program:
                             raise ConfigurationError(
                                 "Must include default_program if include_default_der_on_all_devices is set!"
                             )
 
+                        # Create default DER with device-scoped href (index 0 since it's the only DER)
+                        der_href_path = hrefs.SEP.join([str(device_index), "der", "0"])
                         der_href = hrefs.DERHref(
-                            hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT,
-                                            str(der_global_count)]))
-                        der_global_count += 1
+                            hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, der_href_path]))
 
                         der_obj = m.DER(
                             href=der_href.root,

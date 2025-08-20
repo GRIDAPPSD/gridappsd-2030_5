@@ -164,7 +164,7 @@ def remove_stop_file():
         os.remove(pth)
 
 
-def get_default_logger_config(log_level: Union[str, int] = 'INFO') -> Dict:
+def get_default_logger_config(log_level: Union[str, int] = 'INFO', log_file: str = 'ieee_2030_5_server.log') -> Dict:
     """Get a default logger configuration."""
     if isinstance(log_level, int):
         log_level = logging.getLevelName(log_level)
@@ -195,7 +195,7 @@ def get_default_logger_config(log_level: Union[str, int] = 'INFO') -> Dict:
                 'level': log_level,
                 'class': 'logging.FileHandler',
                 'formatter': 'single-line',
-                'filename': 'ieee_2030_5_server.log',
+                'filename': log_file,
                 'mode': 'a',
             }
         },
@@ -237,6 +237,107 @@ def get_default_logger_config(log_level: Union[str, int] = 'INFO') -> Dict:
             }
         }
     }
+
+def clear_all_data(config: Optional[ServerConfiguration] = None):
+    """Clear all data, databases, and logs for a fresh start."""
+    _log.info("=" * 60)
+    _log.info("CLEARING ALL DATA FOR FRESH START")
+    _log.info("=" * 60)
+    
+    # Storage directories
+    storage_paths = []
+    if config and config.storage_path:
+        storage_paths.append(Path(config.storage_path))
+    storage_paths.append(Path("data_store"))
+    
+    for storage_path in storage_paths:
+        if storage_path.exists():
+            _log.info(f"Removing storage directory: {storage_path}")
+            try:
+                shutil.rmtree(storage_path)
+            except Exception as e:
+                _log.warning(f"Failed to remove {storage_path}: {e}")
+    
+    # User data directory (contains ZODB and SQLite databases)
+    data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
+    if data_store_userdir.exists():
+        _log.info(f"Removing user data directory: {data_store_userdir}")
+        try:
+            shutil.rmtree(data_store_userdir)
+        except Exception as e:
+            _log.warning(f"Failed to remove {data_store_userdir}: {e}")
+    
+    # Debug client traffic logs
+    debug_traffic_dir = Path("debug_client_traffic")
+    if debug_traffic_dir.exists():
+        _log.info(f"Removing debug client traffic logs: {debug_traffic_dir}")
+        try:
+            shutil.rmtree(debug_traffic_dir)
+        except Exception as e:
+            _log.warning(f"Failed to remove {debug_traffic_dir}: {e}")
+    
+    # Server log files
+    log_files = [
+        Path("ieee_2030_5_server.log"),
+        Path("server.log"),
+        Path("proxy.log"),
+        Path("gridappsd.log")
+    ]
+    
+    for log_file in log_files:
+        if log_file.exists():
+            _log.info(f"Removing log file: {log_file}")
+            try:
+                log_file.unlink()
+            except Exception as e:
+                _log.warning(f"Failed to remove {log_file}: {e}")
+    
+    # Flask session data
+    flask_session_dir = Path("flask_session")
+    if flask_session_dir.exists():
+        _log.info(f"Removing Flask session data: {flask_session_dir}")
+        try:
+            shutil.rmtree(flask_session_dir)
+        except Exception as e:
+            _log.warning(f"Failed to remove {flask_session_dir}: {e}")
+    
+    # Custom database path if specified
+    if config and config.database_path:
+        db_path = Path(config.database_path).expanduser()
+        # Handle both file and directory database backends
+        if db_path.exists():
+            _log.info(f"Removing database: {db_path}")
+            try:
+                if db_path.is_dir():
+                    shutil.rmtree(db_path)
+                else:
+                    db_path.unlink()
+            except Exception as e:
+                _log.warning(f"Failed to remove {db_path}: {e}")
+        
+        # Also remove any associated files (like SQLite journal files)
+        db_parent = db_path.parent
+        if db_parent.exists():
+            for related_file in db_parent.glob(f"{db_path.stem}*"):
+                _log.info(f"Removing related database file: {related_file}")
+                try:
+                    related_file.unlink()
+                except Exception as e:
+                    _log.warning(f"Failed to remove {related_file}: {e}")
+    
+    # Stop file if it exists
+    stop_file = Path("server.stop")
+    if stop_file.exists():
+        _log.info("Removing server stop file")
+        try:
+            stop_file.unlink()
+        except Exception as e:
+            _log.warning(f"Failed to remove stop file: {e}")
+    
+    _log.info("=" * 60)
+    _log.info("Data clearing complete!")
+    _log.info("=" * 60)
+
 
 def setup_storage(config: ServerConfiguration):
     """Set up and prepare storage for the server."""
@@ -304,6 +405,9 @@ def _main():
     )
     parser.add_argument("--with-proxy", action="store_true", help="Enable proxy mode")
     parser.add_argument("--proxy-debug", action="store_true", help="Enable proxy debug logging")
+    parser.add_argument("--clear", action="store_true", 
+                        help="Clear all data and logs for a fresh start (databases, debug logs, storage)")
+    parser.add_argument("--log-file", type=str, help="Output log to specified file instead of default ieee_2030_5_server.log")
 
     opts = parser.parse_args()
 
@@ -315,7 +419,8 @@ def _main():
         os.environ['IEEE_2030_5_METRICS_PORT'] = str(opts.metrics_port)
 
     # Configure logging
-    log_config = get_default_logger_config(log_level)
+    log_file = opts.log_file if opts.log_file else 'ieee_2030_5_server.log'
+    log_config = get_default_logger_config(log_level, log_file)
     # Remove all existing handlers before configuring
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
@@ -323,6 +428,20 @@ def _main():
     logging.config.dictConfig(log_config)
     logging.getLogger("watchdog.observers.inotify_buffer").setLevel(logging.INFO)
     _log = logging.getLogger("ieee_2030_5")
+
+    # Handle --clear flag before server startup
+    if opts.clear:
+        # Load config to get database paths
+        config = None
+        try:
+            config_path = Path(opts.config).expanduser().resolve(strict=True)
+            cfg_dict = yaml.safe_load(config_path.read_text())
+            config = ServerConfiguration(**cfg_dict)
+        except Exception as e:
+            _log.warning(f"Could not load config for clearing: {e}")
+        
+        clear_all_data(config)
+        _log.info("Data cleared successfully! Continuing with server startup...")
 
     _log.info("Starting IEEE 2030.5 server")
 

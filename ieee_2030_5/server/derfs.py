@@ -56,7 +56,7 @@ class DERRequests(RequestOp):
             }
 
             data = request.get_data(as_text=True)
-            data = xml_to_dataclass(data, clstype[parser.at(2)])
+            data = xml_to_dataclass(data, clstype[parser.at(4)])
 
             _log.debug(f"Parsed DER object type: {type(data)}")
 
@@ -109,7 +109,7 @@ class DERRequests(RequestOp):
 
                 if parser.has_index():
                     index = parser.at(1)
-                    subpath = parser.at(2)
+                    subpath = parser.at(4)
                     value = subpaths[subpath]
                     _log.debug(f"Created {subpath} resource for index {index}")
 

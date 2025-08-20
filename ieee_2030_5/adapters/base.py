@@ -1770,7 +1770,8 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
     def __init__(self):
         super().__init__(m.EndDevice, ConcurrencyMode.READ_WRITE_LOCK)
         self._lfdi_index_key = "index:enddevice:lfdi"
-        self._href_index_key = "index:enddevice:href"
+        self._href_index_key = "index:enddevice:href" 
+        self._lfdi_metadata_key = "index:enddevice:lfdi_metadata"
 
     def fetch_index(self, href: str) -> int | None:
         """Extract and return the device index from its href using optimized index lookup.
@@ -1824,7 +1825,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             _log.error(f"Failed to fetch index for href {href}: {e}")
             return None
 
-    def add(self, device: m.EndDevice) -> m.EndDevice:
+    def add(self, device: m.EndDevice, device_id: str = None) -> m.EndDevice:
         """Add a new EndDevice to the adapter with automatic indexing.
 
         This method registers a new EndDevice in the system, automatically
@@ -1868,28 +1869,38 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             try:
                 with atomic_operation():
                     import pickle
+                    import hashlib
 
-                    # Get current count for href generation
-                    count_key = "counter:enddevice"
-                    count_data = self._db.get_point(count_key)
-                    current_count = 0 if count_data is None else pickle.loads(count_data)
+                    # Generate stable device index from device_id (mRID)
+                    if device_id:
+                        # Use hash of device_id to generate stable index
+                        hash_obj = hashlib.sha256(device_id.encode('utf-8'))
+                        device_index = int(hash_obj.hexdigest()[:8], 16) % 100000  # Limit to 5 digits
+                    else:
+                        # Device ID is required for stable indexing
+                        raise ValueError("device_id is required for EndDevice registration. Cannot create stable device index without device_id.")
 
                     # Set href if not present
                     if not device.href:
-                        device.href = f"/edev/{current_count}"
+                        device.href = f"/edev_{device_index}"
 
-                    # Store device
-                    device_key = f"enddevice:{current_count}"
+                    # Store device using stable index
+                    device_key = f"enddevice:{device_index}"
+                    
+                    # Check if device already exists at this index
+                    if self._db.exists(device_key):
+                        existing_data = self._db.get_point(device_key)
+                        if existing_data:
+                            existing_device = pickle.loads(existing_data)
+                            _log.info(f"Device already exists at index {device_index}, updating: {device.href}")
+                    
                     self._db.set_point(device_key, pickle.dumps(device))
 
                     # Update indices
                     if device.lFDI is not None:
-                        self._update_lfdi_index(device.lFDI, current_count)
+                        self._update_lfdi_index(device.lFDI, device_index, device, device_id)
                     if device.href is not None:
-                        self._update_href_index(device.href, current_count)
-
-                    # Update counter
-                    self._db.set_point(count_key, pickle.dumps(current_count + 1))
+                        self._update_href_index(device.href, device_index)
 
                 _log.info(f"Added end device {device.href}")
                 return device
@@ -1970,7 +1981,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
 
                     # Update indices if needed
                     if existing_device.lFDI != device.lFDI and device.lFDI is not None:
-                        self._update_lfdi_index(device.lFDI, index)
+                        self._update_lfdi_index(device.lFDI, index, device, device_id=None)
 
                     if existing_device.href != device.href and device.href is not None:
                         self._update_href_index(device.href, index)
@@ -2154,6 +2165,68 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             except Exception as e:
                 _log.error(f"Failed to fetch device by LFDI: {e}")
                 return None
+    
+    def fetch_lfdi_metadata(self, lfdi: str | bytes) -> dict | None:
+        """
+        Fast lookup for LFDI metadata without loading the full device.
+        
+        Returns dictionary with:
+        - device_index: int
+        - mRID: str (if available)  
+        - href: str
+        - device_uri: str (e.g. "/edev_10")
+        
+        This is much faster than fetch_by_lfdi() for cases where you only
+        need basic device metadata for routing/mapping purposes.
+        """
+        with self._read_lock():
+            self._track_operation("fetch_lfdi_metadata")
+            
+            try:
+                import pickle
+                
+                # Normalize LFDI to string format for metadata index lookup
+                lfdi_str = lfdi.hex() if isinstance(lfdi, bytes) else str(lfdi)
+                
+                # First check the enhanced metadata index
+                metadata_data = self._db.get_point(self._lfdi_metadata_key)
+                if metadata_data:
+                    metadata_index = pickle.loads(metadata_data)
+                    if lfdi_str in metadata_index:
+                        return metadata_index[lfdi_str].copy()
+                
+                # Fallback to legacy index + device lookup for backward compatibility
+                index_data = self._db.get_point(self._lfdi_index_key)
+                if not index_data:
+                    return None
+                    
+                lfdi_index = pickle.loads(index_data)
+                
+                # Try both string and bytes formats for legacy compatibility  
+                lfdi_bytes = bytes.fromhex(lfdi_str) if isinstance(lfdi, str) else lfdi
+                device_index = lfdi_index.get(lfdi_bytes) or lfdi_index.get(lfdi_str)
+                
+                if device_index is None:
+                    return None
+                
+                # Get device for mRID extraction
+                device_key = f"enddevice:{device_index}"  
+                device_data = self._db.get_point(device_key)
+                
+                if device_data:
+                    device = pickle.loads(device_data)
+                    return {
+                        'device_index': device_index,
+                        'mRID': device.mRID,
+                        'href': device.href,
+                        'device_uri': f"/edev_{device_index}"
+                    }
+                
+                return None
+                
+            except Exception as e:
+                _log.error(f"Failed to fetch LFDI metadata: {e}")
+                return None
 
     def fetch_by_property(self, prop_name: str, prop_value: Any) -> m.EndDevice | None:
         """Fetch an EndDevice by any property with optimized lookups for common properties.
@@ -2266,16 +2339,32 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 _log.error(f"Failed to fetch device by {prop_name}: {e}")
                 return None
 
-    def _update_lfdi_index(self, lfdi: bytes, device_index: int):
-        """Update the LFDI index."""
+    def _update_lfdi_index(self, lfdi: bytes, device_index: int, device: m.EndDevice = None, device_id: str = None):
+        """Update both legacy LFDI index and enhanced metadata index."""
         try:
             import pickle
 
+            # Update legacy index for backward compatibility
             index_data = self._db.get_point(self._lfdi_index_key)
             lfdi_index = {} if index_data is None else pickle.loads(index_data)
-
             lfdi_index[lfdi] = device_index
             self._db.set_point(self._lfdi_index_key, pickle.dumps(lfdi_index))
+
+            # Update enhanced metadata index if device provided
+            if device:
+                metadata_data = self._db.get_point(self._lfdi_metadata_key)
+                metadata_index = {} if metadata_data is None else pickle.loads(metadata_data)
+                
+                # Convert LFDI bytes to string for consistency with lookup methods
+                lfdi_str = lfdi.hex() if isinstance(lfdi, bytes) else str(lfdi)
+                
+                metadata_index[lfdi_str] = {
+                    'device_index': device_index,
+                    'mRID': device_id,  # Use device_id as mRID (often the same in GridAPPS-D)
+                    'href': device.href,
+                    'device_uri': f"/edev_{device_index}"
+                }
+                self._db.set_point(self._lfdi_metadata_key, pickle.dumps(metadata_index))
 
         except Exception as e:
             _log.error(f"Failed to update LFDI index: {e}")
