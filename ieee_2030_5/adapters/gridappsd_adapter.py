@@ -293,7 +293,7 @@ if ENABLED:
                     dev = DeviceConfiguration(id=inv.mRID,
                                               pin=int(self._default_pin),
                                               lfdi=self.tls.lfdi(inv.mRID))
-                    dev.ders = [dict(description=inv.name)]
+                    dev.ders = [inv.name]
                     dev.fsas = ["fsa0"]
                     self._devices.append(dev)
             else:
@@ -303,7 +303,7 @@ if ENABLED:
                         pin=int(self._default_pin),
                         lfdi=self.tls.lfdi(inv.mRID)
                     )
-                    dev.ders = [dict(description=inv.mRID)]
+                    dev.ders = [inv.mRID]
                     dev.fsas = ["fsa0"]
                     self._devices.append(dev)
 

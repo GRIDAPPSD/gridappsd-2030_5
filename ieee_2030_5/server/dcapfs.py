@@ -23,23 +23,14 @@ class DcapRequest(RequestOp):
             # if not self._end_devices.allowed_to_connect(self.lfdi):
             #     raise werkzeug.exceptions.Unauthorized()
 
-            device = adpt.EndDeviceAdapter.fetch_by_property("lFDI", self.lfdi)
-            if not device:
+            # Fast LFDI metadata lookup - much faster than loading full device
+            lfdi_metadata = adpt.EndDeviceAdapter.fetch_lfdi_metadata(self.lfdi)
+            if not lfdi_metadata:
                 _log.warning(f"No device found for LFDI: {self.lfdi}")
                 raise werkzeug.exceptions.NotFound(f"No device found for LFDI {self.lfdi}")
 
-            _log.debug(f"Found device: {device.href}")
-
-            # Extract device index from href using the EndDeviceHref parser from hrefs
-            device_index = None
-            try:
-                # Use the EndDeviceHref parser which handles both formats
-                edev_href = hrefs.EndDeviceHref(edev_href=device.href)
-                device_index = edev_href.index
-                _log.debug(f"Extracted device index: {device_index}")
-            except Exception as e:
-                _log.error(f"Error parsing device href '{device.href}': {e}")
-                raise werkzeug.exceptions.NotFound(f"Could not determine device index for {self.lfdi}")
+            device_index = lfdi_metadata['device_index']
+            _log.debug(f"Found device via fast LFDI lookup - Index: {device_index}, mRID: {lfdi_metadata.get('mRID')}")
 
             # Construct dcap_href using the proper URL builder from hrefs
             dcap_href = f"{hrefs.DEFAULT_DCAP_ROOT}{hrefs.SEP}{device_index}"

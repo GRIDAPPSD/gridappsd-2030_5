@@ -48,6 +48,14 @@ cleanse_storage: false
 # This directory will be created if it does not exist.
 storage_path: data_store
 
+# Database backend configuration for point storage
+# Options: "zodb" (default) or "sqlite"
+# ZODB: File-based object database with MVCC
+# SQLite: Lightweight SQL database with better concurrency
+database_backend: sqlite
+# Optional: Custom path for database file
+database_path: "~/.ieee_2030_5_data/custom_points.db"
+
 # Enable debug logging of all client requests/responses to individual files
 # When enabled, creates a debug_client_traffic/ directory with per-client logs
 debug_client_traffic: true
@@ -87,7 +95,7 @@ gridappsd:
     is_ot_bus: True
 
   # How often should the aggregates for the houses be published.
-  publish_interval_seconds: 3
+  publish_interval_seconds: 10
 
   # The topic the aggregate houses should publish to the goss bus.
 
