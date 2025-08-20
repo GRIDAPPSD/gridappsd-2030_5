@@ -7,6 +7,7 @@ import socket
 import ssl
 import threading
 import time
+from datetime import datetime
 from dataclasses import fields
 from functools import lru_cache
 from pathlib import Path
@@ -503,6 +504,98 @@ def set_socket_options(socket):
         socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6)     # Consider dead after 6 failures
 # based on
 # https://stackoverflow.com/questions/19459236/how-to-handle-413-request-entity-too-large-in-python-flask-server#:~:text=server%20MAY%20close%20the%20connection,client%20from%20continuing%20the%20request.&text=time%20the%20client%20MAY%20try,you%20the%20Broken%20pipe%20error.&text=Great%20than%20the%20application%20is%20acting%20correct.
+def log_client_request(lfdi: str, request_id: str, cn: str = None):
+    """Log incoming request details to client-specific file"""
+    debug_dir = Path('debug_client_traffic')
+    
+    # Ensure the debug directory exists
+    debug_dir.mkdir(exist_ok=True)
+    
+    # Use CN for filename if available, otherwise fall back to LFDI
+    # Sanitize the filename to remove any invalid characters
+    safe_name = cn if cn else lfdi
+    safe_name = safe_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+    filename = f"client_{safe_name}.log"
+    client_file = debug_dir / filename
+    
+    timestamp = datetime.now().isoformat()
+    
+    request_data = {
+        'timestamp': timestamp,
+        'request_id': request_id,
+        'type': 'REQUEST',
+        'lfdi': lfdi,
+        'cn': cn,
+        'method': request.method,
+        'path': request.path,
+        'query_string': request.query_string.decode('utf-8') if request.query_string else '',
+        'headers': dict(request.headers),
+        'remote_addr': request.remote_addr,
+        'content_length': request.content_length,
+        'content_type': request.content_type,
+        'body': None
+    }
+    
+    # Try to get request body if present
+    if request.content_length and request.content_length > 0:
+        try:
+            # Get the raw data and restore it for the actual request handler
+            body_data = request.get_data(as_text=True)
+            request_data['body'] = body_data
+        except Exception as e:
+            request_data['body_error'] = str(e)
+    
+    # Write to file with error handling
+    try:
+        with open(client_file, 'a') as f:
+            f.write(json.dumps(request_data, indent=2) + '\n\n')
+    except Exception as e:
+        _log.error(f"Failed to write request log for {safe_name}: {e}")
+
+def log_client_response(lfdi: str, request_id: str, response: Response, duration: float, cn: str = None):
+    """Log outgoing response details to client-specific file"""
+    debug_dir = Path('debug_client_traffic')
+    
+    # Ensure the debug directory exists
+    debug_dir.mkdir(exist_ok=True)
+    
+    # Use CN for filename if available, otherwise fall back to LFDI
+    # Sanitize the filename to remove any invalid characters
+    safe_name = cn if cn else lfdi
+    safe_name = safe_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+    filename = f"client_{safe_name}.log"
+    client_file = debug_dir / filename
+    
+    timestamp = datetime.now().isoformat()
+    
+    response_data = {
+        'timestamp': timestamp,
+        'request_id': request_id,
+        'type': 'RESPONSE',
+        'lfdi': lfdi,
+        'cn': cn,
+        'status_code': response.status_code,
+        'headers': dict(response.headers),
+        'content_length': response.headers.get('Content-Length', 0),
+        'content_type': response.headers.get('Content-Type', 'unknown'),
+        'duration_seconds': duration,
+        'body': None
+    }
+    
+    # Try to get response body
+    try:
+        response_body = response.get_data(as_text=True)
+        response_data['body'] = response_body
+    except Exception as e:
+        response_data['body_error'] = str(e)
+    
+    # Write to file with error handling
+    try:
+        with open(client_file, 'a') as f:
+            f.write(json.dumps(response_data, indent=2) + '\n\n')
+    except Exception as e:
+        _log.error(f"Failed to write response log for {safe_name}: {e}")
+
 def handle_chunking():
     """
     Sets the "wsgi.input_terminated" environment flag, thus enabling
@@ -544,6 +637,22 @@ def before_request():
     # Log client certificate info if available
     if 'ieee_2030_5_lfdi' in request.environ:
         _log_http.debug(f"[{g.request_id}] Client LFDI: {request.environ.get('ieee_2030_5_lfdi')}")
+        
+        # Client-specific debug logging to file
+        lfdi = request.environ.get('ieee_2030_5_lfdi')
+        if lfdi and getattr(server_config, 'debug_client_traffic', False):
+            try:
+                # Try to get CN from the certificate
+                cn = None
+                if 'ieee_2030_5_peercert' in request.environ:
+                    try:
+                        x509 = request.environ.get('ieee_2030_5_peercert')
+                        cn = x509.get_subject().CN if x509 else None
+                    except Exception as e:
+                        _log.debug(f"Could not extract CN from certificate: {e}")
+                log_client_request(lfdi, g.request_id, cn)
+            except Exception as e:
+                _log.error(f"Failed to log client request: {e}")
 
 
 def after_request(response: Response) -> Response:
@@ -571,6 +680,22 @@ def after_request(response: Response) -> Response:
     _log.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
     resp = response.get_data().decode('utf-8')
     _log.debug(f"\nRESP: {resp}")
+    
+    # Client-specific debug logging to file
+    lfdi = request.environ.get('ieee_2030_5_lfdi')
+    if lfdi and getattr(server_config, 'debug_client_traffic', False):
+        try:
+            # Try to get CN from the certificate
+            cn = None
+            if 'ieee_2030_5_peercert' in request.environ:
+                try:
+                    x509 = request.environ.get('ieee_2030_5_peercert')
+                    cn = x509.get_subject().CN if x509 else None
+                except Exception as e:
+                    _log.debug(f"Could not extract CN from certificate: {e}")
+            log_client_response(lfdi, g.request_id, response, duration, cn)
+        except Exception as e:
+            _log.error(f"Failed to log client response: {e}")
 
     return response
 
@@ -685,6 +810,8 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     # Allows for larger data to be sent through because of chunking types.
     app.before_request(handle_chunking)
     app.after_request(after_request)
+
+    # Adapters already initialized in __main__.py
 
     ServerEndpoints(app, tls_repo=tlsrepo, config=config)
     AdminEndpoints(app, tls_repo=tlsrepo, config=config)
@@ -882,6 +1009,12 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
     global server_config, tls_repository
     server_config = config
     tls_repository = tlsrepo
+    
+    # Create debug directory for client traffic logs if debug is enabled
+    if getattr(config, 'debug_client_traffic', False):
+        debug_dir = Path('debug_client_traffic')
+        debug_dir.mkdir(exist_ok=True)
+        _log.info(f"Client traffic debugging enabled. Logs will be written to {debug_dir}")
 
     # Build the Flask application
     app = __build_app__(config, tlsrepo)

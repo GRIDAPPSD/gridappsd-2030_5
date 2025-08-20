@@ -1588,6 +1588,64 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
         return {'count': 0, 'created': time.time()}
 
+    def get_all_keys(self) -> List[str]:
+        """Get all keys stored in the adapter for debugging and administrative purposes.
+
+        This method returns all storage keys managed by this adapter, including
+        both list keys and single object keys. It's primarily used for debugging,
+        administrative operations, and system introspection.
+
+        Returns:
+            List[str]: A list of all storage keys. Keys are returned in sorted order
+                for consistency. The list includes:
+                - List keys (prefixed with "list:")
+                - Single object keys (prefixed with "single:")
+                - Metadata keys (prefixed with "list_meta:" and "single_meta:")
+
+        Thread Safety:
+            This method is thread-safe and uses read locks for concurrent access.
+
+        Performance:
+            O(n log n) where n is the total number of keys, due to sorting.
+            For large datasets, this may be expensive.
+
+        Example:
+            >>> adapter = ThreadSafeListAdapter(MyModel)
+            >>> keys = adapter.get_all_keys()
+            >>> for key in keys:
+            ...     print(f"Key: {key}")
+
+        Note:
+            This method returns internal storage keys, not application-level URIs.
+            Use print_all() for human-readable resource listings.
+        """
+        with self._read_lock():
+            self._track_operation("get_all_keys")
+
+            try:
+                all_keys = []
+                
+                # Get list keys
+                list_pattern = "list:*"
+                all_keys.extend(self._db.get_keys_matching(list_pattern))
+                
+                # Get single object keys  
+                single_pattern = "single:*"
+                all_keys.extend(self._db.get_keys_matching(single_pattern))
+                
+                # Get metadata keys
+                list_meta_pattern = "list_meta:*"
+                all_keys.extend(self._db.get_keys_matching(list_meta_pattern))
+                
+                single_meta_pattern = "single_meta:*" 
+                all_keys.extend(self._db.get_keys_matching(single_meta_pattern))
+                
+                return sorted(all_keys)
+                
+            except Exception as e:
+                _log.error(f"Failed to get all keys: {e}")
+                return []
+
     def print_all(self) -> None:
         """Print all resources stored in the adapter for debugging purposes.
 
@@ -2291,8 +2349,23 @@ def initialize_adapters():
         ListAdapter = ThreadSafeListAdapter(object)  # Generic list adapter
         EndDeviceAdapter = ThreadSafeEndDeviceAdapter()
 
+        # Add compatibility method to ListAdapter instance
+        ListAdapter.list_size = lambda uri: ListAdapter.get_list_size(uri)
+
         _initialized = True
         _log.info("Thread-safe adapters initialized")
+        
+        # Update global adapter references in __init__.py
+        try:
+            from . import _update_global_adapters
+            _update_global_adapters()
+        except ImportError:
+            pass  # Module might not have this function yet
+
+def ensure_adapters_initialized():
+    """Ensure adapters are initialized (lazy initialization)."""
+    if not _initialized:
+        initialize_adapters()
 
 def get_adapter_stats() -> Dict[str, Any]:
     """Get performance statistics from all adapters.
@@ -2331,5 +2404,5 @@ def get_adapter_stats() -> Dict[str, Any]:
         'enddevice_adapter': EndDeviceAdapter.get_stats() if EndDeviceAdapter is not None else {},
     }
 
-# Initialize adapters on module import
-initialize_adapters()
+# Don't initialize adapters on module import - wait for configuration
+# initialize_adapters() will be called after point store is configured

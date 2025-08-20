@@ -33,7 +33,8 @@ def create_device_capability(end_device_index: int,
     device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
 
     # Use thread-safe append instead of add
-    result = adpt.DeviceCapabilityAdapter.append(hrefs.DEFAULT_DCAP_ROOT, device_capability)
+    device_capability_adapter = adpt._get_or_create_adapter('DeviceCapability', m.DeviceCapability)
+    result = device_capability_adapter.append(hrefs.DEFAULT_DCAP_ROOT, device_capability)
     if not result.success:
         raise Exception(f"Failed to add device capability: {result.error}")
     return result.data
@@ -120,9 +121,7 @@ def update_active_der_event_ended(event: m.Event):
     adpt.update_active_der_event_ended(event)
 
 
-# Connect event handlers to TimeAdapter signals
-adpt.TimeAdapter.event_started.connect(update_active_der_event_started)
-adpt.TimeAdapter.event_ended.connect(update_active_der_event_ended)
+# Event handlers will be connected during initialization
 
 
 def create_der_program_and_control(default_der_program: m.DERProgram,
@@ -139,8 +138,8 @@ def create_der_program_and_control(default_der_program: m.DERProgram,
     # Prepare objects
     derp = deepcopy(default_der_program)
     dderc = deepcopy(default_der_control)
-    derp.mRID = adpt.GlobalmRIDs.new_mrid()
-    dderc.mRID = adpt.GlobalmRIDs.new_mrid()
+    derp.mRID = adpt.get_global_mrids().new_mrid()
+    dderc.mRID = adpt.get_global_mrids().new_mrid()
 
     # Use thread-safe append
     result = adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
@@ -180,6 +179,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     This method initializes the adapters from the configuration objects into
     the persistence adapters.
     """
+    # Connect event handlers to TimeAdapter signals
+    adpt.TimeAdapter.event_started.connect(update_active_der_event_started)
+    adpt.TimeAdapter.event_ended.connect(update_active_der_event_ended)
+    
     _log.debug("Initializing 2030.5 with thread safety")
     _log.debug("Adding server level urls to cache")
 
@@ -202,7 +205,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             derp = config.default_program
 
             if not derp.mRID:
-                derp.mRID = adpt.GlobalmRIDs.new_mrid()
+                derp.mRID = adpt.get_global_mrids().new_mrid()
 
             result = adpt.ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
             if not result.success:
@@ -220,7 +223,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             # Add default DER control if configured
             if config.default_der_control:
                 dderc = config.default_der_control
-                dderc.mRID = adpt.GlobalmRIDs.new_mrid()
+                dderc.mRID = adpt.get_global_mrids().new_mrid()
                 dderc.href = derp.DefaultDERControlLink.href
                 adpt.ListAdapter.set_single(uri=derp.DefaultDERControlLink.href, obj=dderc)
 
@@ -238,7 +241,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
             program = m.DERProgram(**program_cfg)
             if not program.mRID:
-                program.mRID = adpt.GlobalmRIDs.new_mrid()
+                program.mRID = adpt.get_global_mrids().new_mrid()
 
             program = program_hrefs.fill_hrefs(program)
 
@@ -249,7 +252,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             # Either set up default control or use the one passed in
             if not default_der_control:
                 default_der_control = m.DefaultDERControl(href=program_hrefs.default_control_href,
-                                                          mRID=adpt.GlobalmRIDs.new_mrid(),
+                                                          mRID=adpt.get_global_mrids().new_mrid(),
                                                           DERControlBase=m.DERControlBase())
             elif default_der_control:
                 der_control_base = None
@@ -260,7 +263,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                                           **default_der_control)
 
                 if not default_der_control.mRID:
-                    default_der_control.mRID = adpt.GlobalmRIDs.new_mrid()
+                    default_der_control.mRID = adpt.get_global_mrids().new_mrid()
 
                 if not der_control_base:
                     default_der_control.DERControlBase = m.DERControlBase()
@@ -286,7 +289,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                            **curve_cfg)
 
         if not curve.mRID:
-            curve.mRID = adpt.GlobalmRIDs.new_mrid()
+            curve.mRID = adpt.get_global_mrids().new_mrid()
 
         result = adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
         if not result.success:
@@ -324,7 +327,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                          changedTime=adpt.TimeAdapter.current_tick)
 
                 end_device = add_enddevice(end_device)
-                adpt.GlobalmRIDs.add_item_with_mrid(cfg_device.id, end_device)
+                adpt.get_global_mrids().add_item_with_mrid(cfg_device.id, end_device)
 
                 # Add registration
                 reg = m.Registration(href=end_device.RegistrationLink.href,
@@ -347,7 +350,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                             ed_href.function_set_assignments)
                         fsa = m.FunctionSetAssignments(href=hrefs.SEP.join(
                             (ed_href.function_set_assignments, str(fsa_index))),
-                                                       mRID=adpt.GlobalmRIDs.new_mrid(),
+                                                       mRID=adpt.get_global_mrids().new_mrid(),
                                                        description=fsa_name)
 
                         result = adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)

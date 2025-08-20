@@ -60,7 +60,7 @@ import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
-from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
+# Import GridAPPSDAdapter lazily to avoid early database initialization
 
 # Configure metrics if available (optional)
 try:
@@ -386,6 +386,11 @@ def _main():
     for key, value in sorted(asdict(config).items()):
         _log.info(f"Config '{key}': {value}")
 
+    # Configure the point store backend before any database operations
+    from ieee_2030_5.persistance.points import configure_point_store
+    configure_point_store(backend=config.database_backend, db_path=config.database_path)
+    _log.info(f"Configured {config.database_backend} point store backend")
+
     # Add server configuration to URL registry
     add_href(hrefs.get_server_config_href(), config)
 
@@ -405,6 +410,7 @@ def _main():
             try:
                 import ieee_2030_5.adapters as adpt
                 from gridappsd import GridAPPSD
+                from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
 
                 gapps = GridAPPSD(stomp_address=config.gridappsd.address,
                                 stomp_port=config.gridappsd.port,
@@ -443,6 +449,12 @@ def _main():
 
         # Initialize the IEEE 2030.5 server
         from ieee_2030_5.server.server_constructs import initialize_2030_5
+        
+        # Initialize adapters before server initialization
+        from ieee_2030_5.adapters.base import initialize_adapters
+        initialize_adapters()
+        _log.info("Adapters initialized for server startup")
+        
         _log.info("Initializing IEEE 2030.5 server")
         initialize_2030_5(config, tls_repo)
 

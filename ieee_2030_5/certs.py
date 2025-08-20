@@ -190,6 +190,40 @@ class TLSRepository:
         #                                             lFDI=self.lfdi(common_name),
         #                                             path=self.__get_cert_file__(common_name).as_posix())
 
+    def copy_certificate(self, source_common_name: str, target_common_name: str):
+        """
+        Copy certificate files from source to target device.
+        This copies both the regular certificate file and the combined PEM file.
+        Used for ensuring LFDI matching between related devices (e.g., conducting equipment and energy consumers).
+        
+        Args:
+            source_common_name: The source device ID/common name whose certificate to copy
+            target_common_name: The target device ID/common name to copy certificate to
+        """
+        import shutil
+        
+        source_cert = self.__get_cert_file__(source_common_name)
+        target_cert = self.__get_cert_file__(target_common_name)
+        source_key = self.__get_key_file__(source_common_name)
+        target_key = self.__get_key_file__(target_common_name)
+        source_combined = self.__get_combined_file__(source_common_name)
+        target_combined = self.__get_combined_file__(target_common_name)
+        
+        if not source_cert.exists():
+            raise FileNotFoundError(f"Source certificate not found: {source_cert}")
+        
+        # Copy certificate file
+        shutil.copy2(source_cert, target_cert)
+        self._current_certs[target_common_name] = target_cert
+        
+        # Copy private key file
+        if source_key.exists():
+            shutil.copy2(source_key, target_key)
+            self._current_pk[target_common_name] = target_key
+        
+        # Copy combined file
+        if source_combined.exists():
+            shutil.copy2(source_combined, target_combined)
 
     def lfdi(self, device_id: str) -> Lfdi:
         """

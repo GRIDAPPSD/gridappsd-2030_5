@@ -16,20 +16,75 @@ from ieee_2030_5.persistance.points import atomic_operation, get_db
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from blinker import Signal
 from .base import (ThreadSafeListAdapter, ThreadSafeEndDeviceAdapter, initialize_adapters,
-                   get_adapter_stats, AdapterResult)
+                   get_adapter_stats, AdapterResult, ensure_adapters_initialized)
 # Import the global instances
-from .base import ListAdapter, EndDeviceAdapter
+# Dynamic adapter access functions to get updated references after initialization
+def get_list_adapter():
+    """Get the current ListAdapter instance after initialization."""
+    from .base import ListAdapter
+    return ListAdapter
+
+def get_end_device_adapter():
+    """Get the current EndDeviceAdapter instance after initialization."""
+    from .base import EndDeviceAdapter
+    return EndDeviceAdapter
+
+# For backward compatibility, create module-level references that will be updated
+ListAdapter = None
+EndDeviceAdapter = None
+
+def _update_global_adapters():
+    """Update the global adapter references after initialization."""
+    global ListAdapter, EndDeviceAdapter
+    from .base import ListAdapter as BaseListAdapter, EndDeviceAdapter as BaseEndDeviceAdapter
+    ListAdapter = BaseListAdapter
+    EndDeviceAdapter = BaseEndDeviceAdapter
 
 _log = logging.getLogger(__name__)
 
-# Create additional specialized adapters
-DERAdapter = ThreadSafeListAdapter(m.DER)
-DERControlAdapter = ThreadSafeListAdapter(m.DERControl)
-DERProgramAdapter = ThreadSafeListAdapter(m.DERProgram)
-DERCurveAdapter = ThreadSafeListAdapter(m.DERCurve)
-FunctionSetAssignmentsAdapter = ThreadSafeListAdapter(m.FunctionSetAssignments)
-DeviceCapabilityAdapter = ThreadSafeListAdapter(m.DeviceCapability)
-RegistrationAdapter = ThreadSafeListAdapter(m.Registration)
+# Lazy initialization of specialized adapters
+_specialized_adapters = {}
+_specialized_adapters_lock = threading.Lock()
+
+def _get_or_create_adapter(name, model_class):
+    """Get or create a specialized adapter lazily."""
+    if name not in _specialized_adapters:
+        with _specialized_adapters_lock:
+            if name not in _specialized_adapters:
+                from .base import ensure_adapters_initialized
+                ensure_adapters_initialized()  # Ensure base adapters are initialized
+                _specialized_adapters[name] = ThreadSafeListAdapter(model_class)
+    return _specialized_adapters[name]
+
+# Create module-level adapter instances that are initialized lazily
+# These will be actual adapter instances, not functions
+DERAdapter = None
+DERControlAdapter = None
+DERProgramAdapter = None
+DERCurveAdapter = None
+FunctionSetAssignmentsAdapter = None
+DeviceCapabilityAdapter = None
+RegistrationAdapter = None
+
+def _initialize_specialized_adapters():
+    """Initialize all specialized adapters if not already done."""
+    global DERAdapter, DERControlAdapter, DERProgramAdapter, DERCurveAdapter
+    global FunctionSetAssignmentsAdapter, DeviceCapabilityAdapter, RegistrationAdapter
+    
+    if DeviceCapabilityAdapter is None:
+        DERAdapter = _get_or_create_adapter('DER', m.DER)
+        DERControlAdapter = _get_or_create_adapter('DERControl', m.DERControl)
+        DERProgramAdapter = _get_or_create_adapter('DERProgram', m.DERProgram)
+        DERCurveAdapter = _get_or_create_adapter('DERCurve', m.DERCurve)
+        FunctionSetAssignmentsAdapter = _get_or_create_adapter('FunctionSetAssignments', m.FunctionSetAssignments)
+        DeviceCapabilityAdapter = _get_or_create_adapter('DeviceCapability', m.DeviceCapability)
+        RegistrationAdapter = _get_or_create_adapter('Registration', m.Registration)
+
+# Initialize adapters on module load (but after database configuration)
+def ensure_specialized_adapters_initialized():
+    """Ensure specialized adapters are initialized. Safe to call multiple times."""
+    if DeviceCapabilityAdapter is None:
+        _initialize_specialized_adapters()
 
 
 # Add compatibility method for list_size
@@ -38,8 +93,7 @@ def list_size(list_uri: str) -> int:
     return ListAdapter.get_list_size(list_uri)
 
 
-# Add method directly to the ListAdapter instance
-ListAdapter.list_size = lambda uri: ListAdapter.get_list_size(uri)
+# Method will be added to ListAdapter instance during initialization
 
 
 # Create a TimeAdapter for time operations
@@ -251,10 +305,23 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> AdapterResult:
 
         # Create new MirrorUsagePoint
         result = ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup)
-        if result.success:
-            return AdapterResult(success=True, data=result.data, was_update=False, location=result.location)
-        else:
+        if not result.success:
             return AdapterResult(success=False, error=result.error)
+        
+        # Create corresponding UsagePoint automatically
+        usage_point = m.UsagePoint(
+            mRID=mup.mRID,
+            description=mup.description,
+            href=f"{hrefs.DEFAULT_UPT_ROOT}_{len(ListAdapter.get_list(hrefs.DEFAULT_UPT_ROOT))}"
+        )
+        
+        # Store the usage point
+        up_result = ListAdapter.append(hrefs.DEFAULT_UPT_ROOT, usage_point)
+        if not up_result.success:
+            _log.warning(f"Failed to create corresponding usage point for MirrorUsagePoint {result.location}: {up_result.error}")
+            # Continue anyway - the mirror usage point was created successfully
+        
+        return AdapterResult(success=True, data=result.data, was_update=False, location=result.location)
             
     except Exception as e:
         _log.error(f"Failed to create mirror usage point: {e}")
@@ -264,23 +331,182 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> AdapterResult:
 def create_or_update_meter_reading(mup_href: str, mmr_input: m.MirrorMeterReading | m.MirrorReadingSet) -> AdapterResult:
     """Thread-safe meter reading creation/update."""
     try:
-        # Store the meter reading data at the specified href path
-        if not mmr_input.href:
-            mmr_input.href = mup_href
+        # Parse the MUP href to get the usage point index
+        parsed_href = hrefs.ParsedUsagePointHref(mup_href)
+        if not parsed_href.has_usage_point_index():
+            return AdapterResult(success=False, error="Invalid MUP href - no usage point index")
             
-        # Check if it already exists
-        existing = ListAdapter.get_single(mup_href)
-        was_update = existing is not None
+        # Get the existing MirrorUsagePoint
+        mup = ListAdapter.get(hrefs.DEFAULT_MUP_ROOT, parsed_href.usage_point_index)
+        if mup is None:
+            return AdapterResult(success=False, error=f"MirrorUsagePoint not found at index {parsed_href.usage_point_index}")
         
-        # Store the data
-        result = ListAdapter.set_single(uri=mup_href, obj=mmr_input)
+        # Set the href for the meter reading if not already set
+        if not mmr_input.href:
+            # Generate an href for the meter reading within the MUP
+            if isinstance(mmr_input, m.MirrorMeterReading):
+                mmr_input.href = f"{mup_href}/mr_{len(mup.MirrorMeterReading)}"
+            elif isinstance(mmr_input, m.MirrorReadingSet):
+                mmr_input.href = f"{mup_href}/rs_{len(getattr(mup, 'MirrorReadingSet', []))}"
+        
+        # Add the reading to the MirrorUsagePoint
+        was_update = False
+        if isinstance(mmr_input, m.MirrorMeterReading):
+            # Check if it already exists (by mRID)
+            existing_idx = None
+            for i, existing_mmr in enumerate(mup.MirrorMeterReading):
+                if existing_mmr.mRID == mmr_input.mRID:
+                    existing_idx = i
+                    was_update = True
+                    break
+            
+            if was_update:
+                # Update existing reading
+                mup.MirrorMeterReading[existing_idx] = mmr_input
+            else:
+                # Add new reading
+                mup.MirrorMeterReading.append(mmr_input)
+        
+        elif isinstance(mmr_input, m.MirrorReadingSet):
+            # Handle MirrorReadingSet similarly
+            if not hasattr(mup, 'MirrorReadingSet'):
+                mup.MirrorReadingSet = []
+            
+            # Check if it already exists (by mRID)
+            existing_idx = None
+            for i, existing_mrs in enumerate(mup.MirrorReadingSet):
+                if existing_mrs.mRID == mmr_input.mRID:
+                    existing_idx = i
+                    was_update = True
+                    break
+            
+            if was_update:
+                # Update existing reading set
+                mup.MirrorReadingSet[existing_idx] = mmr_input
+            else:
+                # Add new reading set
+                mup.MirrorReadingSet.append(mmr_input)
+        
+        # Update the MirrorUsagePoint in storage
+        result = ListAdapter.put(hrefs.DEFAULT_MUP_ROOT, parsed_href.usage_point_index, mup)
+        if not result.success:
+            return AdapterResult(success=False, error=result.error)
+        
+        # Also create corresponding reading in the related UsagePoint
+        try:
+            # Get the corresponding UsagePoint (same index)
+            up = ListAdapter.get(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index)
+            if up is not None:
+                if isinstance(mmr_input, m.MirrorMeterReading):
+                    # Create corresponding MeterReading for the UsagePoint
+                    meter_reading = m.MeterReading(
+                        mRID=mmr_input.mRID,
+                        href=f"{hrefs.DEFAULT_UPT_ROOT}_{parsed_href.usage_point_index}/mr_{len(getattr(up, 'MeterReading', []))}"
+                    )
+                    
+                    if not hasattr(up, 'MeterReading'):
+                        up.MeterReading = []
+                    
+                    # Check if it already exists (by mRID) and update/add
+                    existing_idx = None
+                    for i, existing_mr in enumerate(up.MeterReading):
+                        if existing_mr.mRID == meter_reading.mRID:
+                            existing_idx = i
+                            break
+                    
+                    if existing_idx is not None:
+                        up.MeterReading[existing_idx] = meter_reading
+                    else:
+                        up.MeterReading.append(meter_reading)
+                    
+                    # Update the UsagePoint in storage
+                    up_result = ListAdapter.put(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index, up)
+                    if not up_result.success:
+                        _log.warning(f"Failed to update corresponding usage point reading: {up_result.error}")
+        except Exception as e:
+            _log.warning(f"Failed to sync reading to corresponding usage point: {e}")
+        
+        return AdapterResult(success=True, data=mmr_input, was_update=was_update, location=mmr_input.href)
+            
+    except Exception as e:
+        _log.error(f"Failed to create/update meter reading: {e}")
+        return AdapterResult(success=False, error=str(e))
+
+
+def create_or_update_usage_point_reading(up_href: str, reading_input: m.MeterReading | m.ReadingSet) -> AdapterResult:
+    """Thread-safe usage point reading creation/update."""
+    try:
+        # Parse the UP href to get the usage point index
+        parsed_href = hrefs.ParsedUsagePointHref(up_href)
+        if not parsed_href.has_usage_point_index():
+            return AdapterResult(success=False, error="Invalid UP href - no usage point index")
+            
+        # Get the existing UsagePoint
+        up = ListAdapter.get(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index)
+        if up is None:
+            return AdapterResult(success=False, error=f"UsagePoint not found at index {parsed_href.usage_point_index}")
+        
+        # Set the href for the meter reading if not already set
+        if not reading_input.href:
+            # Generate an href for the meter reading within the UP
+            if isinstance(reading_input, m.MeterReading):
+                if not hasattr(up, 'MeterReading'):
+                    up.MeterReading = []
+                reading_input.href = f"{up_href}/mr_{len(up.MeterReading)}"
+            elif isinstance(reading_input, m.ReadingSet):
+                if not hasattr(up, 'ReadingSet'):
+                    up.ReadingSet = []
+                reading_input.href = f"{up_href}/rs_{len(up.ReadingSet)}"
+        
+        # Add the reading to the UsagePoint
+        was_update = False
+        if isinstance(reading_input, m.MeterReading):
+            if not hasattr(up, 'MeterReading'):
+                up.MeterReading = []
+                
+            # Check if it already exists (by mRID)
+            existing_idx = None
+            for i, existing_mr in enumerate(up.MeterReading):
+                if existing_mr.mRID == reading_input.mRID:
+                    existing_idx = i
+                    was_update = True
+                    break
+            
+            if was_update:
+                # Update existing reading
+                up.MeterReading[existing_idx] = reading_input
+            else:
+                # Add new reading
+                up.MeterReading.append(reading_input)
+        
+        elif isinstance(reading_input, m.ReadingSet):
+            if not hasattr(up, 'ReadingSet'):
+                up.ReadingSet = []
+                
+            # Check if it already exists (by mRID)
+            existing_idx = None
+            for i, existing_rs in enumerate(up.ReadingSet):
+                if existing_rs.mRID == reading_input.mRID:
+                    existing_idx = i
+                    was_update = True
+                    break
+            
+            if was_update:
+                # Update existing reading set
+                up.ReadingSet[existing_idx] = reading_input
+            else:
+                # Add new reading set
+                up.ReadingSet.append(reading_input)
+        
+        # Update the UsagePoint in storage
+        result = ListAdapter.put(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index, up)
         if result.success:
-            return AdapterResult(success=True, data=mmr_input, was_update=was_update, location=mup_href)
+            return AdapterResult(success=True, data=reading_input, was_update=was_update, location=reading_input.href)
         else:
             return AdapterResult(success=False, error=result.error)
             
     except Exception as e:
-        _log.error(f"Failed to create/update meter reading: {e}")
+        _log.error(f"Failed to create/update usage point reading: {e}")
         return AdapterResult(success=False, error=str(e))
 
 
@@ -459,8 +685,16 @@ def clear_all_adapters():
             raise
 
 
-# Global instance
-GlobalmRIDs = ThreadSafeGlobalMRIDs()
+# Global instance - initialized lazily
+GlobalmRIDs = None
+
+def get_global_mrids():
+    """Get the global MRIDs instance, initializing if necessary."""
+    global GlobalmRIDs
+    if GlobalmRIDs is None:
+        ensure_adapters_initialized()
+        GlobalmRIDs = ThreadSafeGlobalMRIDs()
+    return GlobalmRIDs
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
@@ -480,7 +714,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             index = ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
             derp = config.default_program
             if not derp.mRID:
-                derp.mRID = GlobalmRIDs.new_mrid()
+                derp.mRID = get_global_mrids().new_mrid()
             result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
             if not result.success:
                 raise Exception(f"Failed to add default program: {result.error}")
@@ -494,7 +728,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             # Add default control if configured
             if config.default_der_control:
                 dderc = config.default_der_control
-                dderc.mRID = GlobalmRIDs.new_mrid()
+                dderc.mRID = get_global_mrids().new_mrid()
                 dderc.href = derp.DefaultDERControlLink.href
                 ListAdapter.set_single(uri=derp.DefaultDERControlLink.href, obj=dderc)
             # Initialize sub-lists
@@ -508,7 +742,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 default_der_control = program_cfg.pop("DefaultDERControl", None)
                 program = m.DERProgram(**program_cfg)
                 if not program.mRID:
-                    program.mRID = GlobalmRIDs.new_mrid()
+                    program.mRID = get_global_mrids().new_mrid()
                 program = program_hrefs.fill_hrefs(program)
                 result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
                 if not result.success:
@@ -518,7 +752,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     dderc = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
                                                 **default_der_control)
                     if not dderc.mRID:
-                        dderc.mRID = GlobalmRIDs.new_mrid()
+                        dderc.mRID = get_global_mrids().new_mrid()
                     ListAdapter.set_single(uri=program.DefaultDERControlLink.href, obj=dderc)
                 # Initialize lists
                 ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
@@ -536,7 +770,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                                     str(index)]),
                                **curve_cfg)
             if not curve.mRID:
-                curve.mRID = GlobalmRIDs.new_mrid()
+                curve.mRID = get_global_mrids().new_mrid()
             result = ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
             if not result.success:
                 raise Exception(f"Failed to add curve: {result.error}")
@@ -568,7 +802,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                          enabled=True,
                                          changedTime=TimeAdapter.current_tick)
                 end_device = add_enddevice(end_device)
-                GlobalmRIDs.add_item_with_mrid(cfg_device.id, end_device)
+                get_global_mrids().add_item_with_mrid(cfg_device.id, end_device)
                 # Add registration
                 reg = m.Registration(href=end_device.RegistrationLink.href,
                                      pIN=cfg_device.pin,

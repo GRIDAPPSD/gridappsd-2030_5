@@ -257,7 +257,11 @@ class ServerConfiguration:
     # DefaultDERControl: Optional[DefaultDERControl] = None
     # DERControlList: Optional[DERControl] = field(default=list)
 
-    # ZODB configuration
+    # Database backend configuration
+    database_backend: str = "zodb"  # Options: "zodb" or "sqlite"
+    database_path: Path | None = None  # Optional custom path for database file
+    
+    # ZODB configuration (used when database_backend = "zodb")
     zodb_path: Path | None = None
     zodb_pool_size: int = 7
     zodb_cache_size: int = 10000
