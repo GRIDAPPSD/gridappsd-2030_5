@@ -9,7 +9,7 @@ import typing
 from typing import get_type_hints
 
 import re
-from threading import Timer, Lock
+from threading import Timer, Lock, RLock
 
 _log = logging.getLogger(__name__)
 ENABLED = True
@@ -69,7 +69,7 @@ if ENABLED:
         _power_electronic_connections: list[cim.PowerElectronicsConnection] | None = None
         _timer: PublishTimer | None = None
         __field_bus_connection__: FieldMessageBus | None = None
-        _lock: Lock = field(default=Lock(), init=False)
+        _lock: RLock = field(default=RLock(), init=False)
 
 
         def start_publishing(self):
@@ -313,72 +313,141 @@ if ENABLED:
             return self._devices
 
         def get_message_for_bus(self) -> dict:
-            import random
             import ieee_2030_5.models.output as mo
             msg = {}
             _log.debug(f"=== GET_MESSAGE_FOR_BUS ENTRY ===")
 
             def detect(v):
                 if v:
-                    result = v.endswith("ders")
-                    #_log.debug(f"detect() called with '{v}', result: {result}")
-                    return result
-                _log.debug(f"detect() called with None/empty value")
+                    return v.endswith("ders")
                 return False
 
-            with self._lock:
+            try:
+                # Database reads are already thread-safe - no adapter lock needed
+                _log.debug(f"About to call filter_single_dict...")
+                
+                # Debug: Get ALL URIs first to see what's in the database
                 try:
-                    _log.debug(f"About to call filter_single_dict...")
-                    der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
-                    _log.debug(f"filter_single_dict returned {len(der_status_uris)} URIs: {der_status_uris}")
+                    all_uris = adpt.ListAdapter.get_all_keys()
+                    _log.debug(f"Database contains {len(all_uris)} total URIs")
+                    if len(all_uris) > 0:
+                        _log.debug(f"Sample URIs: {all_uris[:5]}")
+                        ders_uris = [uri for uri in all_uris if "ders" in uri]
+                        _log.debug(f"URIs containing 'ders': {ders_uris}")
+                        der_uris = [uri for uri in all_uris if "/der" in uri]
+                        _log.debug(f"URIs containing '/der': {der_uris[:10]}")
+                except Exception as debug_e:
+                    _log.warning(f"Debug URI listing failed: {debug_e}")
+                
+                der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
+                _log.debug(f"filter_single_dict returned {len(der_status_uris)} URIs: {der_status_uris}")
 
-                    for uri in der_status_uris:
-                        _log.debug(f"Testing uri: {uri}")
+                # Take a snapshot of inverters to avoid holding lock during database reads
+                current_inverters = self._inverters[:] if self._inverters else []
+                _log.debug(f"Using {len(current_inverters)} inverters for LFDI mapping")
+                
+                for uri in der_status_uris:
+                    _log.debug(f"Testing uri: {uri}")
 
-                        try:
-                            _log.debug(f"Getting metadata for URI: {uri}")
-                            meta_data = adpt.ListAdapter.get_single_meta_data(uri)
-                            _log.debug(f"Metadata: {meta_data}")
+                    try:
+                        _log.debug(f"Getting metadata for URI: {uri}")
+                        meta_data = adpt.ListAdapter.get_single_meta_data(uri)
+                        _log.debug(f"Metadata: {meta_data}")
 
-                            _log.debug(f"Getting status from URI: {meta_data['uri']}")
-                            status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
-                            _log.debug(f"Retrieved status: {status}")
-                            inverter: HouseLookup | None = None
+                        _log.debug(f"Getting status from URI: {meta_data['uri']}")
+                        status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
+                        _log.debug(f"Retrieved status: {status}")
+                        inverter: HouseLookup | None = None
 
-                            _log.debug(f"Status is: {status}")
-                            _log.debug(f"Meta_data LFDI: {meta_data.get('lfdi')}")
-                            _log.debug(f"Inverters count: {len(self._inverters) if self._inverters else 0}")
-                            if status and meta_data.get('lfdi') and self._inverters:
-                                _log.debug(f"Status found: {status}")
-                                _log.debug(f"Looking for: {meta_data['lfdi']}")
+                        _log.debug(f"Status is: {status}")
+                        _log.debug(f"Meta_data LFDI: {meta_data.get('lfdi')}")
+                        
+                        if status and meta_data.get('lfdi') and current_inverters:
+                            _log.debug(f"Status found: {status}")
+                            _log.debug(f"Looking for: {meta_data['lfdi']}")
 
-                                for x in self._inverters:
-                                    if x.lfdi == meta_data['lfdi']:
-                                        inverter = x
-                                        _log.debug(f"Found inverter: {inverter}")
-                                        break
+                            for x in current_inverters:
+                                if x.lfdi == meta_data['lfdi']:
+                                    inverter = x
+                                    _log.debug(f"Found inverter: {inverter}")
+                                    break
 
-                                if inverter:
-                                    # Convert to cim object measurement as analog value.
-                                    analog_value = mo.AnalogValue(mRID=inverter.mRID, name=inverter.name)
+                            if inverter:
+                                # Convert to cim object measurement as analog value.
+                                analog_value = mo.AnalogValue(mRID=inverter.mRID, name=inverter.name)
 
-                                    if status.readingTime is not None:
-                                        analog_value.timeStamp = status.readingTime
+                                if status.readingTime is not None:
+                                    analog_value.timeStamp = status.readingTime
 
-                                    if status.stateOfChargeStatus is not None:
-                                        if status.stateOfChargeStatus.value is not None:
-                                            analog_value.value = status.stateOfChargeStatus.value
+                                if status.stateOfChargeStatus is not None:
+                                    if status.stateOfChargeStatus.value is not None:
+                                        analog_value.value = status.stateOfChargeStatus.value
 
-                                    msg[inverter.mRID] = asdict(analog_value)
-                        except Exception as e:
-                            _log.warning(f"Error processing URI {uri}: {e}")
-                            continue
+                                msg[inverter.mRID] = asdict(analog_value)
+                    except Exception as e:
+                        _log.warning(f"Error processing URI {uri}: {e}")
+                        continue
 
-                except Exception as e:
-                    _log.error(f"Error in get_message_for_bus: {e}")
+            except Exception as e:
+                _log.error(f"Error in get_message_for_bus: {e}")
 
             _log.debug(f"=== GET_MESSAGE_FOR_BUS EXIT === Final message: {msg}")
             return msg
+        def _copy_certificates_for_energy_consumers(self):
+            """
+            Copy certificates from conducting equipment to their related energy consumers.
+            This ensures LFDI matching works for both main house mRIDs and energy consumer mRIDs.
+            """
+            _log.info("Copying certificates for energy consumers...")
+            
+            # Get the CIM dictionary data
+            if self._model_dict_file is None:
+                if self._model_id is None:
+                    self._model_id = self.get_model_id_from_name()
+                response = self.gapps.get_response(topic='goss.gridappsd.process.request.config',
+                                                   message={"configurationType": "CIM Dictionary",
+                                                            "parameters": {"model_id": f"{self._model_id}"}})
+                feeder = response['data']['feeders'][0]
+            else:
+                with open(self.model_dict_file, 'r') as f:
+                    feeder = json.load(f)['feeders'][0]
+            
+            # Find all energy consumers with ConductingEquipment_mRID
+            conducting_equipment_map = {}
+            for measurement in feeder.get('measurements', []):
+                if ('EnergyConsumer_' in measurement.get('name', '') and 
+                    'ConductingEquipment_mRID' in measurement):
+                    
+                    conducting_eq_mrid = measurement['ConductingEquipment_mRID']
+                    energy_consumer_mrid = measurement['mRID']
+                    
+                    if conducting_eq_mrid not in conducting_equipment_map:
+                        conducting_equipment_map[conducting_eq_mrid] = []
+                    conducting_equipment_map[conducting_eq_mrid].append(energy_consumer_mrid)
+            
+            # Copy certificates from conducting equipment to energy consumers
+            cert_copies_count = 0
+            for conducting_mrid, consumer_mrids in conducting_equipment_map.items():
+                # Check if conducting equipment certificate files exist (using direct path construction)
+                cert_file = self.tls._certs_dir / f"{conducting_mrid}.crt"
+                combined_file = self.tls._combined_dir / f"{conducting_mrid}-combined.pem"
+                
+                if cert_file.exists() or combined_file.exists():
+                    _log.debug(f"Copying certificate from {conducting_mrid} to {len(consumer_mrids)} energy consumers")
+                    
+                    for consumer_mrid in consumer_mrids:
+                        try:
+                            # Copy the certificate files
+                            self.tls.copy_certificate(conducting_mrid, consumer_mrid)
+                            cert_copies_count += 1
+                            _log.debug(f"  Copied to {consumer_mrid}")
+                        except Exception as e:
+                            _log.warning(f"Failed to copy certificate from {conducting_mrid} to {consumer_mrid}: {e}")
+                else:
+                    _log.debug(f"No certificate found for conducting equipment {conducting_mrid}")
+            
+            _log.info(f"Completed certificate copying: {cert_copies_count} certificates copied")
+
         def create_2030_5_device_certificates_and_configurations(self) -> list[DeviceConfiguration]:
 
             self._devices = []
@@ -387,9 +456,16 @@ if ENABLED:
                     self.tls.create_cert(house.mRID)
                     if house.lfdi is None:
                         house.lfdi = self.tls.lfdi(house.mRID)
+                
+                # Copy certificates to energy consumers after creating main certificates
+                self._copy_certificates_for_energy_consumers()
             else:
                 for inv in self.get_power_electronic_connections():
                     self.tls.create_cert(inv.mRID)
+                
+                # Copy certificates to energy consumers after creating main certificates
+                self._copy_certificates_for_energy_consumers()
+            
             self._build_device_configurations()
             return self._devices
 
@@ -411,6 +487,23 @@ if ENABLED:
             # output_topic = topics.field_output_topic(message_bus_id=field_bus)
 
             message = self.get_message_for_bus()
+
+            # Write detailed output to file for debugging
+            from pathlib import Path
+            import datetime
+            debug_file = Path("gridappsd_adapter_output.log")
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                with open(debug_file, "a") as f:
+                    f.write(f"\n{'='*80}\n")
+                    f.write(f"TIMESTAMP: {timestamp}\n")
+                    f.write(f"TOPIC: {output_topic}\n")
+                    f.write(f"MESSAGE: {pformat(message, 2)}\n")
+                    f.write(f"MESSAGE SIZE: {len(str(message))} chars\n")
+                    f.write(f"MESSAGE EMPTY: {message == {}}\n")
+                    f.write(f"{'='*80}\n")
+            except Exception as e:
+                _log.warning(f"Failed to write debug file: {e}")
 
             _log.debug(f"Output: {output_topic}\n{pformat(message, 2)}")
             mb.send(topic=output_topic, message=message)

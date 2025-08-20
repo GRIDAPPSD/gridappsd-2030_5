@@ -45,6 +45,9 @@ class DcapRequest(RequestOp):
             dcap_href = f"{hrefs.DEFAULT_DCAP_ROOT}{hrefs.SEP}{device_index}"
             _log.debug(f"Device capability href: {dcap_href}")
 
+            # Ensure specialized adapters are initialized
+            adpt.ensure_specialized_adapters_initialized()
+            
             # Get the DeviceCapability
             cap = adpt.DeviceCapabilityAdapter.get_single(dcap_href)
             if not cap:
