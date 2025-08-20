@@ -29,7 +29,8 @@ class DERRequests(RequestOp):
     def put(self) -> Response:
         """Allows putting of 2030.5 DER data to the server.
         """
-        _log.debug(f"DERRequests PUT: {request.path} - LFDI: {self.lfdi}")
+        _log.info(f"=== DERRequests PUT ENTRY === Path: {request.path} - LFDI: {self.lfdi}")
+        _log.info(f"Request method: {request.method}, Content-Type: {request.content_type}")
 
         try:
             if not request.path.startswith(hrefs.DEFAULT_DER_ROOT):
@@ -40,9 +41,11 @@ class DERRequests(RequestOp):
                 _log.warning("PUT request missing data")
                 raise BadRequest("Request data is required")
 
-            _log.debug(f"PUT data length: {len(request.data)}")
+            _log.info(f"PUT data length: {len(request.data)}")
+            _log.info(f"PUT data content: {request.data[:200]}...")  # First 200 chars
 
             parser = hrefs.HrefParser(request.path)
+            _log.info(f"Parsed href parts: {[parser.at(i) for i in range(parser.count())]}")
 
             clstype = {
                 hrefs.DER_SETTINGS: m.DERSettings,
@@ -60,14 +63,17 @@ class DERRequests(RequestOp):
             # if request.path.endswith("ders") or request.path.endswith("derg"):
             #     print(f"----------------------DER PUT {request.path} {data}")
 
-            _log.info(f"DER PUT {request.path} {asdict(data)}")
-            result = adpt.ListAdapter.set_single(uri=f"{request.path}", obj=data)
+            _log.info(f"=== CALLING STORAGE === DER PUT {request.path} {asdict(data)}")
+            result = adpt.ListAdapter.set_single(uri=f"{request.path}", obj=data, lfdi=self.lfdi)
+            _log.info(f"Storage result - Success: {result.success}, Error: {result.error}")
+            rep =  adpt.ListAdapter.get_single(uri=f"{request.path}")
+            print(f"REP-----------------------: {rep}")
             if not result.success:
                 _log.error(f"Failed to store DER object: {result.error}")
                 raise werkzeug.exceptions.InternalServerError(f"Failed to store DER object: {result.error}")
 
             response = self.build_response_from_dataclass(data)
-            _log.info(f"DERRequests PUT {request.path} - Status: {response.status_code}")
+            _log.info(f"=== DERRequests PUT COMPLETE === {request.path} - Status: {response.status_code}")
             return response
 
         except werkzeug.exceptions.HTTPException:

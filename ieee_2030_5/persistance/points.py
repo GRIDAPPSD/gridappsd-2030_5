@@ -150,60 +150,34 @@ class ZODBPointStore:
 
     def get_keys_matching(self, pattern: str) -> List[str]:
         """
-        Get all keys that match a specified pattern.
+        Get all keys that match a pattern.
 
         Args:
-            pattern: String pattern to match keys against. Supports:
-                    - Exact match: "key"
-                    - Prefix match: "prefix*"
-                    - Suffix match: "*suffix"
-                    - Contains match: "*part*"
-                    - Regular expression: "re:pattern"
+            pattern: Pattern to match (supports '*' as wildcard)
 
         Returns:
             List of matching keys
         """
         try:
-            # Get all keys first
-            all_keys = self.get_hrefs()
-            matching_keys = []
-
-            # Handle different pattern types
-            if pattern.startswith('re:'):
-                # Regular expression pattern
-                regex = pattern[3:]
-                with self._lock:
-                    if regex not in self._pattern_cache:
-                        self._pattern_cache[regex] = re.compile(regex)
-                    compiled_re = self._pattern_cache[regex]
-
-                matching_keys = [key for key in all_keys if compiled_re.search(key)]
-
-            elif pattern.startswith('*') and pattern.endswith('*'):
-                # Contains pattern
-                substr = pattern[1:-1]
-                matching_keys = [key for key in all_keys if substr in key]
-
-            elif pattern.startswith('*'):
-                # Suffix pattern
-                suffix = pattern[1:]
-                matching_keys = [key for key in all_keys if key.endswith(suffix)]
-
-            elif pattern.endswith('*'):
-                # Prefix pattern
-                prefix = pattern[:-1]
-                matching_keys = [key for key in all_keys if key.startswith(prefix)]
-
-            else:
-                # Exact match
-                if pattern in all_keys:
-                    matching_keys = [pattern]
-
-            _log.debug(f"Found {len(matching_keys)} keys matching pattern '{pattern}'")
-            return matching_keys
-
+            with self._get_connection() as conn:
+                all_keys = list(conn.root.points.keys())
+                
+                # Normalize the pattern for matching against stored keys
+                normalized_pattern = pattern.replace('/', '^^^^')
+                
+                # Simple pattern matching for "prefix*" patterns
+                if normalized_pattern.endswith('*'):
+                    prefix = normalized_pattern[:-1]
+                    matching_keys = [key for key in all_keys if key.startswith(prefix)]
+                else:
+                    matching_keys = [key for key in all_keys if key == normalized_pattern]
+                
+                # Convert back from normalized format
+                result_keys = [key.replace('^^^^', '/') for key in matching_keys]
+                _log.debug(f"Pattern '{pattern}' matched {len(result_keys)} keys")
+                return result_keys
         except Exception as e:
-            _log.error(f"Failed to get keys matching pattern '{pattern}': {e}")
+            _log.error(f"Failed to get keys matching '{pattern}': {e}")
             return []
 
     def clear_all(self) -> None:

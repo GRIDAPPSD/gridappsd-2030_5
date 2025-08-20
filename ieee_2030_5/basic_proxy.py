@@ -724,13 +724,13 @@ class RequestForwarder(BaseHTTPRequestHandler):
             try:
                 _log.debug(f"Connection attempt {attempt+1}/{max_retries} to {host}:{port} for client {client_info}")
 
-                # Create connection with shorter timeouts for better concurrency
+                # Create connection with reasonable timeouts
                 conn = HTTPSConnectionWithTimeout(
                     host=host,
                     port=port,
                     context=ccp.context,
-                    timeout_connect=5,   # Shorter connect timeout
-                    timeout_read=15      # Shorter read timeout
+                    timeout_connect=30,   # Reasonable connect timeout
+                    timeout_read=60       # Reasonable read timeout
                 )
 
                 _log.debug(f"Establishing connection for client {client_info}...")
@@ -1674,5 +1674,4 @@ def _main():
         return 1
 
 if __name__ == '__main__':
-    _main()
     _main()

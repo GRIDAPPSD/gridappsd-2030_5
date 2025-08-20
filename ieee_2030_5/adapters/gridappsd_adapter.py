@@ -11,7 +11,7 @@ from typing import get_type_hints
 import re
 from threading import Timer, Lock
 
-_log = logging.getLogger("ieee_2030_5.gridappsd.adapter")
+_log = logging.getLogger(__name__)
 ENABLED = True
 try:
     from attrs import define, field
@@ -316,24 +316,38 @@ if ENABLED:
             import random
             import ieee_2030_5.models.output as mo
             msg = {}
+            _log.debug(f"=== GET_MESSAGE_FOR_BUS ENTRY ===")
 
             def detect(v):
                 if v:
-                    return v.endswith("ders")
+                    result = v.endswith("ders")
+                    #_log.debug(f"detect() called with '{v}', result: {result}")
+                    return result
+                _log.debug(f"detect() called with None/empty value")
+                return False
 
             with self._lock:
                 try:
+                    _log.debug(f"About to call filter_single_dict...")
                     der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
+                    _log.debug(f"filter_single_dict returned {len(der_status_uris)} URIs: {der_status_uris}")
 
                     for uri in der_status_uris:
                         _log.debug(f"Testing uri: {uri}")
 
                         try:
+                            _log.debug(f"Getting metadata for URI: {uri}")
                             meta_data = adpt.ListAdapter.get_single_meta_data(uri)
+                            _log.debug(f"Metadata: {meta_data}")
+
+                            _log.debug(f"Getting status from URI: {meta_data['uri']}")
                             status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
+                            _log.debug(f"Retrieved status: {status}")
                             inverter: HouseLookup | None = None
 
                             _log.debug(f"Status is: {status}")
+                            _log.debug(f"Meta_data LFDI: {meta_data.get('lfdi')}")
+                            _log.debug(f"Inverters count: {len(self._inverters) if self._inverters else 0}")
                             if status and meta_data.get('lfdi') and self._inverters:
                                 _log.debug(f"Status found: {status}")
                                 _log.debug(f"Looking for: {meta_data['lfdi']}")
@@ -363,6 +377,7 @@ if ENABLED:
                 except Exception as e:
                     _log.error(f"Error in get_message_for_bus: {e}")
 
+            _log.debug(f"=== GET_MESSAGE_FOR_BUS EXIT === Final message: {msg}")
             return msg
         def create_2030_5_device_certificates_and_configurations(self) -> list[DeviceConfiguration]:
 

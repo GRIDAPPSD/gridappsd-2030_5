@@ -221,6 +221,7 @@ class ServerConfiguration:
 
     generate_admin_cert: bool = False
     lfdi_client: str | None = None
+    debug_client_traffic: bool = False  # Enable per-client request/response logging to files
 
     fsas: List[FSAConfiguration] = field(default_factory=list)
     programs: List[ProgramConfiguration] = field(default_factory=list)
