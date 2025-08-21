@@ -196,7 +196,7 @@ def get_default_logger_config(log_level: Union[str, int] = 'INFO', log_file: str
                 'class': 'logging.FileHandler',
                 'formatter': 'single-line',
                 'filename': log_file,
-                'mode': 'a',
+                'mode': 'w',  # Use 'w' mode to recreate the log file each time
             }
         },
         "loggers": {

@@ -151,10 +151,17 @@ if ENABLED:
                     _log.error(f"INVALID object_id.  The 'object_id' field must be set in order to use this function.")
                     continue
 
-                obj = adpt.GlobalmRIDs.get_item(item[object_key])
-
+                object_id_value = item[object_key]
+                obj = adpt.get_global_mrids().get_item(object_id_value)
+                
+                # Note: The EndDevice should now be indexed by certificate CN during device creation
+                
+                if obj is None:
+                    _log.error(f"Couldn't find any object with {object_key}='{object_id_value}' in GlobalmRIDs registry")
+                    continue
+                    
                 if not isinstance(obj, m.EndDevice):
-                    _log.error(f"Couldn't find end device with object_id {object_key} returned {type(obj)} instead.")
+                    _log.error(f"Object with {object_key}='{object_id_value}' is not an EndDevice, got {type(obj)} instead.")
                     continue
 
                 if isinstance(obj, m.EndDevice):
@@ -325,7 +332,7 @@ if ENABLED:
             try:
                 # Database reads are already thread-safe - no adapter lock needed
                 _log.debug(f"About to call filter_single_dict...")
-                
+
                 # Debug: Get ALL URIs first to see what's in the database
                 try:
                     all_uris = adpt.ListAdapter.get_all_keys()
@@ -338,14 +345,14 @@ if ENABLED:
                         _log.debug(f"URIs containing '/der': {der_uris[:10]}")
                 except Exception as debug_e:
                     _log.warning(f"Debug URI listing failed: {debug_e}")
-                
+
                 der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
                 _log.debug(f"filter_single_dict returned {len(der_status_uris)} URIs: {der_status_uris}")
 
                 # Take a snapshot of inverters to avoid holding lock during database reads
                 current_inverters = self._inverters[:] if self._inverters else []
                 _log.debug(f"Using {len(current_inverters)} inverters for LFDI mapping")
-                
+
                 for uri in der_status_uris:
                     _log.debug(f"Testing uri: {uri}")
 
@@ -361,7 +368,7 @@ if ENABLED:
 
                         _log.debug(f"Status is: {status}")
                         _log.debug(f"Meta_data LFDI: {meta_data.get('lfdi')}")
-                        
+
                         if status and meta_data.get('lfdi') and current_inverters:
                             _log.debug(f"Status found: {status}")
                             _log.debug(f"Looking for: {meta_data['lfdi']}")
@@ -399,7 +406,7 @@ if ENABLED:
             This ensures LFDI matching works for both main house mRIDs and energy consumer mRIDs.
             """
             _log.info("Copying certificates for energy consumers...")
-            
+
             # Get the CIM dictionary data
             if self._model_dict_file is None:
                 if self._model_id is None:
@@ -411,30 +418,30 @@ if ENABLED:
             else:
                 with open(self.model_dict_file, 'r') as f:
                     feeder = json.load(f)['feeders'][0]
-            
+
             # Find all energy consumers with ConductingEquipment_mRID
             conducting_equipment_map = {}
             for measurement in feeder.get('measurements', []):
-                if ('EnergyConsumer_' in measurement.get('name', '') and 
+                if ('EnergyConsumer_' in measurement.get('name', '') and
                     'ConductingEquipment_mRID' in measurement):
-                    
+
                     conducting_eq_mrid = measurement['ConductingEquipment_mRID']
                     energy_consumer_mrid = measurement['mRID']
-                    
+
                     if conducting_eq_mrid not in conducting_equipment_map:
                         conducting_equipment_map[conducting_eq_mrid] = []
                     conducting_equipment_map[conducting_eq_mrid].append(energy_consumer_mrid)
-            
+
             # Copy certificates from conducting equipment to energy consumers
             cert_copies_count = 0
             for conducting_mrid, consumer_mrids in conducting_equipment_map.items():
                 # Check if conducting equipment certificate files exist (using direct path construction)
                 cert_file = self.tls._certs_dir / f"{conducting_mrid}.crt"
                 combined_file = self.tls._combined_dir / f"{conducting_mrid}-combined.pem"
-                
+
                 if cert_file.exists() or combined_file.exists():
                     _log.debug(f"Copying certificate from {conducting_mrid} to {len(consumer_mrids)} energy consumers")
-                    
+
                     for consumer_mrid in consumer_mrids:
                         try:
                             # Copy the certificate files
@@ -445,7 +452,7 @@ if ENABLED:
                             _log.warning(f"Failed to copy certificate from {conducting_mrid} to {consumer_mrid}: {e}")
                 else:
                     _log.debug(f"No certificate found for conducting equipment {conducting_mrid}")
-            
+
             _log.info(f"Completed certificate copying: {cert_copies_count} certificates copied")
 
         def create_2030_5_device_certificates_and_configurations(self) -> list[DeviceConfiguration]:
@@ -456,16 +463,16 @@ if ENABLED:
                     self.tls.create_cert(house.mRID)
                     if house.lfdi is None:
                         house.lfdi = self.tls.lfdi(house.mRID)
-                
+
                 # Copy certificates to energy consumers after creating main certificates
                 self._copy_certificates_for_energy_consumers()
             else:
                 for inv in self.get_power_electronic_connections():
                     self.tls.create_cert(inv.mRID)
-                
+
                 # Copy certificates to energy consumers after creating main certificates
                 self._copy_certificates_for_energy_consumers()
-            
+
             self._build_device_configurations()
             return self._devices
 

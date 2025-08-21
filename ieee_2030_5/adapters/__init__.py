@@ -4,8 +4,9 @@ Thread-safe adapters for IEEE 2030.5 server.
 """
 import threading
 import logging
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 import OpenSSL
 from flask import Response, request, g
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
@@ -17,6 +18,8 @@ from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lf
 from blinker import Signal
 from .base import (ThreadSafeListAdapter, ThreadSafeEndDeviceAdapter, initialize_adapters,
                    get_adapter_stats, AdapterResult, ensure_adapters_initialized)
+
+
 # Import the global instances
 # Dynamic adapter access functions to get updated references after initialization
 def get_list_adapter():
@@ -24,14 +27,17 @@ def get_list_adapter():
     from .base import ListAdapter
     return ListAdapter
 
+
 def get_end_device_adapter():
     """Get the current EndDeviceAdapter instance after initialization."""
     from .base import EndDeviceAdapter
     return EndDeviceAdapter
 
+
 # For backward compatibility, create module-level references that will be updated
 ListAdapter = None
 EndDeviceAdapter = None
+
 
 def _update_global_adapters():
     """Update the global adapter references after initialization."""
@@ -40,11 +46,189 @@ def _update_global_adapters():
     ListAdapter = BaseListAdapter
     EndDeviceAdapter = BaseEndDeviceAdapter
 
+
 _log = logging.getLogger(__name__)
+
+# Thread-safe locks for HREF generation per client LFDI to prevent race conditions
+_href_generation_locks = {}
+_href_lock_manager = threading.RLock()
+
+# Pre-loaded EndDevice mapping cache to eliminate lookup race conditions
+_enddevice_cache = {}
+_enddevice_cache_lock = threading.RLock()
+_enddevice_cache_initialized = False
+
+# MUP metadata storage for tracking which client created each MUP
+# Key: MUP href, Value: dict with metadata including createdByLFDI
+_mup_metadata = {}
+_mup_metadata_lock = threading.RLock()
+
+
+def _normalize_lfdi_for_cache(lfdi):
+    """Normalize LFDI to consistent format for cache key."""
+    if isinstance(lfdi, bytes):
+        return lfdi.hex().lower()
+    else:
+        # Remove any non-hex characters and convert to lowercase
+        return str(lfdi).lower().replace('\\x', '').replace(' ', '').replace('-', '')
+
+
+def _initialize_enddevice_cache():
+    """Pre-load all EndDevices into a thread-safe cache for fast lookups."""
+    global _enddevice_cache_initialized
+
+    with _enddevice_cache_lock:
+        if _enddevice_cache_initialized:
+            return    # Already initialized
+
+        try:
+            _log.info("Initializing EndDevice cache for fast LFDI lookups...")
+
+            # Get all EndDevices from the system
+            EndDeviceAdapter = get_end_device_adapter()
+            if EndDeviceAdapter is None:
+                _log.warning("EndDeviceAdapter not available, skipping cache initialization")
+                return
+
+            all_devices_list = EndDeviceAdapter.fetch_all()
+
+            # Clear and rebuild cache
+            _enddevice_cache.clear()
+
+            # Extract the actual devices from the EndDeviceList
+            all_devices = all_devices_list.EndDevice if hasattr(all_devices_list,
+                                                                'EndDevice') else []
+
+            for device in all_devices:
+                if hasattr(device, 'lFDI') and device.lFDI:
+                    # Normalize LFDI for consistent lookups
+                    normalized_lfdi = _normalize_lfdi_for_cache(device.lFDI)
+
+                    # Extract client_index from device href
+                    client_index = None
+                    if device.href:
+                        href_parts = device.href.strip('/').split(hrefs.SEP)
+                        if len(href_parts) >= 2:
+                            client_index = href_parts[-1]
+
+                    # Cache the device with normalized LFDI as key
+                    _enddevice_cache[normalized_lfdi] = {
+                        'device':
+                        device,
+                        'client_index':
+                        client_index,
+                        'lfdi_bytes':
+                        device.lFDI
+                        if isinstance(device.lFDI, bytes) else bytes.fromhex(normalized_lfdi),
+                        'lfdi_normalized':
+                        normalized_lfdi
+                    }
+
+                    _log.debug(
+                        f"Cached EndDevice: LFDI={normalized_lfdi}, client_index={client_index}, href={device.href}"
+                    )
+
+            _enddevice_cache_initialized = True
+            _log.info(f"EndDevice cache initialized with {len(_enddevice_cache)} devices")
+
+        except Exception as e:
+            _log.error(f"Failed to initialize EndDevice cache: {e}")
+            # Don't set initialized flag so it can be retried
+
+
+def _get_enddevice_from_cache(lfdi):
+    """Get EndDevice from cache with fallback to dynamic lookup."""
+    normalized_lfdi = _normalize_lfdi_for_cache(lfdi)
+
+    with _enddevice_cache_lock:
+        # Initialize cache if not done yet
+        if not _enddevice_cache_initialized:
+            _initialize_enddevice_cache()
+
+        # Lookup device in cache
+        device_info = _enddevice_cache.get(normalized_lfdi)
+        if device_info:
+            _log.debug(
+                f"Cache HIT: Found EndDevice for LFDI {normalized_lfdi}, client_index={device_info['client_index']}"
+            )
+            return device_info
+        else:
+            _log.warning(f"Cache MISS: No EndDevice found for LFDI {normalized_lfdi}")
+
+            # FALLBACK: Try dynamic lookup and cache the result
+            try:
+                EndDeviceAdapter = get_end_device_adapter()
+                if EndDeviceAdapter is not None:
+                    # Convert LFDI to bytes for the adapter
+                    if isinstance(lfdi, bytes):
+                        lfdi_bytes = lfdi
+                    else:
+                        try:
+                            lfdi_bytes = bytes.fromhex(str(lfdi))
+                        except ValueError:
+                            lfdi_bytes = str(lfdi).encode('utf-8')
+
+                    _log.debug(f"Fallback: Attempting dynamic lookup for LFDI {normalized_lfdi}")
+                    device = EndDeviceAdapter.fetch_by_lfdi(lfdi_bytes)
+
+                    if device:
+                        # Extract client_index from device href
+                        client_index = None
+                        if device.href:
+                            href_parts = device.href.strip('/').split(hrefs.SEP)
+                            if len(href_parts) >= 2:
+                                client_index = href_parts[-1]
+
+                        # Cache the dynamically found device for future use
+                        device_info = {
+                            'device': device,
+                            'client_index': client_index,
+                            'lfdi_bytes': lfdi_bytes,
+                            'lfdi_normalized': normalized_lfdi
+                        }
+                        _enddevice_cache[normalized_lfdi] = device_info
+
+                        _log.info(
+                            f"Fallback SUCCESS: Cached EndDevice for LFDI {normalized_lfdi}, client_index={client_index}"
+                        )
+                        return device_info
+                    else:
+                        _log.error(
+                            f"Fallback FAILED: No EndDevice found for LFDI {normalized_lfdi}")
+                        return None
+                else:
+                    _log.error(f"Fallback FAILED: EndDeviceAdapter not available")
+                    return None
+            except Exception as e:
+                _log.error(
+                    f"Fallback ERROR: Dynamic lookup failed for LFDI {normalized_lfdi}: {e}")
+                return None
+
+
+def _get_href_generation_lock(client_lfdi):
+    """Get or create a thread-safe lock for HREF generation for a specific client LFDI."""
+    # Normalize LFDI to consistent hex string format for lock key
+    if isinstance(client_lfdi, bytes):
+        lock_key = client_lfdi.hex()
+    else:
+        # Remove any non-hex characters and convert to lowercase
+        lock_key = str(client_lfdi).lower().replace('\\x', '').replace(' ', '').replace('-', '')
+
+    _log.debug(
+        f"LOCK GENERATION DEBUG: client_lfdi={client_lfdi}, type={type(client_lfdi)}, normalized_key={lock_key}"
+    )
+
+    with _href_lock_manager:
+        if lock_key not in _href_generation_locks:
+            _href_generation_locks[lock_key] = threading.RLock()
+            _log.debug(f"LOCK GENERATION DEBUG: Created new lock for key: {lock_key}")
+        return _href_generation_locks[lock_key]
+
 
 # Lazy initialization of specialized adapters
 _specialized_adapters = {}
 _specialized_adapters_lock = threading.Lock()
+
 
 def _get_or_create_adapter(name, model_class):
     """Get or create a specialized adapter lazily."""
@@ -52,9 +236,10 @@ def _get_or_create_adapter(name, model_class):
         with _specialized_adapters_lock:
             if name not in _specialized_adapters:
                 from .base import ensure_adapters_initialized
-                ensure_adapters_initialized()  # Ensure base adapters are initialized
+                ensure_adapters_initialized()    # Ensure base adapters are initialized
                 _specialized_adapters[name] = ThreadSafeListAdapter(model_class)
     return _specialized_adapters[name]
+
 
 # Create module-level adapter instances that are initialized lazily
 # These will be actual adapter instances, not functions
@@ -66,19 +251,22 @@ FunctionSetAssignmentsAdapter = None
 DeviceCapabilityAdapter = None
 RegistrationAdapter = None
 
+
 def _initialize_specialized_adapters():
     """Initialize all specialized adapters if not already done."""
     global DERAdapter, DERControlAdapter, DERProgramAdapter, DERCurveAdapter
     global FunctionSetAssignmentsAdapter, DeviceCapabilityAdapter, RegistrationAdapter
-    
+
     if DeviceCapabilityAdapter is None:
         DERAdapter = _get_or_create_adapter('DER', m.DER)
         DERControlAdapter = _get_or_create_adapter('DERControl', m.DERControl)
         DERProgramAdapter = _get_or_create_adapter('DERProgram', m.DERProgram)
         DERCurveAdapter = _get_or_create_adapter('DERCurve', m.DERCurve)
-        FunctionSetAssignmentsAdapter = _get_or_create_adapter('FunctionSetAssignments', m.FunctionSetAssignments)
+        FunctionSetAssignmentsAdapter = _get_or_create_adapter('FunctionSetAssignments',
+                                                               m.FunctionSetAssignments)
         DeviceCapabilityAdapter = _get_or_create_adapter('DeviceCapability', m.DeviceCapability)
         RegistrationAdapter = _get_or_create_adapter('Registration', m.Registration)
+
 
 # Initialize adapters on module load (but after database configuration)
 def ensure_specialized_adapters_initialized():
@@ -119,9 +307,10 @@ class TimeAdapter:
 TimeAdapter = TimeAdapter()
 
 __all__ = [
-    'ListAdapter', 'EndDeviceAdapter', 'DERAdapter', 'DERControlAdapter', 'DERProgramAdapter', 'DERCurveAdapter',
-    'FunctionSetAssignmentsAdapter', 'DeviceCapabilityAdapter', 'RegistrationAdapter',
-    'TimeAdapter', 'initialize_adapters', 'get_adapter_stats', 'AdapterResult'
+    'ListAdapter', 'EndDeviceAdapter', 'DERAdapter', 'DERControlAdapter', 'DERProgramAdapter',
+    'DERCurveAdapter', 'FunctionSetAssignmentsAdapter', 'DeviceCapabilityAdapter',
+    'RegistrationAdapter', 'TimeAdapter', 'initialize_adapters', 'get_adapter_stats',
+    'AdapterResult'
 ]
 
 
@@ -286,69 +475,433 @@ def _admin_controls(self) -> Response:
         return Response("Internal server error", status=500)
 
 
-def create_mirror_usage_point(mup: m.MirrorUsagePoint) -> AdapterResult:
-    """Thread-safe mirror usage point creation."""
+def create_mirror_usage_point(mup: m.MirrorUsagePoint, client_lfdi: str = None) -> AdapterResult:
+    """Thread-safe mirror usage point creation with atomic operations to prevent race conditions."""
     try:
-        # Check if MirrorUsagePoint already exists by mRID
-        if mup.mRID:
-            existing_list = ListAdapter.get_list(hrefs.DEFAULT_MUP_ROOT)
-            for existing_mup in existing_list:
-                if hasattr(existing_mup, 'mRID') and existing_mup.mRID == mup.mRID:
-                    # Update existing
-                    if not mup.href:
-                        mup.href = existing_mup.href
-                    result = ListAdapter.set_single(mup.href, mup)
-                    if result.success:
-                        return AdapterResult(success=True, data=mup, was_update=True, location=mup.href)
-                    else:
-                        return AdapterResult(success=False, error=result.error)
+        # Get existing MUPs - reading doesn't need to be in a transaction
+        try:
+            existing_mups = ListAdapter.get_list(hrefs.DEFAULT_MUP_ROOT)
+        except Exception as e:
+            _log.debug(f"No existing MUPs found or error reading list: {e}")
+            existing_mups = []
 
-        # Create new MirrorUsagePoint
-        result = ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup)
+        # Check if MirrorUsagePoint already exists by mRID AND belongs to the same client
+        # IMPORTANT: MUPs with the same mRID can exist for different clients in IEEE 2030.5
+        _log.debug(
+            f"MUP CREATION DEBUG: Checking for existing MUPs with mRID={getattr(mup, 'mRID', None)} for client {client_lfdi}"
+        )
+        if mup.mRID and client_lfdi:
+            _log.debug(
+                f"MUP CREATION DEBUG: MUP has mRID={mup.mRID}, checking {len(existing_mups)} existing MUPs for client {client_lfdi}"
+            )
+            for i, existing_mup in enumerate(existing_mups):
+                existing_mrid = getattr(existing_mup, 'mRID', None)
+                existing_href = getattr(existing_mup, 'href', None)
+                _log.debug(
+                    f"MUP CREATION DEBUG: Existing MUP {i}: mRID={existing_mrid}, href={existing_href}"
+                )
+
+                # Only consider it a duplicate if BOTH mRID matches AND it belongs to the same client
+                if hasattr(existing_mup, 'mRID') and existing_mup.mRID == mup.mRID:
+                    # Check if this existing MUP belongs to the same client using metadata (thread-safe)
+                    with _mup_metadata_lock:
+                        metadata = _mup_metadata.get(existing_href, {})
+                        existing_client_lfdi = metadata.get('createdByLFDI')
+                    normalized_client_lfdi = _normalize_lfdi_for_cache(client_lfdi)
+
+                    _log.debug(
+                        f"MUP CREATION DEBUG: Checking ownership - existing client: {existing_client_lfdi}, current client: {normalized_client_lfdi}"
+                    )
+
+                    if existing_client_lfdi == normalized_client_lfdi:
+                        _log.debug(
+                            f"MUP CREATION DEBUG: Found existing MUP with matching mRID={mup.mRID} for SAME client {client_lfdi}, returning update result"
+                        )
+                        # Update existing for the same client
+                        if not mup.href:
+                            mup.href = existing_mup.href
+                        result = ListAdapter.set_single(mup.href, mup)
+                        if result.success:
+                            return AdapterResult(success=True,
+                                                 data=mup,
+                                                 was_update=True,
+                                                 location=mup.href)
+                        else:
+                            return AdapterResult(success=False, error=result.error)
+                    else:
+                        _log.debug(
+                            f"MUP CREATION DEBUG: Found existing MUP with same mRID={mup.mRID} but DIFFERENT client ({existing_client_lfdi} vs {normalized_client_lfdi}), continuing with new MUP creation"
+                        )
+        else:
+            _log.debug(
+                f"MUP CREATION DEBUG: MUP has no mRID or no client_lfdi, will create new MUP")
+
+        # Generate device-specific href - deviceLFDI is required for IEEE 2030.5 compliance
+        _log.debug(
+            f"MUP deviceLFDI: {getattr(mup, 'deviceLFDI', 'None')}, existing href: {getattr(mup, 'href', 'None')}"
+        )
+        _log.debug(f"MUP deviceLFDI type: {type(getattr(mup, 'deviceLFDI', None))}")
+        _log.debug(f"MUP deviceLFDI repr: {repr(getattr(mup, 'deviceLFDI', None))}")
+
+        if not mup.deviceLFDI:
+            _log.error("MirrorUsagePoint requires deviceLFDI for device association")
+            # Per IEEE 2030.5 standard, return 400 error for missing required field
+            return AdapterResult(success=False,
+                                 error="deviceLFDI is required for MirrorUsagePoint creation",
+                                 status_code=400)
+
+        if not mup.href:
+            # Ensure deviceLFDI is in bytes format for device lookup
+            if isinstance(mup.deviceLFDI, bytes):
+                lfdi_bytes = mup.deviceLFDI
+            else:
+                # Convert string/hex to bytes
+                lfdi_str = str(mup.deviceLFDI)
+                try:
+                    # Try to decode hex string to bytes
+                    lfdi_bytes = bytes.fromhex(lfdi_str)
+                except ValueError:
+                    # If not hex, encode as UTF-8
+                    lfdi_bytes = lfdi_str.encode('utf-8')
+
+            _log.debug(
+                f"Looking up EndDevice with LFDI bytes: {lfdi_bytes} (hex: {lfdi_bytes.hex()})")
+
+            # IMPORTANT: Use the authenticated client's LFDI for client_index lookup, not the MUP's deviceLFDI
+            # This ensures each authenticated client gets their own MUP namespace
+            lookup_lfdi = client_lfdi if client_lfdi else mup.deviceLFDI
+            _log.debug(
+                f"MUP CREATION DEBUG: Using authenticated client LFDI for client_index lookup: {lookup_lfdi} (original MUP deviceLFDI: {mup.deviceLFDI})"
+            )
+
+            # Find the device by authenticated client LFDI from pre-loaded cache (eliminates race conditions)
+            device_info = _get_enddevice_from_cache(lookup_lfdi)
+            device = device_info['device'] if device_info else None
+            if device and device_info:
+                # Use pre-calculated client_index from cache (eliminates race conditions)
+                client_index = device_info['client_index']
+                _log.debug(
+                    f"MUP CREATION DEBUG: Found client_index {client_index} for authenticated client LFDI {lookup_lfdi}, device href: {device.href if device else 'None'}"
+                )
+                if client_index:
+
+                    # Use global lock ONLY for mirror_usage_point_index calculation to prevent conflicts
+                    # while allowing concurrent MUP operations for different clients
+                    _log.debug(
+                        f"MUP CREATION DEBUG: About to get GLOBAL lock for mirror_usage_point_index calculation"
+                    )
+                    global_index_lock = _get_href_generation_lock(
+                        "__GLOBAL_MIRROR_USAGE_POINT_INDEX__")
+
+                    # Then use per-client lock for the actual MUP creation (using authenticated client LFDI)
+                    _log.debug(
+                        f"MUP CREATION DEBUG: About to get per-client lock for authenticated client LFDI={lookup_lfdi}"
+                    )
+                    client_lock = _get_href_generation_lock(lookup_lfdi)
+
+                    # Retry mechanism to handle potential race conditions
+                    max_retries = 3
+                    retry_count = 0
+
+                    while retry_count < max_retries:
+                        try:
+                            # PHASE 1: Global lock to calculate mirror_usage_point_index safely
+                            mirror_usage_point_index = None
+                            mup_href = None
+
+                            with global_index_lock:
+                                _log.debug(
+                                    f"MUP CREATION DEBUG: Acquired GLOBAL lock for mirror_usage_point_index calculation"
+                                )
+
+                                # Re-read existing MUPs within the global lock to get latest state
+                                try:
+                                    existing_mups_fresh = ListAdapter.get_list(
+                                        hrefs.DEFAULT_MUP_ROOT)
+                                except Exception as e:
+                                    _log.debug(f"No existing MUPs found in fresh read: {e}")
+                                    existing_mups_fresh = []
+
+                                # Count existing MUPs for this client to determine mirror_usage_point_index
+                                client_mup_count = 0
+                                # Normalize the new MUP's deviceLFDI for comparison
+                                if isinstance(mup.deviceLFDI, bytes):
+                                    new_mup_lfdi = mup.deviceLFDI.hex()
+                                else:
+                                    new_mup_lfdi = str(mup.deviceLFDI).lower().replace(
+                                        '\\x', '').replace(' ', '').replace('-', '')
+
+                                for existing_mup in existing_mups_fresh:
+                                    if (hasattr(existing_mup, 'deviceLFDI')
+                                            and existing_mup.deviceLFDI):
+                                        # Normalize the existing MUP's deviceLFDI for comparison
+                                        if isinstance(existing_mup.deviceLFDI, bytes):
+                                            existing_mup_lfdi = existing_mup.deviceLFDI.hex()
+                                        else:
+                                            existing_mup_lfdi = str(
+                                                existing_mup.deviceLFDI).lower().replace(
+                                                    '\\x', '').replace(' ', '').replace('-', '')
+
+                                        if existing_mup_lfdi == new_mup_lfdi:
+                                            client_mup_count += 1
+
+                                mirror_usage_point_index = client_mup_count
+
+                                # Generate href with pattern: /mup_{client_index}_{mirror_usage_point_index}
+                                mup_href = f"/mup{hrefs.SEP}{client_index}{hrefs.SEP}{mirror_usage_point_index}"
+                                _log.debug(
+                                    f"Generated MUP href {mup_href} for client index {client_index}, mirror usage point {mirror_usage_point_index} (global lock, attempt {retry_count + 1})"
+                                )
+
+                            # PHASE 2: Per-client lock for the actual MUP creation, verification, and UPT creation
+                            # Combine MUP and UPT creation in single atomic operation to prevent database lock cascades
+                            with client_lock:
+                                _log.debug(
+                                    f"MUP CREATION DEBUG: Acquired per-client lock for MUP+UPT creation - authenticated client LFDI: {lookup_lfdi}"
+                                )
+
+                                # Set the href that was calculated under global lock
+                                mup.href = mup_href
+
+                                # Start atomic operation for both MUP and UPT creation
+                                with atomic_operation():
+                                    # Perform the database append within the per-client lock to ensure consistency
+                                    _log.debug(f"About to append MUP with href: {mup.href}")
+                                    result = ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup)
+                                    if not result.success:
+                                        raise Exception(f"Database append failed: {result.error}")
+
+                                    # Store metadata about which client created this MUP
+                                    if client_lfdi:
+                                        with _mup_metadata_lock:
+                                            _mup_metadata[mup.href] = {
+                                                'createdByLFDI':
+                                                _normalize_lfdi_for_cache(client_lfdi),
+                                                'createdAt': time.time(),
+                                                'deviceLFDI':
+                                                mup.deviceLFDI    # Keep original deviceLFDI
+                                            }
+                                            _log.debug(
+                                                f"Stored MUP metadata for {mup.href}: createdBy={client_lfdi}"
+                                            )
+
+                                    _log.debug(
+                                        f"Append result - success: {result.success}, location: {result.location}, data.href: {getattr(result.data, 'href', 'None')}"
+                                    )
+
+                                    # WRITE-THEN-READ CONSISTENCY CHECK
+                                    # Verify the MUP can be successfully read by href (not by index)
+                                    # This ensures write-read consistency and prevents 403 errors
+                                    try:
+                                        _log.debug(
+                                            f"Performing verification read for MUP at href {mup.href}"
+                                        )
+
+                                        # Find the MUP by href rather than by index to avoid index confusion
+                                        verification_mups = ListAdapter.get_list(
+                                            hrefs.DEFAULT_MUP_ROOT)
+                                        verified_mup = None
+
+                                        for test_mup in verification_mups:
+                                            if hasattr(test_mup,
+                                                       'href') and test_mup.href == mup.href:
+                                                verified_mup = test_mup
+                                                break
+
+                                        if verified_mup is None:
+                                            raise Exception(
+                                                f"Verification read failed: MUP not found with href {mup.href}"
+                                            )
+
+                                        # Verify the retrieved MUP actually belongs to this client
+                                        if hasattr(verified_mup,
+                                                   'deviceLFDI') and verified_mup.deviceLFDI:
+                                            if isinstance(verified_mup.deviceLFDI, bytes):
+                                                verified_lfdi = verified_mup.deviceLFDI.hex()
+                                            else:
+                                                verified_lfdi = str(
+                                                    verified_mup.deviceLFDI).lower().replace(
+                                                        '\\x', '').replace(' ',
+                                                                           '').replace('-', '')
+
+                                            if verified_lfdi != new_mup_lfdi:
+                                                raise Exception(
+                                                    f"Verification read failed: Retrieved MUP belongs to different client (expected {new_mup_lfdi}, got {verified_lfdi})"
+                                                )
+
+                                        _log.debug(
+                                            f"Verification read successful for MUP {mup.href} - write-read consistency confirmed"
+                                        )
+
+                                    except Exception as verification_error:
+                                        _log.error(
+                                            f"Write-read consistency verification failed for MUP {mup.href}: {verification_error}"
+                                        )
+                                        raise Exception(
+                                            f"MUP write-read consistency check failed: {verification_error}"
+                                        )
+
+                                    # Create corresponding UsagePoint within the same atomic operation
+                                    # This prevents database lock cascades from separate transactions
+                                    try:
+                                        # Get current UPT list size within the atomic operation for consistent index
+                                        current_upt_size = len(
+                                            ListAdapter.get_list(hrefs.DEFAULT_UPT_ROOT))
+
+                                        usage_point = m.UsagePoint(
+                                            mRID=mup.mRID,
+                                            description=mup.description,
+                                            href=f"{hrefs.DEFAULT_UPT_ROOT}_{current_upt_size}")
+
+                                        # Store the usage point within the same atomic operation
+                                        up_result = ListAdapter.append(
+                                            hrefs.DEFAULT_UPT_ROOT, usage_point)
+                                        if not up_result.success:
+                                            _log.warning(
+                                                f"Failed to create corresponding usage point for MirrorUsagePoint {result.location}: {up_result.error}"
+                                            )
+                                            # Continue anyway - the mirror usage point was created successfully
+                                        else:
+                                            _log.debug(
+                                                f"Successfully created corresponding UsagePoint {usage_point.href} for MUP {mup.href}"
+                                            )
+
+                                    except Exception as e:
+                                        _log.warning(
+                                            f"Failed to create corresponding usage point for MirrorUsagePoint {result.location}: {e}"
+                                        )
+                                        # Continue anyway - the mirror usage point was created successfully
+
+                                # Success - break out of retry loop
+                                break
+
+                        except Exception as e:
+                            retry_count += 1
+                            _log.warning(
+                                f"MUP creation attempt {retry_count} failed for client {mup.deviceLFDI}: {e}"
+                            )
+                            if retry_count >= max_retries:
+                                return AdapterResult(
+                                    success=False,
+                                    error=f"Failed to create MUP after {max_retries} attempts: {e}"
+                                )
+
+                            # Brief wait before retry (exponential backoff)
+                            wait_time = 0.01 * (2**retry_count)    # 20ms, 40ms, 80ms
+                            time.sleep(wait_time)
+
+                else:
+                    _log.error(f"Client index not found for device: {device.href}")
+                    # Per IEEE 2030.5 standard, return 400 error for invalid device configuration
+                    return AdapterResult(success=False,
+                                         error=f"Client index not found for device: {device.href}",
+                                         status_code=400)
+        else:
+            _log.error(f"No device found for LFDI: {mup.deviceLFDI}")
+            # Per IEEE 2030.5 standard, return 404 error when device cannot be found
+            return AdapterResult(success=False,
+                                 error=f"Device not found for LFDI: {mup.deviceLFDI}",
+                                 status_code=404)
+
+        # Verify result was set (should have been set in the per-client lock above)
+        if 'result' not in locals():
+            _log.error(
+                f"MUP creation failed - no result set. href: {getattr(mup, 'href', 'None')}")
+            return AdapterResult(success=False, error="Failed to create MUP - internal error")
+
         if not result.success:
             return AdapterResult(success=False, error=result.error)
-        
-        # Create corresponding UsagePoint automatically
-        usage_point = m.UsagePoint(
-            mRID=mup.mRID,
-            description=mup.description,
-            href=f"{hrefs.DEFAULT_UPT_ROOT}_{len(ListAdapter.get_list(hrefs.DEFAULT_UPT_ROOT))}"
-        )
-        
-        # Store the usage point
-        up_result = ListAdapter.append(hrefs.DEFAULT_UPT_ROOT, usage_point)
-        if not up_result.success:
-            _log.warning(f"Failed to create corresponding usage point for MirrorUsagePoint {result.location}: {up_result.error}")
-            # Continue anyway - the mirror usage point was created successfully
-        
-        return AdapterResult(success=True, data=result.data, was_update=False, location=result.location)
-            
+
+        # UsagePoint creation is now handled within the main atomic operation above
+        # This eliminates the duplicate transaction that was causing database lock cascades
+
+        return AdapterResult(success=True,
+                             data=result.data,
+                             was_update=False,
+                             location=mup.href if mup.href else result.location)
+
     except Exception as e:
         _log.error(f"Failed to create mirror usage point: {e}")
         return AdapterResult(success=False, error=str(e))
 
 
-def create_or_update_meter_reading(mup_href: str, mmr_input: m.MirrorMeterReading | m.MirrorReadingSet) -> AdapterResult:
+def create_or_update_meter_reading(mup_href: str,
+                                   mmr_input: m.MirrorMeterReading | m.MirrorReadingSet,
+                                   client_lfdi: str = None) -> AdapterResult:
     """Thread-safe meter reading creation/update."""
     try:
-        # Parse the MUP href to get the usage point index
-        parsed_href = hrefs.ParsedUsagePointHref(mup_href)
-        if not parsed_href.has_usage_point_index():
-            return AdapterResult(success=False, error="Invalid MUP href - no usage point index")
-            
-        # Get the existing MirrorUsagePoint
-        mup = ListAdapter.get(hrefs.DEFAULT_MUP_ROOT, parsed_href.usage_point_index)
+        # Find the MirrorUsagePoint by href directly
+        existing_mups = ListAdapter.get_list(hrefs.DEFAULT_MUP_ROOT)
+        mup = None
+
+        for existing_mup in existing_mups:
+            if existing_mup.href == mup_href:
+                mup = existing_mup
+                break
+
         if mup is None:
-            return AdapterResult(success=False, error=f"MirrorUsagePoint not found at index {parsed_href.usage_point_index}")
-        
+            return AdapterResult(success=False,
+                                 error=f"MirrorUsagePoint not found with href {mup_href}")
+
+        # Find the MUP's position in the list for storage operations
+        mup_list_index = None
+        for i, existing_mup in enumerate(existing_mups):
+            if existing_mup.href == mup_href:
+                mup_list_index = i
+                _log.debug(f"Found MUP at list index {mup_list_index} for href {mup_href}")
+                break
+
+        if mup_list_index is None:
+            return AdapterResult(success=False,
+                                 error=f"Could not determine storage index for MUP {mup_href}")
+
+        # Create a parsed_href-like object for compatibility with existing code
+        class MUPRef:
+
+            def __init__(self, index):
+                self.usage_point_index = index
+
+        parsed_href = MUPRef(mup_list_index)
+
+        # IEEE 2030.5 Rule 5: Only allow the client that created the mirror to update it
+        if client_lfdi and hasattr(mup, 'deviceLFDI') and mup.deviceLFDI:
+            # Handle LFDI comparison - both could be bytes or strings
+            try:
+                if isinstance(mup.deviceLFDI, bytes):
+                    # Try to decode as UTF-8, fallback to hex representation
+                    try:
+                        mup_lfdi = mup.deviceLFDI.decode('utf-8')
+                    except UnicodeDecodeError:
+                        # If it's not valid UTF-8, convert to hex string
+                        mup_lfdi = mup.deviceLFDI.hex()
+                else:
+                    mup_lfdi = str(mup.deviceLFDI)
+
+                # Ensure client LFDI is a string
+                client_lfdi_str = str(client_lfdi)
+
+                _log.debug(
+                    f"Authorization check: MUP LFDI='{mup_lfdi}', Client LFDI='{client_lfdi_str}'")
+
+                if mup_lfdi != client_lfdi_str:
+                    return AdapterResult(
+                        success=False,
+                        error="Only the client that created this mirror may update it",
+                        status_code=403)
+            except Exception as e:
+                _log.error(f"Error in LFDI comparison: {e}")
+                return AdapterResult(success=False,
+                                     error="Authorization check failed",
+                                     status_code=403)
+
         # Set the href for the meter reading if not already set
         if not mmr_input.href:
-            # Generate an href for the meter reading within the MUP
+            # Generate an href for the meter reading within the MUP using SEP separator
             if isinstance(mmr_input, m.MirrorMeterReading):
-                mmr_input.href = f"{mup_href}/mr_{len(mup.MirrorMeterReading)}"
+                mmr_input.href = f"{mup_href}{hrefs.SEP}mr{hrefs.SEP}{len(mup.MirrorMeterReading)}"
             elif isinstance(mmr_input, m.MirrorReadingSet):
-                mmr_input.href = f"{mup_href}/rs_{len(getattr(mup, 'MirrorReadingSet', []))}"
-        
+                mmr_input.href = f"{mup_href}{hrefs.SEP}rs{hrefs.SEP}{len(getattr(mup, 'MirrorReadingSet', []))}"
+
         # Add the reading to the MirrorUsagePoint
         was_update = False
         if isinstance(mmr_input, m.MirrorMeterReading):
@@ -359,19 +912,25 @@ def create_or_update_meter_reading(mup_href: str, mmr_input: m.MirrorMeterReadin
                     existing_idx = i
                     was_update = True
                     break
-            
+
             if was_update:
                 # Update existing reading
                 mup.MirrorMeterReading[existing_idx] = mmr_input
             else:
+                # New reading - validate ReadingType requirement (IEEE 2030.5 Rule 8c)
+                if not hasattr(mmr_input, 'ReadingType') or mmr_input.ReadingType is None:
+                    return AdapterResult(
+                        success=False,
+                        error="ReadingType is required for new MirrorMeterReading",
+                        status_code=400)
                 # Add new reading
                 mup.MirrorMeterReading.append(mmr_input)
-        
+
         elif isinstance(mmr_input, m.MirrorReadingSet):
             # Handle MirrorReadingSet similarly
             if not hasattr(mup, 'MirrorReadingSet'):
                 mup.MirrorReadingSet = []
-            
+
             # Check if it already exists (by mRID)
             existing_idx = None
             for i, existing_mrs in enumerate(mup.MirrorReadingSet):
@@ -379,19 +938,19 @@ def create_or_update_meter_reading(mup_href: str, mmr_input: m.MirrorMeterReadin
                     existing_idx = i
                     was_update = True
                     break
-            
+
             if was_update:
                 # Update existing reading set
                 mup.MirrorReadingSet[existing_idx] = mmr_input
             else:
                 # Add new reading set
                 mup.MirrorReadingSet.append(mmr_input)
-        
+
         # Update the MirrorUsagePoint in storage
         result = ListAdapter.put(hrefs.DEFAULT_MUP_ROOT, parsed_href.usage_point_index, mup)
         if not result.success:
             return AdapterResult(success=False, error=result.error)
-        
+
         # Also create corresponding reading in the related UsagePoint
         try:
             # Get the corresponding UsagePoint (same index)
@@ -401,69 +960,79 @@ def create_or_update_meter_reading(mup_href: str, mmr_input: m.MirrorMeterReadin
                     # Create corresponding MeterReading for the UsagePoint
                     meter_reading = m.MeterReading(
                         mRID=mmr_input.mRID,
-                        href=f"{hrefs.DEFAULT_UPT_ROOT}_{parsed_href.usage_point_index}/mr_{len(getattr(up, 'MeterReading', []))}"
+                        href=
+                        f"{hrefs.DEFAULT_UPT_ROOT}{hrefs.SEP}{parsed_href.usage_point_index}{hrefs.SEP}mr{hrefs.SEP}{len(getattr(up, 'MeterReading', []))}"
                     )
-                    
+
                     if not hasattr(up, 'MeterReading'):
                         up.MeterReading = []
-                    
+
                     # Check if it already exists (by mRID) and update/add
                     existing_idx = None
                     for i, existing_mr in enumerate(up.MeterReading):
                         if existing_mr.mRID == meter_reading.mRID:
                             existing_idx = i
                             break
-                    
+
                     if existing_idx is not None:
                         up.MeterReading[existing_idx] = meter_reading
                     else:
                         up.MeterReading.append(meter_reading)
-                    
+
                     # Update the UsagePoint in storage
-                    up_result = ListAdapter.put(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index, up)
+                    up_result = ListAdapter.put(hrefs.DEFAULT_UPT_ROOT,
+                                                parsed_href.usage_point_index, up)
                     if not up_result.success:
-                        _log.warning(f"Failed to update corresponding usage point reading: {up_result.error}")
+                        _log.warning(
+                            f"Failed to update corresponding usage point reading: {up_result.error}"
+                        )
         except Exception as e:
             _log.warning(f"Failed to sync reading to corresponding usage point: {e}")
-        
-        return AdapterResult(success=True, data=mmr_input, was_update=was_update, location=mmr_input.href)
-            
+
+        return AdapterResult(success=True,
+                             data=mmr_input,
+                             was_update=was_update,
+                             location=mmr_input.href)
+
     except Exception as e:
         _log.error(f"Failed to create/update meter reading: {e}")
         return AdapterResult(success=False, error=str(e))
 
 
-def create_or_update_usage_point_reading(up_href: str, reading_input: m.MeterReading | m.ReadingSet) -> AdapterResult:
+def create_or_update_usage_point_reading(
+        up_href: str, reading_input: m.MeterReading | m.ReadingSet) -> AdapterResult:
     """Thread-safe usage point reading creation/update."""
     try:
         # Parse the UP href to get the usage point index
         parsed_href = hrefs.ParsedUsagePointHref(up_href)
         if not parsed_href.has_usage_point_index():
             return AdapterResult(success=False, error="Invalid UP href - no usage point index")
-            
+
         # Get the existing UsagePoint
         up = ListAdapter.get(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index)
         if up is None:
-            return AdapterResult(success=False, error=f"UsagePoint not found at index {parsed_href.usage_point_index}")
-        
+            return AdapterResult(
+                success=False,
+                error=f"UsagePoint not found at index {parsed_href.usage_point_index}")
+
         # Set the href for the meter reading if not already set
         if not reading_input.href:
-            # Generate an href for the meter reading within the UP
+            # Generate an href for the meter reading within the UP using SEP separator
             if isinstance(reading_input, m.MeterReading):
                 if not hasattr(up, 'MeterReading'):
                     up.MeterReading = []
-                reading_input.href = f"{up_href}/mr_{len(up.MeterReading)}"
+                reading_input.href = f"{up_href}{hrefs.SEP}mr{hrefs.SEP}{len(up.MeterReading)}"
             elif isinstance(reading_input, m.ReadingSet):
                 if not hasattr(up, 'ReadingSet'):
                     up.ReadingSet = []
-                reading_input.href = f"{up_href}/rs_{len(up.ReadingSet)}"
-        
+                reading_input.href = f"{up_href}{hrefs.SEP}rs{hrefs.SEP}{len(up.ReadingSet)}"
+
         # Add the reading to the UsagePoint
         was_update = False
         if isinstance(reading_input, m.MeterReading):
             if not hasattr(up, 'MeterReading'):
                 up.MeterReading = []
-                
+
             # Check if it already exists (by mRID)
             existing_idx = None
             for i, existing_mr in enumerate(up.MeterReading):
@@ -471,18 +1040,18 @@ def create_or_update_usage_point_reading(up_href: str, reading_input: m.MeterRea
                     existing_idx = i
                     was_update = True
                     break
-            
+
             if was_update:
                 # Update existing reading
                 up.MeterReading[existing_idx] = reading_input
             else:
                 # Add new reading
                 up.MeterReading.append(reading_input)
-        
+
         elif isinstance(reading_input, m.ReadingSet):
             if not hasattr(up, 'ReadingSet'):
                 up.ReadingSet = []
-                
+
             # Check if it already exists (by mRID)
             existing_idx = None
             for i, existing_rs in enumerate(up.ReadingSet):
@@ -490,21 +1059,24 @@ def create_or_update_usage_point_reading(up_href: str, reading_input: m.MeterRea
                     existing_idx = i
                     was_update = True
                     break
-            
+
             if was_update:
                 # Update existing reading set
                 up.ReadingSet[existing_idx] = reading_input
             else:
                 # Add new reading set
                 up.ReadingSet.append(reading_input)
-        
+
         # Update the UsagePoint in storage
         result = ListAdapter.put(hrefs.DEFAULT_UPT_ROOT, parsed_href.usage_point_index, up)
         if result.success:
-            return AdapterResult(success=True, data=reading_input, was_update=was_update, location=reading_input.href)
+            return AdapterResult(success=True,
+                                 data=reading_input,
+                                 was_update=was_update,
+                                 location=reading_input.href)
         else:
             return AdapterResult(success=False, error=result.error)
-            
+
     except Exception as e:
         _log.error(f"Failed to create/update usage point reading: {e}")
         return AdapterResult(success=False, error=str(e))
@@ -671,6 +1243,26 @@ class ThreadSafeGlobalMRIDs:
                 _log.error(f"Failed to add item with mRID: {e}")
                 raise
 
+    def get_item(self, mrid: str) -> Any:
+        """Get an item by its mRID."""
+        with self._lock:
+            try:
+                import pickle
+                # Get mRID index
+                index_data = self._db.get_point(self._mrid_index_key)
+                if index_data is None:
+                    return None
+                mrid_index = pickle.loads(index_data)
+                # Get key for this mRID
+                key = mrid_index.get(mrid)
+                if key is None:
+                    return None
+                # Get the actual item using the key
+                return self._db.get_point(key)
+            except Exception as e:
+                _log.error(f"Failed to get item with mRID {mrid}: {e}")
+                return None
+
 
 # Add missing method that might be referenced
 def clear_all_adapters():
@@ -687,6 +1279,7 @@ def clear_all_adapters():
 
 # Global instance - initialized lazily
 GlobalmRIDs = None
+
 
 def get_global_mrids():
     """Get the global MRIDs instance, initializing if necessary."""
@@ -803,6 +1396,25 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                          changedTime=TimeAdapter.current_tick)
                 end_device = add_enddevice(end_device)
                 get_global_mrids().add_item_with_mrid(cfg_device.id, end_device)
+
+                # Also add the EndDevice indexed by certificate CN for GridAPPS-D compatibility
+                # The certificate CN is typically derived from the device ID
+                try:
+                    from flask import g
+                    tls_repo = g.TLS_REPOSITORY
+                    # Get the certificate subject (CN) for this device
+                    cn = tls_repo.get_common_name(cfg_device.id)
+                    if cn and hasattr(cn, 'CN'):
+                        cert_cn = cn.CN    # Extract the CN field
+                        # Also index by certificate CN
+                        get_global_mrids().add_item_with_mrid(cert_cn, end_device)
+                        _log.debug(
+                            f"Added EndDevice mapping: CN '{cert_cn}' -> device_id '{cfg_device.id}'"
+                        )
+                except Exception as e:
+                    _log.warning(
+                        f"Could not add certificate CN mapping for device {cfg_device.id}: {e}")
+                    # Continue without CN mapping - direct device ID lookup will still work
                 # Add registration
                 reg = m.Registration(href=end_device.RegistrationLink.href,
                                      pIN=cfg_device.pin,
@@ -829,4 +1441,42 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         except Exception as e:
             _log.error(f"Failed to initialize device {cfg_device.id}: {e}")
             raise
+
+    # Initialize EndDevice cache for fast lookups (eliminates race conditions)
+    # Must be done AFTER all devices are created
+    _initialize_enddevice_cache()
+
     _log.info("Thread-safe 2030.5 initialization completed")
+
+
+def get_mup_metadata(mup_href: str) -> dict | None:
+    """Get metadata for a MirrorUsagePoint."""
+    with _mup_metadata_lock:
+        return _mup_metadata.get(mup_href, None)
+
+
+def get_mups_for_client(client_lfdi: str) -> List[m.MirrorUsagePoint]:
+    """Get all MirrorUsagePoints created by or belonging to a specific client."""
+    normalized_client_lfdi = _normalize_lfdi_for_cache(client_lfdi)
+    result = []
+
+    try:
+        all_mups = ListAdapter.get_list(hrefs.DEFAULT_MUP_ROOT)
+
+        with _mup_metadata_lock:
+            for mup in all_mups:
+                # Check if this MUP was created by the client
+                metadata = _mup_metadata.get(mup.href)
+                if metadata and metadata.get('createdByLFDI') == normalized_client_lfdi:
+                    result.append(mup)
+                    continue
+
+                # Also check deviceLFDI for backward compatibility
+                if hasattr(mup, 'deviceLFDI') and mup.deviceLFDI:
+                    mup_lfdi = _normalize_lfdi_for_cache(mup.deviceLFDI)
+                    if mup_lfdi == normalized_client_lfdi:
+                        result.append(mup)
+    except KeyError:
+        pass
+
+    return result

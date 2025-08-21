@@ -381,12 +381,22 @@ class URLBuilder:
             ])
 
     @thread_safe_cached
-    def mirror_usage_point_href(self, mirror_usage_point_index: int = NO_INDEX) -> str:
-        """Get a mirror usage point URL."""
-        if mirror_usage_point_index == NO_INDEX:
+    def mirror_usage_point_href(self, mirror_usage_point_index: int = NO_INDEX, device_id: str = None) -> str:
+        """Get a mirror usage point URL.
+        
+        Args:
+            mirror_usage_point_index: The index of the mirror usage point (deprecated, use device_id)
+            device_id: The device ID to generate a hashed index from
+        """
+        if mirror_usage_point_index == NO_INDEX and device_id is None:
             return RootURLs.DEFAULT_MUP_ROOT
         else:
-            return SEP.join([RootURLs.DEFAULT_MUP_ROOT, str(mirror_usage_point_index)])
+            # If device_id is provided, generate hashed index from it
+            if device_id is not None:
+                index = get_device_hashed_index(device_id)
+            else:
+                index = mirror_usage_point_index
+            return SEP.join([RootURLs.DEFAULT_MUP_ROOT, str(index)])
 
     @thread_safe_cached
     def usage_point_href(self,
@@ -875,10 +885,22 @@ class ParsedUsagePointHref:
             return False
 
     @property
-    def usage_point_index(self) -> Optional[int]:
-        """Get the usage point index."""
+    def client_index(self) -> Optional[int]:
+        """Get the client index from format: /mup_{client}_{pointindex}."""
         try:
+            # New format: /mup_{client_index}_{usage_point_index}
+            # _split[0] = '/mup', _split[1] = client_index, _split[2] = usage_point_index
             return int(self._split[1])
+        except (IndexError, ValueError):
+            return None
+
+    @property
+    def usage_point_index(self) -> Optional[int]:
+        """Get the usage point index from format: /mup_{client}_{pointindex}."""
+        try:
+            # New format: /mup_{client_index}_{usage_point_index}
+            # _split[0] = '/mup', _split[1] = client_index, _split[2] = usage_point_index
+            return int(self._split[2])
         except (IndexError, ValueError):
             return None
 
@@ -1210,9 +1232,25 @@ def der_sub_href(edev_index: int, index: int = NO_INDEX, subtype: DERSubType = N
 
 
 @thread_safe_cached
-def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX) -> str:
+def get_device_hashed_index(device_id: str) -> int:
+    """Get the consistent hashed index for a device ID.
+    
+    This function provides the standard hashing mechanism used throughout
+    the IEEE 2030.5 server for converting device IDs to consistent indices.
+    
+    Args:
+        device_id: The device identifier string
+        
+    Returns:
+        int: Hashed index (0-99999)
+    """
+    import hashlib
+    hash_obj = hashlib.sha256(device_id.encode('utf-8'))
+    return int(hash_obj.hexdigest()[:8], 16) % 100000  # Limit to 5 digits
+
+def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX, device_id: str = None) -> str:
     """Get a mirror usage point URL."""
-    return url_builder.mirror_usage_point_href(mirror_usage_point_index)
+    return url_builder.mirror_usage_point_href(mirror_usage_point_index, device_id)
 
 
 @thread_safe_cached

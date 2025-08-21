@@ -309,6 +309,14 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             if expected_fingerprint != provided_fingerprint:
                 _log.warning(f"Fingerprint mismatch: expected {expected_fingerprint}, got {provided_fingerprint}")
 
+    def _normalize_lfdi(self, lfdi_value):
+        """Normalize LFDI to consistent lowercase hex string format"""
+        if isinstance(lfdi_value, bytes):
+            return lfdi_value.hex().lower()
+        else:
+            # Remove any non-hex characters and convert to lowercase
+            return str(lfdi_value).lower().replace('\\x', '').replace(' ', '').replace('-', '')
+
     def _calculate_device_identifiers(self, environ, x509):
         """Calculate LFDI and SFDI from certificate"""
         if IEEE2030_5_RequestHandler.config.lfdi_mode == "lfdi_mode_from_file":
@@ -316,13 +324,15 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             try:
                 pth = IEEE2030_5_RequestHandler.tlsrepo.__get_combined_file__(x509.get_subject().CN)
                 sha256hash = hashlib.sha256(pth.read_text().encode('utf-8')).hexdigest()
-                environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(sha256hash)
+                raw_lfdi = lfdi_from_fingerprint(sha256hash)
             except Exception as e:
                 _log.error(f"Failed to read combined file for {x509.get_subject().CN}: {e}")
                 raise
         else:
-            environ['ieee_2030_5_lfdi'] = lfdi_from_fingerprint(x509.digest("sha256").decode('ascii'))
+            raw_lfdi = lfdi_from_fingerprint(x509.digest("sha256").decode('ascii'))
 
+        # Normalize LFDI to consistent format immediately when calculated
+        environ['ieee_2030_5_lfdi'] = self._normalize_lfdi(raw_lfdi)
         environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
 
         _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
