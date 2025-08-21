@@ -171,6 +171,10 @@ class EDevRequests(RequestOp):
                 _log.debug(f"Getting nested resource for path: {request.path}")
                 if retval := get_href(request.path):
                     pass
+                elif request.path.endswith('_rg'):
+                    # Handle registration requests - these are single Registration objects, not lists
+                    _log.debug(f"Getting Registration object for path: {request.path}")
+                    retval = adpt.ListAdapter.get_single(request.path)
                 else:
                     retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
             elif not edev_href.has_index():

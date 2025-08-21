@@ -337,6 +337,21 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
                 end_device = add_enddevice(end_device, cfg_device.id)
                 adpt.get_global_mrids().add_item_with_mrid(cfg_device.id, end_device)
+                
+                # Also add the EndDevice indexed by certificate CN for GridAPPS-D compatibility
+                try:
+                    from flask import g
+                    tls_repo = g.TLS_REPOSITORY
+                    # Get the certificate subject (CN) for this device
+                    cn = tls_repo.get_common_name(cfg_device.id)
+                    if cn and hasattr(cn, 'CN'):
+                        cert_cn = cn.CN  # Extract the CN field
+                        # Also index by certificate CN
+                        adpt.get_global_mrids().add_item_with_mrid(cert_cn, end_device)
+                        _log.debug(f"Added EndDevice mapping: CN '{cert_cn}' -> device_id '{cfg_device.id}'")
+                except Exception as e:
+                    _log.warning(f"Could not add certificate CN mapping for device {cfg_device.id}: {e}")
+                    # Continue without CN mapping - direct device ID lookup will still work
 
                 # Add registration
                 reg = m.Registration(href=end_device.RegistrationLink.href,

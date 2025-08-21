@@ -56,6 +56,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Callable, Union
 from collections import defaultdict
 import ieee_2030_5.models as m
+import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.persistance.points import get_db, atomic_operation
 _log = logging.getLogger(__name__)
 T = TypeVar('T')
@@ -102,6 +103,7 @@ class AdapterResult:
     error: str | None = None
     was_update: bool = False
     location: str | None = None
+    status_code: int | None = None
 class ConcurrencyMode:
     """Concurrency control modes for adapters.
 
@@ -1508,18 +1510,23 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
                 # Find all single object keys
                 pattern = f"single:*"
-                for key in self._db.get_keys_matching(pattern):
+                all_keys = self._db.get_keys_matching(pattern)
+                
+                for key in all_keys:
                     # Extract the URI part from the key (remove "single:" prefix)
                     uri = key[7:]    # 7 is the length of "single:"
 
                     # Apply the filter function
-                    if filter_func(uri):
-                        matching_uris.append(uri)
+                    try:
+                        if filter_func(uri):
+                            matching_uris.append(uri)
+                    except Exception as filter_e:
+                        _log.error(f"Filter function failed for URI '{uri}': {filter_e}")
 
                 return matching_uris
 
             except Exception as e:
-                _log.error(f"Failed to filter single dict: {e}")
+                _log.error(f"Failed to filter single dict: {e}", exc_info=True)
                 return []
 
     def get_single_meta_data(self, uri: str) -> Dict[str, Any]:
@@ -1882,7 +1889,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
 
                     # Set href if not present
                     if not device.href:
-                        device.href = f"/edev_{device_index}"
+                        device.href = f"/edev{hrefs.SEP}{device_index}"
 
                     # Store device using stable index
                     device_key = f"enddevice:{device_index}"
@@ -2150,6 +2157,21 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 lfdi_index = pickle.loads(index_data)
                 device_index = lfdi_index.get(lfdi)
 
+                # If not found, try alternative format for backward compatibility
+                if device_index is None:
+                    if isinstance(lfdi, bytes):
+                        # Try string format
+                        lfdi_str = lfdi.hex()
+                        device_index = lfdi_index.get(lfdi_str)
+                    else:
+                        # Try bytes format
+                        try:
+                            lfdi_bytes = bytes.fromhex(str(lfdi))
+                            device_index = lfdi_index.get(lfdi_bytes)
+                        except ValueError:
+                            lfdi_bytes = str(lfdi).encode('utf-8')
+                            device_index = lfdi_index.get(lfdi_bytes)
+
                 if device_index is None:
                     return None
 
@@ -2219,7 +2241,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                         'device_index': device_index,
                         'mRID': device.mRID,
                         'href': device.href,
-                        'device_uri': f"/edev_{device_index}"
+                        'device_uri': f"/edev{hrefs.SEP}{device_index}"
                     }
                 
                 return None
@@ -2339,15 +2361,27 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 _log.error(f"Failed to fetch device by {prop_name}: {e}")
                 return None
 
-    def _update_lfdi_index(self, lfdi: bytes, device_index: int, device: m.EndDevice = None, device_id: str = None):
+    def _update_lfdi_index(self, lfdi: bytes | str, device_index: int, device: m.EndDevice = None, device_id: str = None):
         """Update both legacy LFDI index and enhanced metadata index."""
         try:
             import pickle
 
-            # Update legacy index for backward compatibility
+            # Convert LFDI to both formats for comprehensive indexing
+            if isinstance(lfdi, bytes):
+                lfdi_bytes = lfdi
+                lfdi_str = lfdi.hex()
+            else:
+                lfdi_str = str(lfdi)
+                try:
+                    lfdi_bytes = bytes.fromhex(lfdi_str)
+                except ValueError:
+                    lfdi_bytes = lfdi_str.encode('utf-8')
+
+            # Update legacy index for backward compatibility - store both formats
             index_data = self._db.get_point(self._lfdi_index_key)
             lfdi_index = {} if index_data is None else pickle.loads(index_data)
-            lfdi_index[lfdi] = device_index
+            lfdi_index[lfdi_bytes] = device_index  # Store with bytes key
+            lfdi_index[lfdi_str] = device_index    # Store with string key for compatibility
             self._db.set_point(self._lfdi_index_key, pickle.dumps(lfdi_index))
 
             # Update enhanced metadata index if device provided
@@ -2362,7 +2396,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                     'device_index': device_index,
                     'mRID': device_id,  # Use device_id as mRID (often the same in GridAPPS-D)
                     'href': device.href,
-                    'device_uri': f"/edev_{device_index}"
+                    'device_uri': f"/edev{hrefs.SEP}{device_index}"
                 }
                 self._db.set_point(self._lfdi_metadata_key, pickle.dumps(metadata_index))
 
