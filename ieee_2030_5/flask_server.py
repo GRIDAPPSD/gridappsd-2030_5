@@ -153,11 +153,9 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
     @staticmethod
     @lru_cache
     def is_admin(path_info) -> bool:
-        start_paths = ['/admin', '/socket-io']
-        a_filter = itertools.accumulate(start_paths,
-                                        lambda x: 1 if path_info.startswith(x) else 0,
-                                        initial=0)
-        return next(a_filter) > 0
+        """Check if the request path is for an admin endpoint."""
+        admin_prefixes = ['/admin', '/socket-io', '/api']
+        return any(path_info.startswith(prefix) for prefix in admin_prefixes)
 
     def make_environ(self):
         """
@@ -171,11 +169,9 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
         _log.debug("Making environment")
         environ = super(IEEE2030_5_RequestHandler, self).make_environ()
 
-        # Check admin access early
+        # Check admin access early - admin endpoints are now unprotected
         if IEEE2030_5_RequestHandler.is_admin(environ['PATH_INFO']):
-            if not self.config.generate_admin_cert:
-                raise werkzeug.exceptions.Forbidden()
-            return self._setup_admin_environ(environ)
+            return self._setup_admin_environ_unprotected(environ)
 
         # Handle LFDI client mode (HTTP without certificates)
         if self.config.lfdi_client:
@@ -205,7 +201,7 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
         return environ
 
     def _setup_admin_environ(self, environ):
-        """Setup environment for admin requests"""
+        """Setup environment for admin requests (protected with certificates)"""
         try:
             cert, key = self.tlsrepo.get_file_pair("admin")
             x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
@@ -216,6 +212,17 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
         except Exception as e:
             _log.error(f"Failed to setup admin environment: {e}")
             raise werkzeug.exceptions.InternalServerError("Admin certificate setup failed")
+
+    def _setup_admin_environ_unprotected(self, environ):
+        """Setup environment for unprotected admin requests (no certificate required)"""
+        # Set up minimal environment for admin access without requiring certificates
+        # Use a valid 40-character hex LFDI for admin access
+        admin_lfdi = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"  # 40 character hex string
+        environ['ieee_2030_5_lfdi'] = admin_lfdi
+        environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(admin_lfdi)
+        environ['ieee_2030_5_admin_access'] = True  # Flag to indicate admin access
+        _log.debug("Admin access granted without certificate verification")
+        return environ
 
     def _setup_lfdi_client_environ(self, environ):
         """Setup environment for LFDI client mode (HTTP without certificates)"""
@@ -625,11 +632,69 @@ def before_request():
     # Add request tracking
     g.start_time = time.time()
     g.request_id = str(uuid.uuid4())[:8]  # Generate short request ID for tracking
+    
+    # Get request details early for burst detection
+    method = request.method
+    path = request.path
+    
+    # Simultaneous request detection and mitigation
+    # Track recent requests to detect bursts and add delays for database-intensive operations
+    current_time = g.start_time
+    request_signature = f"{method}:{path}"
+    
+    # Initialize global request tracking if not exists
+    if not hasattr(before_request, '_recent_requests'):
+        before_request._recent_requests = []
+        before_request._request_lock = threading.RLock()
+    
+    with before_request._request_lock:
+        # Clean old requests (older than 100ms)
+        before_request._recent_requests = [
+            (ts, sig) for ts, sig in before_request._recent_requests 
+            if current_time - ts < 0.1
+        ]
+        
+        # Check for simultaneous requests that could cause database contention
+        simultaneous_count = len(before_request._recent_requests)
+        recent_mup_posts = sum(1 for ts, sig in before_request._recent_requests 
+                              if 'POST:' in sig and '/mup' in sig)
+        recent_db_ops = sum(1 for ts, sig in before_request._recent_requests 
+                           if any(op in sig for op in ['POST:', 'PUT:']))
+        
+        # Add this request to tracking
+        before_request._recent_requests.append((current_time, request_signature))
+        
+        # Apply burst mitigation for database-intensive operations
+        should_delay = False
+        delay_reason = ""
+        
+        if method in ['POST', 'PUT'] and simultaneous_count > 0:
+            if '/mup' in path and recent_mup_posts > 0:
+                # Multiple MUP operations - high contention risk
+                should_delay = True
+                delay_reason = f"MUP burst (sim:{simultaneous_count}, mup:{recent_mup_posts})"
+            elif recent_db_ops >= 2:
+                # High database operation density
+                should_delay = True  
+                delay_reason = f"DB op burst (sim:{simultaneous_count}, db_ops:{recent_db_ops})"
+        
+        if should_delay:
+            # Add larger randomized delay to handle severe contention (100-500ms for high-risk operations)
+            import random
+            if '/mup' in path and recent_mup_posts > 0:
+                # MUP operations get longer delays due to high contention
+                delay = random.uniform(0.1, 0.5)  # 100-500ms
+            else:
+                # Other DB operations get moderate delays
+                delay = random.uniform(0.05, 0.2)  # 50-200ms
+            time.sleep(delay)
+            _log_http.debug(f"[{g.request_id}] Added {delay*1000:.1f}ms delay for {delay_reason}")
+            
+            # Update start time after delay
+            g.start_time = time.time()
 
     # Log the incoming request details
     client_address = request.remote_addr
-    method = request.method
-    path = request.path
     protocol = request.environ.get('SERVER_PROTOCOL', '')
 
     # Log basic request info
@@ -845,6 +910,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         # return render_template("admin/index.html")
         # return render_template('helloworld.html', client_cert=request.environ['peercert'])
 
+    @app.route("/admin/")
     @app.route("/admin/index.html")
     def admin_home():
         return render_template("admin/index.html")
@@ -952,6 +1018,201 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         routes += "</ul>"
         return Response(f"{routes}")
 
+    @app.route("/admin/performance")
+    def admin_performance():
+        """Performance monitoring dashboard endpoint."""
+        try:
+            # Get monitoring data from the point store
+            from ieee_2030_5.persistance.points import get_db
+            monitoring_data = None
+            db = get_db()
+            if hasattr(db, 'get_monitoring_data'):
+                monitoring_data = db.get_monitoring_data()
+            
+            return render_template("admin/performance.html", 
+                                 monitoring_data=monitoring_data,
+                                 current_time=datetime.now().isoformat())
+        except Exception as e:
+            _log.error(f"Error in performance endpoint: {e}")
+            return Response(f"Error: {e}", status=500)
+
+    @app.route("/api/monitoring")
+    def api_monitoring():
+        """JSON API endpoint for monitoring data (for graphs/dashboards)."""
+        try:
+            # Get monitoring data from the point store
+            from ieee_2030_5.persistance.points import get_db
+            db = get_db()
+            if hasattr(db, 'get_monitoring_data'):
+                data = db.get_monitoring_data()
+                return Response(json.dumps(data, indent=2, default=str), 
+                              mimetype='application/json')
+            else:
+                return Response(json.dumps({
+                    'error': 'Point store monitoring not available',
+                    'timestamp': datetime.now().isoformat()
+                }), mimetype='application/json', status=503)
+        except Exception as e:
+            _log.error(f"Error in monitoring API: {e}")
+            return Response(json.dumps({
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json', status=500)
+
+    @app.route("/api/monitoring/reset", methods=['POST'])
+    def api_monitoring_reset():
+        """Reset performance statistics."""
+        try:
+            from ieee_2030_5.persistance.points import get_db
+            db = get_db()
+            if hasattr(db, 'reset_stats'):
+                db.reset_stats()
+                return Response(json.dumps({
+                    'success': True,
+                    'message': 'Statistics reset successfully',
+                    'timestamp': datetime.now().isoformat()
+                }), mimetype='application/json')
+            else:
+                return Response(json.dumps({
+                    'error': 'Point store monitoring not available',
+                    'timestamp': datetime.now().isoformat()
+                }), mimetype='application/json', status=503)
+        except Exception as e:
+            _log.error(f"Error resetting monitoring stats: {e}")
+            return Response(json.dumps({
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json', status=500)
+
+    @app.route("/admin/message-bus")
+    def admin_message_bus():
+        """GridAPPS-D message bus traffic monitoring dashboard."""
+        return render_template("admin/message_bus.html", 
+                             current_time=datetime.now().isoformat())
+
+    @app.route("/api/message-bus/events")
+    def api_message_bus_events():
+        """Server-Sent Events stream for real-time message bus traffic."""
+        def generate_events():
+            from ieee_2030_5.monitoring import get_message_monitor
+            monitor = get_message_monitor()
+            
+            # Send initial messages
+            recent_messages = monitor.get_recent_messages(50)  # Last 50 messages
+            for msg in recent_messages:
+                yield f"data: {json.dumps(msg.to_dict())}\n\n"
+            
+            # Set up real-time subscription
+            import queue
+            import threading
+            
+            message_queue = queue.Queue(maxsize=100)
+            
+            def message_callback(event):
+                try:
+                    message_queue.put(event, block=False)
+                except queue.Full:
+                    pass  # Drop messages if queue is full
+            
+            monitor.subscribe(message_callback)
+            
+            try:
+                while True:
+                    try:
+                        # Wait for new messages with timeout
+                        event = message_queue.get(timeout=30)  # 30 second keepalive
+                        yield f"data: {json.dumps(event.to_dict())}\n\n"
+                    except queue.Empty:
+                        # Send keepalive
+                        yield f"data: {{\"type\":\"keepalive\",\"timestamp\":\"{datetime.now().isoformat()}\"}}\n\n"
+            finally:
+                monitor.unsubscribe(message_callback)
+        
+        return Response(generate_events(), mimetype='text/event-stream',
+                       headers={'Cache-Control': 'no-cache'})
+
+    @app.route("/api/message-bus/stats")
+    def api_message_bus_stats():
+        """Get message bus monitoring statistics."""
+        try:
+            from ieee_2030_5.monitoring import get_message_monitor
+            monitor = get_message_monitor()
+            stats = monitor.get_stats()
+            return Response(json.dumps(stats, indent=2, default=str), 
+                          mimetype='application/json')
+        except Exception as e:
+            _log.error(f"Error getting message bus stats: {e}")
+            return Response(json.dumps({
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json', status=500)
+
+    @app.route("/api/message-bus/search")
+    def api_message_bus_search():
+        """Search message bus traffic."""
+        try:
+            query = request.args.get('q', '')
+            topic_filter = request.args.get('topic', None)
+            
+            from ieee_2030_5.monitoring import get_message_monitor
+            monitor = get_message_monitor()
+            results = monitor.search_messages(query, topic_filter)
+            
+            return Response(json.dumps([msg.to_dict() for msg in results], 
+                                     indent=2, default=str), 
+                          mimetype='application/json')
+        except Exception as e:
+            _log.error(f"Error searching messages: {e}")
+            return Response(json.dumps({
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json', status=500)
+
+    @app.route("/api/message-bus/clear", methods=['POST'])
+    def api_message_bus_clear():
+        """Clear message bus traffic history."""
+        try:
+            from ieee_2030_5.monitoring import get_message_monitor
+            monitor = get_message_monitor()
+            monitor.clear_messages()
+            return Response(json.dumps({
+                'success': True,
+                'message': 'Message history cleared',
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json')
+        except Exception as e:
+            _log.error(f"Error clearing messages: {e}")
+            return Response(json.dumps({
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json', status=500)
+
+    @app.route("/api/message-bus/toggle", methods=['POST'])
+    def api_message_bus_toggle():
+        """Toggle message bus monitoring on/off."""
+        try:
+            from ieee_2030_5.monitoring import get_message_monitor
+            monitor = get_message_monitor()
+            
+            if monitor.is_enabled():
+                monitor.disable()
+                status = 'disabled'
+            else:
+                monitor.enable()
+                status = 'enabled'
+                
+            return Response(json.dumps({
+                'success': True,
+                'status': status,
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json')
+        except Exception as e:
+            _log.error(f"Error toggling message monitoring: {e}")
+            return Response(json.dumps({
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), mimetype='application/json', status=500)
+
     return app
 
 class HTTP11WSGIServer(BaseWSGIServer):
@@ -979,6 +1240,67 @@ def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
             port=port,
             exclude_patterns=exclude_patterns,
             **kwargs)
+
+def run_dual_server(config: ServerConfiguration, tlsrepo: TLSRepository, admin_http_port: int = 5001, **kwargs):
+    """Run both HTTPS server (for IEEE 2030.5 API) and HTTP server (for admin only)"""
+    import threading
+    from werkzeug.serving import run_simple
+    global server_config, tls_repository
+    server_config = config
+    tls_repository = tlsrepo
+    
+    # Build the main app
+    app = __build_app__(config, tlsrepo)
+    
+    # Parse main server configuration
+    try:
+        host, port = config.server_hostname.split(":")
+        port = int(port)
+    except ValueError:
+        host = config.server_hostname
+        port = 8443
+    
+    # Set up request handler
+    IEEE2030_5_RequestHandler.config = config
+    IEEE2030_5_RequestHandler.tlsrepo = tlsrepo
+    
+    # Create SSL context for HTTPS server
+    ssl_context = __build_ssl_context__(tlsrepo) if not config.lfdi_client else None
+    
+    def start_https_server():
+        """Start the main HTTPS server for IEEE 2030.5 API"""
+        _log.info(f"Starting HTTPS server on {host}:{port}")
+        run_app(app=app,
+                host=host,
+                ssl_context=ssl_context,
+                port=port,
+                request_handler=IEEE2030_5_RequestHandler,
+                **kwargs)
+    
+    def start_http_admin_server():
+        """Start HTTP server for admin access only"""
+        # Use the same Flask app but different server (simpler approach)
+        # Bind HTTP admin server to all interfaces for convenience
+        # This will allow the same routes to be accessible via both HTTPS and HTTP
+        
+        admin_host = "0.0.0.0"  # Allow access from any interface for HTTP admin
+        _log.info(f"Starting HTTP admin server on {admin_host}:{admin_http_port}")
+        run_simple(admin_host, admin_http_port, app, 
+                  threaded=True, use_reloader=False, use_debugger=kwargs.get('debug', False))
+    
+    # Start both servers in separate threads
+    https_thread = threading.Thread(target=start_https_server, daemon=True)
+    http_thread = threading.Thread(target=start_http_admin_server, daemon=True)
+    
+    https_thread.start()
+    http_thread.start()
+    
+    # Wait for both threads
+    try:
+        https_thread.join()
+    except KeyboardInterrupt:
+        _log.info("Shutting down dual servers")
+        raise
 
 
 def run_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs):

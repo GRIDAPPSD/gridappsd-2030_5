@@ -3,30 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <title>Add DER Program</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .nav-header a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .nav-header a:hover {
+            color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        .page-header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+        .form-container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input[type="text"], .form-group input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        .form-group input[type="text"]:focus, .form-group input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .radio-group, .checkbox-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .radio-item, .checkbox-item {
+            margin-bottom: 12px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e1e8ed;
+            transition: all 0.2s ease;
+        }
+        .radio-item:hover, .checkbox-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .radio-item input[type="radio"], .checkbox-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .section-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+        .note {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
 </head>
 <body>
-    <h1>New DER Program</h1>
-    <form action="{{ url_for("admin_der_program") }}" method="post">
-        <div>
-            <input type="hidden" name="mRID" value="{{ mRID }}" />
-            <div><label>Description:<input name="description" type="text" value="{{ description }}"/></label></div>
-
-            <div><label>Default DERControl:</label><br/>
-                {% for ctl in der_controls %}
-                <div><label><input name="default_der_control" type="radio" value="{{ ctl.href }}"/> {{ ctl.description }}</label></div>
-                {% endfor %}
-
-            </div>
-            <div><label>DERControls:</label><br />
-                {% for ctl in der_controls %}
-                <div><label><input name="der_control_checked{{ loop.index0 }}" type="checkbox" value="{{ ctl.href }}"/>{{ ctl.description }}</label></div>
-                {% endfor %}
-            </div>
-            <div><label>Primacy:<input type="text" name="primacy" size="5" /></label></div>
-            <div>
-                <input type="submit" value="Save" />
-            </div>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
         </div>
-    </form>
+        
+        <div class="page-header">
+            <h1>⚡ Add DER Program</h1>
+            <p>Create a new Distributed Energy Resource (DER) program for device control</p>
+        </div>
+
+        <div class="form-container">
+            <div class="note">
+                <strong>DER Programs</strong> define control strategies and capabilities for distributed energy resources like solar panels, batteries, and electric vehicles.
+            </div>
+
+            <form action="{{ url_for('admin_der_program') }}" method="post">
+                <input type="hidden" name="mRID" value="{{ mRID }}" />
+                
+                <div class="form-group">
+                    <label for="description">Program Description</label>
+                    <input type="text" id="description" name="description" value="{{ description }}" placeholder="Enter program description" required>
+                </div>
+
+                <div class="form-group">
+                    <div class="section-title">Default DER Control</div>
+                    <div class="radio-group">
+                        {% if der_controls %}
+                            {% for ctl in der_controls %}
+                            <div class="radio-item">
+                                <input type="radio" id="default_ctl_{{ loop.index0 }}" name="default_der_control" value="{{ ctl.href }}">
+                                <label for="default_ctl_{{ loop.index0 }}">{{ ctl.description }}</label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p><em>No DER controls available. Create controls first.</em></p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="section-title">Available DER Controls</div>
+                    <div class="checkbox-group">
+                        {% if der_controls %}
+                            {% for ctl in der_controls %}
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ctl_{{ loop.index0 }}" name="der_control_checked{{ loop.index0 }}" value="{{ ctl.href }}">
+                                <label for="ctl_{{ loop.index0 }}">{{ ctl.description }}</label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p><em>No DER controls available. Create controls first.</em></p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="primacy">Primacy</label>
+                    <input type="number" id="primacy" name="primacy" min="0" max="255" value="0">
+                    <small style="color: #666;">Lower numbers have higher priority (0 = highest priority)</small>
+                </div>
+
+                <button type="submit" class="btn">Create DER Program</button>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

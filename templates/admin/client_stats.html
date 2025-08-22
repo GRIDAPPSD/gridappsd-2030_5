@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IEEE 2030.5 Client Statistics</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .nav-header {
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .nav-header a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-header a:hover {
+            text-decoration: underline;
+        }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .client-info { margin-bottom: 30px; }
+        .path-stats { margin-left: 20px; }
+    </style>
+</head>
+<body>
+    <div class="nav-header">
+        <a href="/admin/">← Back to Admin Home</a>
+    </div>
+    <h1>IEEE 2030.5 Client Statistics</h1>
+    <p>Total clients connected: {{ total_clients }}</p>
+    
+    {% for key, client in clients.items() %}
+    <div class="client-info">
+        <h2>Client: {{ client.ip }}</h2>
+        <p><strong>LFDI:</strong> {{ client.lfdi }}</p>
+        <p><strong>SFDI:</strong> {{ client.sfdi }}</p>
+        <p><strong>First seen:</strong> {{ client.first_seen|datetime }}</p>
+        <p><strong>Last seen:</strong> {{ client.last_seen|datetime }}</p>
+        <p><strong>Total requests:</strong> {{ client.request_count }}</p>
+        
+        <h3>Resource Usage:</h3>
+        <table class="path-stats">
+            <tr>
+                <th>Path</th>
+                <th>Count</th>
+            </tr>
+            {% for path, count in client.paths.items() %}
+            <tr>
+                <td>{{ path }}</td>
+                <td>{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <hr>
+    {% endfor %}
+</body>
+</html>

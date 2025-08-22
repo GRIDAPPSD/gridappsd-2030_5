@@ -3,43 +3,180 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Administration Area</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IEEE 2030.5 Server - Administration</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.8;
+            font-size: 1.1em;
+        }
+        .content {
+            padding: 40px;
+        }
+        .admin-sections {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 20px;
+        }
+        .admin-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            border-left: 4px solid #3498db;
+        }
+        .admin-section h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .admin-section .links {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .admin-link {
+            display: inline-block;
+            padding: 12px 18px;
+            background: white;
+            color: #2c3e50;
+            text-decoration: none;
+            border-radius: 6px;
+            border: 1px solid #e1e8ed;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .admin-link:hover {
+            background: #3498db;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+        .monitoring { border-left-color: #e74c3c; }
+        .device-management { border-left-color: #f39c12; }
+        .system-tools { border-left-color: #27ae60; }
+        .development { border-left-color: #9b59b6; }
+        
+        .description {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+            color: #5a6c7d;
+            line-height: 1.6;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Administration Area</h1>
-    <div>
-        <a href="{{ url_for('admin_default_der_control') }}">Default DER Control</a>
-    </div>
-    <!-- <div>
-        <a href="{{ url_for('execute_method')}}">Execute Call</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_default_der_control') }}">Add DER Control</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_der_program') }}">Add DER Program</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_fsa') }}">Add FSA</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_end_device') }}">Add End Device</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_resource_list') }}">Resource Tree</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_clients') }}">Clients</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_groups') }}">DER Program Lists</a>
-    </div>
-    <div>
-        <a href="{{ url_for('admin_aggregators') }}">Aggregators</a>
-    </div> -->
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ IEEE 2030.5 Server Administration</h1>
+            <p>Smart Grid Communication Server Management Console</p>
+        </div>
+        
+        <div class="content">
+            <div class="description">
+                Welcome to the IEEE 2030.5 Server administration interface. Use the tools below to monitor, configure, and manage your smart grid communication server.
+            </div>
+            
+            <div class="admin-sections">
+                <!-- Monitoring & Analytics -->
+                <div class="admin-section monitoring">
+                    <h3>📊 Monitoring & Analytics</h3>
+                    <div class="links">
+                        <a href="{{ url_for('admin_performance') }}" class="admin-link">
+                            📈 Performance Monitor
+                        </a>
+                        <a href="{{ url_for('admin_message_bus') }}" class="admin-link">
+                            📡 Message Bus Monitor
+                        </a>
+                        <a href="{{ url_for('admin_clients') }}" class="admin-link">
+                            👥 Connected Clients
+                        </a>
+                    </div>
+                </div>
 
+                <!-- Device & Resource Management -->
+                <div class="admin-section device-management">
+                    <h3>⚡ Device & Resource Management</h3>
+                    <div class="links">
+                        <a href="{{ url_for('admin_default_der_control') }}" class="admin-link">
+                            🔧 Default DER Control
+                        </a>
+                        <a href="{{ url_for('admin_der_program') }}" class="admin-link">
+                            📋 Add DER Program
+                        </a>
+                        <a href="{{ url_for('admin_end_device') }}" class="admin-link">
+                            📱 Add End Device
+                        </a>
+                        <a href="{{ url_for('admin_fsa') }}" class="admin-link">
+                            🔌 Add FSA
+                        </a>
+                        <a href="{{ url_for('admin_resource_list') }}" class="admin-link">
+                            🌳 Resource Tree
+                        </a>
+                    </div>
+                </div>
 
+                <!-- System Tools -->
+                <div class="admin-section system-tools">
+                    <h3>🔧 System Tools</h3>
+                    <div class="links">
+                        <a href="{{ url_for('execute_method') }}" class="admin-link">
+                            ⚡ Execute Call
+                        </a>
+                        <a href="{{ url_for('admin_routes') }}" class="admin-link">
+                            🗺️ View Routes
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Development & Debug -->
+                <div class="admin-section development">
+                    <h3>🔍 Development & Debug</h3>
+                    <div class="links">
+                        <a href="/admin/clients/dcap/0" class="admin-link">
+                            📊 Client DCAP
+                        </a>
+                        <a href="#" class="admin-link" onclick="window.open('/dcap', '_blank')">
+                            🏗️ Server DCAP
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

@@ -2,53 +2,233 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
-    <head>
-        <script>
-            function httpGet(path) {
-                if (path.charAt(0) !== '/') {
-                    path = '/' + path
+    <title>IEEE 2030.5 Resource Tree</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .nav-header a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .nav-header a:hover {
+            color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        .page-header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+        .resource-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        .resource-list {
+            list-style: none;
+            padding: 0;
+        }
+        .resource-item {
+            background: #f8f9fa;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e1e8ed;
+            transition: all 0.3s ease;
+        }
+        .resource-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+        .resource-header {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: white;
+        }
+        .resource-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            flex-grow: 1;
+        }
+        .resource-link:hover {
+            color: #764ba2;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 10px;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+        }
+        .btn-hide {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        }
+        .resource-content {
+            padding: 20px;
+            background: #2d3748;
+            color: #e2e8f0;
+            border-top: 1px solid #e1e8ed;
+            display: none;
+        }
+        .resource-textarea {
+            width: 100%;
+            min-height: 200px;
+            background: #1a202c;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            resize: vertical;
+        }
+        .resource-object {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        .note {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+    <script>
+        function httpGet(path) {
+            if (path.charAt(0) !== '/') {
+                path = '/' + path
+            }
+            let theUrl = window.location.origin + path;
+            let xmlHttpReq = new XMLHttpRequest();
+            xmlHttpReq.open("GET", theUrl, false);
+            xmlHttpReq.send(null);
+            return xmlHttpReq.responseText;
+        }
+        
+        function hideElement(button, elementId) {
+            const element = document.getElementById(elementId);
+            const showButton = document.getElementById(elementId.replace('_content', '_show'));
+            element.style.display = "none";
+            button.style.display = "none";
+            if (showButton) showButton.style.display = "inline-block";
+        }
+        
+        function loadElementFromRequest(button, path, elementId) {
+            try {
+                const response = httpGet(path);
+                const element = document.getElementById(elementId);
+                const hideButton = document.getElementById(elementId.replace('_content', '_hide'));
+                const textarea = element.querySelector('textarea');
+                
+                if (textarea) {
+                    textarea.value = response;
                 }
-                let theUrl = window.location.origin + path;
-                let xmlHttpReq = new XMLHttpRequest();
-                xmlHttpReq.open("GET", theUrl, false);
-                xmlHttpReq.send(null);
-                return xmlHttpReq.responseText;
+                element.style.display = "block";
+                button.style.display = "none";
+                if (hideButton) hideButton.style.display = "inline-block";
+            } catch (error) {
+                alert('Error loading resource: ' + error.message);
             }
-            function hideElement(button, element) {
-                element.style.display = "none";
-                button.style.display = "none"
-            }
-            function loadElementFromRequest(button, path, element) {
-                let response = httpGet(path);
-                element = document.getElementById(element)
-                button = document.getElementById(button)
-                element.style.display = "block"
-                element.value = response;
-                button.style.display = "block"
-            }
-        </script>
-    </head>
+        }
+    </script>
 </head>
 <body>
-<h1>Resource List</h1>
-<ul>
-    {% for href in resource_urls %}
-        <li><a href="/admin/resources?rurl={{ href }}">{{ href }}</a>
-            <button onclick="loadElementFromRequest(
-                '{{ href.replace('/', '_') }}button',
-                    '{{ href }}',
-                    '{{ href.replace('/', '_') }}'); return false;">Get</button>
-            <button id="{{ href.replace('/', '_') }}button" style="display: none"
-                    onclick="hideElement(this, {{ href.replace('/', '_') }}); return false;">Hide</button>
-            <textarea id="{{ href.replace('/', '_') }}" cols="80" rows="10" style="display: none"></textarea>
-            {% if href == href_shown %}
-                <ul>
-                    <li>{{ object }}</li>
-                </ul>{% endif %}
-        </li>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
+        </div>
+        
+        <div class="page-header">
+            <h1>🌳 IEEE 2030.5 Resource Tree</h1>
+            <p>Browse and inspect server resources and their XML representations</p>
+        </div>
 
-    {% endfor %}
-</ul>
+        <div class="resource-container">
+            <div class="note">
+                <strong>Resource Explorer:</strong> Click on any resource link to view it in a new tab, or use the "Get" button to load the XML content inline for inspection.
+            </div>
+
+            <ul class="resource-list">
+                {% for href in resource_urls %}
+                <li class="resource-item">
+                    <div class="resource-header">
+                        <a href="/admin/resources?rurl={{ href }}" class="resource-link" target="_blank">{{ href }}</a>
+                        <button id="{{ href.replace('/', '_') }}_show" class="btn" 
+                                onclick="loadElementFromRequest(this, '{{ href }}', '{{ href.replace('/', '_') }}_content'); return false;">
+                            📄 Get XML
+                        </button>
+                        <button id="{{ href.replace('/', '_') }}_hide" class="btn btn-hide" style="display: none"
+                                onclick="hideElement(this, '{{ href.replace('/', '_') }}_content'); return false;">
+                            🗙 Hide
+                        </button>
+                    </div>
+                    
+                    <div id="{{ href.replace('/', '_') }}_content" class="resource-content">
+                        <textarea class="resource-textarea" readonly placeholder="Loading resource content..."></textarea>
+                    </div>
+                    
+                    {% if href == href_shown %}
+                    <div class="resource-object">{{ object }}</div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
 </body>
 </html>
