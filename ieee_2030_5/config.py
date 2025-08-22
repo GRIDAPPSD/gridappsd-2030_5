@@ -253,6 +253,10 @@ class ServerConfiguration:
     proxy_enabled: bool = False
     proxy_debug: bool = False
 
+    # Dual server configuration for HTTP admin access
+    dual_server_enabled: bool = False
+    admin_http_port: int = 5001
+
     gridappsd: GridappsdConfiguration | None = None
     # DefaultDERControl: Optional[DefaultDERControl] = None
     # DERControlList: Optional[DERControl] = field(default=list)

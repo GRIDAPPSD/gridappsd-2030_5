@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple
 import shutil
 import yaml
 from cryptography import x509
+
+_log = logging.getLogger(__name__)
 from cryptography.hazmat.backends import default_backend
 
 __all__ = ['TLSRepository']
@@ -281,8 +283,14 @@ class TLSRepository:
                              'device': False}
 
             if ':' not in d.stem or 'admin' != d.stem:
-                specs[d.stem]['lFID'] = self.lfdi(d.stem)
-                specs[d.stem]['device'] = True
+                try:
+                    specs[d.stem]['lFID'] = self.lfdi(d.stem)
+                    specs[d.stem]['device'] = True
+                except Exception as e:
+                    # Skip clients that don't have proper certificate files
+                    _log.debug(f"Could not get LFDI for {d.stem}: {e}")
+                    specs[d.stem]['lFID'] = 'N/A'
+                    specs[d.stem]['device'] = False
 
         return specs
 

@@ -1,67 +1,264 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <title>Add DER Control</title>
+    <title>Update Default DER Control</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .nav-header a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .nav-header a:hover {
+            color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        .page-header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+        .form-container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        .form-section {
+            margin-bottom: 35px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input[type="text"], .form-group input[type="number"] {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        .form-group input[type="text"]:focus, .form-group input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .control-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e1e8ed;
+            transition: all 0.2s ease;
+        }
+        .control-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .checkbox-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e1e8ed;
+            margin-bottom: 15px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+        .checkbox-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 12px;
+            transform: scale(1.2);
+        }
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .note {
+            background: #e8f5e8;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4caf50;
+        }
+        .unit {
+            color: #666;
+            font-size: 0.9em;
+            margin-left: 8px;
+        }
+        small {
+            color: #666;
+            display: block;
+            margin-top: 5px;
+        }
+    </style>
 </head>
-
 <body>
-    <h1>Update Default DER Control</h1>
-    <form action="{{ url_for('admin_default_der_control') }}" method="post">
-        <div>
-            <input type="hidden" name="mRID" value="{{ mRID }}" />
-            <div><label for="description:">Description:</label><input name="description" type="text"
-                    value="{{ dderc.description }}" /></div>
-            <div>
-                <h3>Default DER Control</h3>
-                <ul>
-                    <li>
-                        <label for="enable_setESDelay">setESDelay (ms) <input name="setESDelay" size="10"
-                                value="{{ dderc.setESDelay }}"></label>
-                    </li>
-                    <li>
-                        <label for="enable_setESHighFreq">setESHighFreq <input name="setESHighFreq" size="10"
-                                value="{{ dderc.setESHighFreq }}"></label>
-                    </li>
-                    <li>
-                        <label for="enable_setESLowFreq">setESLowFreq <input name="setESLowFreq" size="10"
-                                value="{{ dderc.setESLowFreq }}"></label>
-                    </li>
-                    <li>
-                        <label for="enable_setESRampTms">setESRampTms(ms) <input name="setESRampTms" size="10"
-                                value="{{ dderc.setESRampTms }}"></label>
-                    </li>
-                    <li>
-                        <label for="enable_GradW">setGradW(W) <input name="setGradW" size="10"
-                                value="{{ dderc.setGradW if dderc.setGradW }}"></label>
-                    </li>
-                    <li>
-                        <label for="setSoftGradW">setSoftGradW(W) <input name="setSoftGradW" size="10"
-                                value="{{ dderc.setSoftGradW if dderc.setSoftGradW }}"></label>
-                    </li>
-                </ul>
-            </div>
-            <div>
-                <h3>DER Control Base</h3>
-                <ul>
-                    <li>
-                        <label for="enable_opModConnect">opModConnect</label>
-                        <input name="enable_opModConnect" type="checkbox" {{ 'checked="checked"' if
-                            dderc.DERControlBase.opModConnect else "" }} /><br />
-                    </li>
-                    <li>
-                        <label for="enable_opModEnergize">opModEnergize</label>
-                        <input name="enable_opModEnergize" type="checkbox" {{ 'checked="checked"' if
-                            dderc.DERControlBase.opModEnergize else "" }} /><br />
-                    </li>
-                </ul>
-            </div>
-            <div>
-                <input type="submit" value="Save" />
-            </div>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
         </div>
-    </form>
-</body>
+        
+        <div class="page-header">
+            <h1>🔧 Update Default DER Control</h1>
+            <p>Configure default settings for Distributed Energy Resource control parameters</p>
+        </div>
 
+        <div class="form-container">
+            <div class="note">
+                <strong>Default DER Control</strong> settings are applied to all DER devices unless overridden by specific programs. These settings control energy storage, frequency response, and operational modes.
+            </div>
+
+            <form action="{{ url_for('admin_default_der_control') }}" method="post">
+                <input type="hidden" name="mRID" value="{{ mRID }}" />
+                
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <input type="text" id="description" name="description" value="{{ dderc.description }}" placeholder="Enter control description">
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">⚡ Energy Storage & Timing Controls</div>
+                    <div class="control-grid">
+                        <div class="control-item">
+                            <label for="setESDelay">Energy Storage Delay</label>
+                            <input type="number" id="setESDelay" name="setESDelay" value="{{ dderc.setESDelay }}">
+                            <small>Delay in milliseconds before energy storage activation</small>
+                        </div>
+                        
+                        <div class="control-item">
+                            <label for="setESRampTms">Energy Storage Ramp Time</label>
+                            <input type="number" id="setESRampTms" name="setESRampTms" value="{{ dderc.setESRampTms }}">
+                            <small>Ramp time in milliseconds for energy storage changes</small>
+                        </div>
+                        
+                        <div class="control-item">
+                            <label for="setESHighFreq">High Frequency Threshold</label>
+                            <input type="number" id="setESHighFreq" name="setESHighFreq" value="{{ dderc.setESHighFreq }}" step="0.01">
+                            <small>High frequency threshold for energy storage response</small>
+                        </div>
+                        
+                        <div class="control-item">
+                            <label for="setESLowFreq">Low Frequency Threshold</label>
+                            <input type="number" id="setESLowFreq" name="setESLowFreq" value="{{ dderc.setESLowFreq }}" step="0.01">
+                            <small>Low frequency threshold for energy storage response</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">🔄 Power Gradient Controls</div>
+                    <div class="control-grid">
+                        <div class="control-item">
+                            <label for="setGradW">Power Gradient (W/s)</label>
+                            <input type="number" id="setGradW" name="setGradW" value="{{ dderc.setGradW if dderc.setGradW }}">
+                            <small>Maximum rate of change in watts per second</small>
+                        </div>
+                        
+                        <div class="control-item">
+                            <label for="setSoftGradW">Soft Power Gradient (W/s)</label>
+                            <input type="number" id="setSoftGradW" name="setSoftGradW" value="{{ dderc.setSoftGradW if dderc.setSoftGradW }}">
+                            <small>Recommended rate of change in watts per second</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">🔌 Operational Modes</div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="enable_opModConnect" name="enable_opModConnect" {{ 'checked="checked"' if dderc.DERControlBase.opModConnect else "" }}>
+                        <label for="enable_opModConnect">
+                            <strong>Connect Mode</strong>
+                            <small>Allow the DER to connect to the grid</small>
+                        </label>
+                    </div>
+                    
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="enable_opModEnergize" name="enable_opModEnergize" {{ 'checked="checked"' if dderc.DERControlBase.opModEnergize else "" }}>
+                        <label for="enable_opModEnergize">
+                            <strong>Energize Mode</strong>
+                            <small>Allow the DER to energize and provide power</small>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn">Save DER Control Settings</button>
+            </form>
+        </div>
+    </div>
+</body>
 </html>

@@ -666,8 +666,9 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint, client_lfdi: str = None) 
                                 # Start atomic operation for both MUP and UPT creation
                                 with atomic_operation():
                                     # Perform the database append within the per-client lock to ensure consistency
-                                    _log.debug(f"About to append MUP with href: {mup.href}")
-                                    result = ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup)
+                                    # Use synchronous=True to ensure MUP is immediately available before responding to client
+                                    _log.debug(f"About to append MUP with href: {mup.href} (synchronous write)")
+                                    result = ListAdapter.append(hrefs.DEFAULT_MUP_ROOT, mup, synchronous=True)
                                     if not result.success:
                                         raise Exception(f"Database append failed: {result.error}")
 
@@ -753,9 +754,9 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint, client_lfdi: str = None) 
                                             description=mup.description,
                                             href=f"{hrefs.DEFAULT_UPT_ROOT}_{current_upt_size}")
 
-                                        # Store the usage point within the same atomic operation
+                                        # Store the usage point within the same atomic operation (synchronous)
                                         up_result = ListAdapter.append(
-                                            hrefs.DEFAULT_UPT_ROOT, usage_point)
+                                            hrefs.DEFAULT_UPT_ROOT, usage_point, synchronous=True)
                                         if not up_result.success:
                                             _log.warning(
                                                 f"Failed to create corresponding usage point for MirrorUsagePoint {result.location}: {up_result.error}"
@@ -1400,10 +1401,9 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 # Also add the EndDevice indexed by certificate CN for GridAPPS-D compatibility
                 # The certificate CN is typically derived from the device ID
                 try:
-                    from flask import g
-                    tls_repo = g.TLS_REPOSITORY
+                    # Use the tlsrepo parameter instead of Flask.g to avoid context issues
                     # Get the certificate subject (CN) for this device
-                    cn = tls_repo.get_common_name(cfg_device.id)
+                    cn = tlsrepo.get_common_name(cfg_device.id)
                     if cn and hasattr(cn, 'CN'):
                         cert_cn = cn.CN    # Extract the CN field
                         # Also index by certificate CN

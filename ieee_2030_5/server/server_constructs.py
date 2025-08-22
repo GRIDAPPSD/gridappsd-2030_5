@@ -298,14 +298,25 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             raise Exception(f"Failed to add curve {index}: {result.error}")
 
     # Add devices
-
-    for enum_index, cfg_device in enumerate(config.devices):
-        try:
-            # Generate stable device index from device_id (same logic as in EndDeviceAdapter.add)
+    import time
+    device_start_time = time.time()
+    _log.info(f"Starting device initialization for {len(config.devices)} devices at {time.strftime('%H:%M:%S')}")
+    
+    # Temporarily reduce logging verbosity during device initialization for performance
+    import logging
+    sql_logger = logging.getLogger("ieee_2030_5.persistance.sqlite_store")
+    original_level = sql_logger.level
+    if len(config.devices) > 10:
+        sql_logger.setLevel(logging.WARNING)  # Reduce SQLite debug spam during bulk initialization
+        _log.info("Reduced database logging verbosity for bulk device initialization performance")
+    
+    try:
+        for enum_index, cfg_device in enumerate(config.devices):
+            if enum_index % 20 == 0:  # Log every 20 devices instead of 50
+                _log.info(f"Processing device {enum_index + 1}/{len(config.devices)}: {cfg_device.id}")
+            # Generate stable device index using existing function
             if cfg_device.id:
-                import hashlib
-                hash_obj = hashlib.sha256(cfg_device.id.encode('utf-8'))
-                device_index = int(hash_obj.hexdigest()[:8], 16) % 100000  # Limit to 5 digits
+                device_index = hrefs.get_device_hashed_index(cfg_device.id)
             else:
                 raise ValueError(f"device_id is required for device {enum_index}. Cannot create stable device index.")
             
@@ -340,10 +351,9 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 
                 # Also add the EndDevice indexed by certificate CN for GridAPPS-D compatibility
                 try:
-                    from flask import g
-                    tls_repo = g.TLS_REPOSITORY
+                    # Use the tlsrepo parameter instead of Flask.g to avoid context issues
                     # Get the certificate subject (CN) for this device
-                    cn = tls_repo.get_common_name(cfg_device.id)
+                    cn = tlsrepo.get_common_name(cfg_device.id)
                     if cn and hasattr(cn, 'CN'):
                         cert_cn = cn.CN  # Extract the CN field
                         # Also index by certificate CN
@@ -503,10 +513,12 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                         result = adpt.ListAdapter.append(ed_href.der_list, der_obj)
                         if not result.success:
                             raise Exception(f"Failed to add default DER to device: {result.error}")
-
-        except Exception as e:
-            _log.error(f"Failed to process device {cfg_device.id}: {e}")
-            raise
+    finally:
+        # Restore original logging level
+        sql_logger.setLevel(original_level)
+        device_end_time = time.time()
+        device_duration = device_end_time - device_start_time
+        _log.info(f"Device initialization completed in {device_duration:.2f} seconds at {time.strftime('%H:%M:%S')}")
 
     # Display all resources for debugging
     if hasattr(adpt.ListAdapter, "print_all") and callable(adpt.ListAdapter.print_all):

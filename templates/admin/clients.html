@@ -2,24 +2,210 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Clients</title>
+    <title>IEEE 2030.5 Clients</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .nav-header a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .nav-header a:hover {
+            color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        .page-header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .page-header p {
+            color: #666;
+            margin: 0;
+            font-size: 1.1em;
+        }
+        .client-section {
+            background: white;
+            margin-bottom: 25px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .client-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        .section-header {
+            padding: 20px 30px;
+            margin: 0;
+            font-size: 1.4em;
+            font-weight: 600;
+            color: white;
+            text-align: center;
+        }
+        .connected-header {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+        .available-header {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        }
+        .client-list {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+            min-height: 60px;
+        }
+        .client-list li {
+            padding: 15px 30px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.3s ease;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+        .client-list li:last-child {
+            border-bottom: none;
+        }
+        .client-list li:hover {
+            background-color: #f8f9fa;
+        }
+        .empty-state {
+            padding: 30px;
+            text-align: center;
+            color: #999;
+            font-style: italic;
+        }
+        .actions {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-decoration: none;
+            color: white;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 0;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin: 5px 0 0 0;
+        }
+    </style>
 </head>
 <body>
-    <h1>Clients</h1>
-    <h2>Available</h2>
-    <div>
-        <ul>
-            {% for c in registered %}<li>{{c}}</li>{% endfor %}
-        </ul>
-    </div>
-    <h2>Connected</h2>
-    <div>
-        <ul>
-            {% for c in connected %}<li>{{c}}</li>{% endfor %}
-        </ul>
-    </div>
-    <div>
-        <a href="/admin/dcap">Dcap Edev</a>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
+        </div>
+        
+        <div class="page-header">
+            <h1>🔌 IEEE 2030.5 Clients</h1>
+            <p>Monitor and manage connected devices and available certificates</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ connected|length }}</div>
+                <div class="stat-label">Connected Clients</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ registered|length }}</div>
+                <div class="stat-label">Available Certificates</div>
+            </div>
+        </div>
+
+        <div class="client-section">
+            <h2 class="section-header connected-header">🟢 Connected Clients</h2>
+            {% if connected %}
+                <ul class="client-list">
+                    {% for c in connected %}
+                        <li>{{ c }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="empty-state">No clients currently connected</div>
+            {% endif %}
+        </div>
+
+        <div class="client-section">
+            <h2 class="section-header available-header">📋 Available Certificates</h2>
+            {% if registered %}
+                <ul class="client-list">
+                    {% for c in registered %}
+                        <li>{{ c }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="empty-state">No certificates available</div>
+            {% endif %}
+        </div>
+
+        <div class="actions">
+            <a href="/admin/dcap" class="btn">🔍 View Device Capabilities (DCAP)</a>
+        </div>
     </div>
 </body>
 </html>

@@ -781,7 +781,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to initialize URI {list_uri}: {e}")
                 raise
 
-    def append(self, list_uri: str, obj: T) -> AdapterResult:
+    def append(self, list_uri: str, obj: T, synchronous: bool = False) -> AdapterResult:
         """Append an object to the end of a list.
 
         This method adds a new object to the end of the specified list in a
@@ -791,6 +791,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         Args:
             list_uri: The URI of the list to append to (e.g., "/edev", "/programs")
             obj: The object to append to the list. Must be of type T.
+            synchronous: If True, forces immediate write bypassing queue (critical for MUP creation)
 
         Returns:
             AdapterResult: Result of the append operation containing:
@@ -849,15 +850,34 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     # Append object
                     current_list.append(obj)
 
-                    # Store updated list
-                    self._db.set_point(list_key, pickle.dumps(current_list))
+                    # Store updated list and metadata in sequence to reduce lock contention
+                    # During burst periods, add tiny delay to allow batching of rapid requests
+                    import time
+                    now = time.time()
+                    
+                    # For burst mitigation: if this is a list operation and we're in a burst,
+                    # add jitter to spread out database writes  
+                    if hasattr(self, '_last_write_time'):
+                        time_since_last = now - getattr(self, '_last_write_time', 0)
+                        if time_since_last < 0.1:  # If last write was < 100ms ago (burst detected)
+                            # Add larger randomized delay (5-50ms) to spread out writes during bursts
+                            import random
+                            jitter = random.uniform(0.005, 0.05)  
+                            time.sleep(jitter)
+                            _log.debug(f"Burst detected (last write {time_since_last*1000:.1f}ms ago), added {jitter*1000:.1f}ms jitter")
+                    
+                    # Store updated list (synchronous for critical operations like MUP creation)
+                    self._db.set_point(list_key, pickle.dumps(current_list), synchronous=synchronous)
 
-                    # Update metadata
+                    # Update metadata (synchronous for critical operations)
                     metadata = self._get_list_metadata(list_uri)
                     metadata['count'] = len(current_list)
                     metadata['last_modified'] = time.time()
                     self._db.set_point(self._get_metadata_key(list_uri),
-                                     pickle.dumps(metadata))
+                                     pickle.dumps(metadata), synchronous=synchronous)
+                    
+                    # Track last write time for burst detection
+                    self._last_write_time = time.time()
 
                 _log.debug(f"Appended object to {list_uri}, new count: {len(current_list)}")
                 return AdapterResult(success=True, data=obj, location=obj.href)  # type: ignore[attr-defined]

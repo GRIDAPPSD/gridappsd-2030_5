@@ -189,7 +189,7 @@ def get_default_logger_config(log_level: Union[str, int] = 'INFO', log_file: str
             "console": {
                 'level': log_level,
                 'class': 'logging.StreamHandler',
-                'formatter': 'brief',
+                'formatter': 'single-line',
             },
             'file': {
                 'level': log_level,
@@ -408,6 +408,8 @@ def _main():
     parser.add_argument("--clear", action="store_true", 
                         help="Clear all data and logs for a fresh start (databases, debug logs, storage)")
     parser.add_argument("--log-file", type=str, help="Output log to specified file instead of default ieee_2030_5_server.log")
+    parser.add_argument("--admin-http-port", type=int, default=5001, help="Port for HTTP admin access (default: 5001)")
+    parser.add_argument("--dual-server", action="store_true", help="Run both HTTPS (API) and HTTP (admin) servers")
 
     opts = parser.parse_args()
 
@@ -581,9 +583,19 @@ def _main():
         if gridappsd_adpt:
             _log.info("Starting GridAPPSD publishing")
             gridappsd_adpt.start_publishing()
+            
+            # Enable message bus monitoring
+            try:
+                from ieee_2030_5.monitoring import patch_gridappsd_adapter, get_message_monitor
+                patch_gridappsd_adapter()
+                monitor = get_message_monitor()
+                monitor.enable()
+                _log.info("GridAPPS-D message bus monitoring enabled")
+            except Exception as e:
+                _log.warning(f"Could not enable message bus monitoring: {e}")
 
         # Run the server
-        from ieee_2030_5.flask_server import run_server, build_server
+        from ieee_2030_5.flask_server import run_server, run_dual_server, build_server
 
         if opts.production:
             _log.info(f"Running in production mode with {opts.num_threads} threads")
@@ -619,23 +631,43 @@ def _main():
                     _log.warning("Server did not shut down cleanly")
         else:
             # Development mode - run directly
-            _log.info("Running in development mode")
-            try:
-                run_server(config,
-                         tls_repo,
-                         debug=opts.debug,
-                         use_reloader=False,
-                         use_debugger=opts.debug,
-                         threaded=True)  # Enable threading for better performance
-            except KeyboardInterrupt:
-                _log.info("Keyboard interrupt received")
-            except Exception as e:
-                _log.error(f"Server error: {e}")
-                if opts.debug:
-                    import traceback
-                    traceback.print_exc()
-            finally:
-                _log.info("Server shutdown complete")
+            if opts.dual_server or getattr(config, 'dual_server_enabled', False):
+                # Use command line arg if provided, otherwise use config value
+                admin_port = opts.admin_http_port if opts.dual_server else getattr(config, 'admin_http_port', 5001)
+                _log.info(f"Running in development mode with dual servers (HTTPS + HTTP admin on port {admin_port})")
+                try:
+                    run_dual_server(config,
+                                  tls_repo,
+                                  admin_http_port=admin_port,
+                                  debug=opts.debug,
+                                  use_reloader=False,
+                                  use_debugger=opts.debug,
+                                  threaded=True)  # Enable threading for better performance
+                except KeyboardInterrupt:
+                    _log.info("Keyboard interrupt received")
+                except Exception as e:
+                    _log.error(f"Dual server error: {e}")
+                    if opts.debug:
+                        import traceback
+                        traceback.print_exc()
+            else:
+                _log.info("Running in development mode")
+                try:
+                    run_server(config,
+                             tls_repo,
+                             debug=opts.debug,
+                             use_reloader=False,
+                             use_debugger=opts.debug,
+                             threaded=True)  # Enable threading for better performance
+                except KeyboardInterrupt:
+                    _log.info("Keyboard interrupt received")
+                except Exception as e:
+                    _log.error(f"Server error: {e}")
+                    if opts.debug:
+                        import traceback
+                        traceback.print_exc()
+                finally:
+                    _log.info("Server shutdown complete")
 
     return 0
 

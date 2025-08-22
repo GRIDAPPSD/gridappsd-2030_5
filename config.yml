@@ -5,6 +5,10 @@ service_name: IEEE_2030_5
 proxy_hostname: 0.0.0.0:8443
 proxy_enabled: True
 
+# Dual server configuration for HTTP admin access
+dual_server_enabled: true
+admin_http_port: 5001
+
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
 
@@ -95,7 +99,7 @@ gridappsd:
     is_ot_bus: True
 
   # How often should the aggregates for the houses be published.
-  publish_interval_seconds: 10
+  publish_interval_seconds: 30
 
   # The topic the aggregate houses should publish to the goss bus.
 
