@@ -184,12 +184,17 @@ def get_default_logger_config(log_level: Union[str, int] = 'INFO', log_file: str
                 'format':
                 '%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s'
             },
+            'colorized': {
+                'datefmt': '%H:%M:%S',
+                '()': 'ieee_2030_5.utils.ColorizedFormatter',
+                'format': '%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s'
+            },
         },
         "handlers": {
             "console": {
                 'level': log_level,
                 'class': 'logging.StreamHandler',
-                'formatter': 'single-line',
+                'formatter': 'colorized',
             },
             'file': {
                 'level': log_level,
@@ -422,7 +427,21 @@ def _main():
 
     # Configure logging
     log_file = opts.log_file if opts.log_file else 'ieee_2030_5_server.log'
-    log_config = get_default_logger_config(log_level, log_file)
+    # Check if external logging config file exists
+    logging_config_path = Path('logging_config.yml')
+    if logging_config_path.exists():
+        import yaml
+        try:
+            with open(logging_config_path, 'r') as f:
+                log_config = yaml.safe_load(f)
+            _log_early = logging.getLogger("ieee_2030_5")
+            _log_early.info(f"Using external logging configuration from {logging_config_path}")
+        except Exception as e:
+            print(f"Failed to load logging config from {logging_config_path}: {e}")
+            log_config = get_default_logger_config(log_level, log_file)
+    else:
+        log_config = get_default_logger_config(log_level, log_file)
+    
     # Remove all existing handlers before configuring
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)

@@ -318,16 +318,17 @@ class SQLitePointStore(PointStoreBase):
                 if self._connection_pool:
                     conn = self._connection_pool.pop()
                     self._pool_stats['pool_hits'] += 1
-                    _log.debug(f"Pool hit: {len(self._connection_pool)} connections remaining")
+                    # Pool hit - no need to log every time
+                    pass
                     return conn
                 else:
                     # Pool was empty, create new connection
                     self._pool_stats['pool_misses'] += 1
                     self._pool_stats['pooled_connections'] += 1
                     conn = self._create_optimized_connection()
-                    _log.debug(
-                        f"Created new pooled connection (total pooled: {self._pool_stats['pooled_connections']})"
-                    )
+                    # Log only when pool size changes significantly
+                    if self._pool_stats['pooled_connections'] % 10 == 0:
+                        _log.info(f"Pool size: {self._pool_stats['pooled_connections']} connections")
                     return conn
         else:
             # Pool exhausted, use thread-local overflow connection
@@ -335,9 +336,9 @@ class SQLitePointStore(PointStoreBase):
             if not hasattr(self._local, 'connection'):
                 self._pool_stats['overflow_connections'] += 1
                 self._local.connection = self._create_optimized_connection()
-                _log.debug(
-                    f"Created overflow connection (total overflow: {self._pool_stats['overflow_connections']})"
-                )
+                # Log overflow connections at info level as they indicate pool exhaustion
+                if self._pool_stats['overflow_connections'] % 5 == 0:
+                    _log.info(f"Overflow connections: {self._pool_stats['overflow_connections']}")
             return self._local.connection
 
     def _return_pooled_connection(self, conn: sqlite3.Connection):
@@ -1342,6 +1343,29 @@ class SQLitePointStore(PointStoreBase):
             self._queue_latencies.clear()
             
         _log.info("Performance statistics reset")
+    
+    def get_all_keys_with_prefix(self, prefix: str) -> list[str]:
+        """Get all database keys that start with the given prefix.
+        
+        Args:
+            prefix: The prefix to search for
+            
+        Returns:
+            list: All keys starting with the prefix
+        """
+        with self._lock:
+            try:
+                conn = self._get_pooled_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT key FROM points WHERE key LIKE ?", (f"{prefix}%",))
+                    rows = cursor.fetchall()
+                    return [row[0] for row in rows]
+                finally:
+                    self._return_pooled_connection(conn)
+            except Exception as e:
+                _log.error(f"Failed to get keys with prefix '{prefix}': {e}")
+                return []
 
 if __name__ == '__main__':
     # Test the SQLite implementation

@@ -854,20 +854,31 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     # During burst periods, add tiny delay to allow batching of rapid requests
                     import time
                     now = time.time()
-                    
+
                     # For burst mitigation: if this is a list operation and we're in a burst,
-                    # add jitter to spread out database writes  
+                    # add jitter to spread out database writes
                     if hasattr(self, '_last_write_time'):
                         time_since_last = now - getattr(self, '_last_write_time', 0)
                         if time_since_last < 0.1:  # If last write was < 100ms ago (burst detected)
                             # Add larger randomized delay (5-50ms) to spread out writes during bursts
                             import random
-                            jitter = random.uniform(0.005, 0.05)  
+                            jitter = random.uniform(0.005, 0.05)
                             time.sleep(jitter)
                             _log.debug(f"Burst detected (last write {time_since_last*1000:.1f}ms ago), added {jitter*1000:.1f}ms jitter")
-                    
+
                     # Store updated list (synchronous for critical operations like MUP creation)
                     self._db.set_point(list_key, pickle.dumps(current_list), synchronous=synchronous)
+                    
+                    # Register mRID if the object has one
+                    if hasattr(obj, 'mRID') and obj.mRID is not None and hasattr(obj, 'href'):
+                        try:
+                            global _GlobalMRIDs
+                            if _GlobalMRIDs is not None:
+                                obj_type = type(obj).__name__
+                                _GlobalMRIDs.register_mrid(obj.mRID, obj.href, obj_type)
+                                _log.debug(f"Registered mRID {obj.mRID} -> {obj_type}:{obj.href}")
+                        except Exception as e:
+                            _log.debug(f"mRID registration failed in append: {e}")
 
                     # Update metadata (synchronous for critical operations)
                     metadata = self._get_list_metadata(list_uri)
@@ -875,7 +886,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     metadata['last_modified'] = time.time()
                     self._db.set_point(self._get_metadata_key(list_uri),
                                      pickle.dumps(metadata), synchronous=synchronous)
-                    
+
                     # Track last write time for burst detection
                     self._last_write_time = time.time()
 
@@ -1226,6 +1237,18 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     # Ensure object has the correct href
                     if hasattr(obj, 'href'):
                         obj.href = uri
+                    
+                    # Register mRID automatically if the object has one
+                    if hasattr(obj, 'mRID') and obj.mRID is not None and hasattr(obj, 'href'):
+                        try:
+                            global _GlobalMRIDs
+                            if _GlobalMRIDs is not None:
+                                obj_type = type(obj).__name__
+                                # Use the actual database key (with single: prefix)
+                                _GlobalMRIDs.register_mrid(obj.mRID, obj_key, obj_type)
+                                _log.debug(f"Registered mRID {obj.mRID} -> {obj_type}:{obj_key}")
+                        except Exception as e:
+                            _log.debug(f"mRID registration failed: {e}")
 
                 # Verify storage immediately after commit
                 #print(f"!!!! STORAGE DEBUG: Verifying storage for key: {obj_key}")
@@ -1531,7 +1554,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 # Find all single object keys
                 pattern = f"single:*"
                 all_keys = self._db.get_keys_matching(pattern)
-                
+
                 for key in all_keys:
                     # Extract the URI part from the key (remove "single:" prefix)
                     uri = key[7:]    # 7 is the length of "single:"
@@ -1651,24 +1674,24 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
             try:
                 all_keys = []
-                
+
                 # Get list keys
                 list_pattern = "list:*"
                 all_keys.extend(self._db.get_keys_matching(list_pattern))
-                
-                # Get single object keys  
+
+                # Get single object keys
                 single_pattern = "single:*"
                 all_keys.extend(self._db.get_keys_matching(single_pattern))
-                
+
                 # Get metadata keys
                 list_meta_pattern = "list_meta:*"
                 all_keys.extend(self._db.get_keys_matching(list_meta_pattern))
-                
-                single_meta_pattern = "single_meta:*" 
+
+                single_meta_pattern = "single_meta:*"
                 all_keys.extend(self._db.get_keys_matching(single_meta_pattern))
-                
+
                 return sorted(all_keys)
-                
+
             except Exception as e:
                 _log.error(f"Failed to get all keys: {e}")
                 return []
@@ -1797,7 +1820,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
     def __init__(self):
         super().__init__(m.EndDevice, ConcurrencyMode.READ_WRITE_LOCK)
         self._lfdi_index_key = "index:enddevice:lfdi"
-        self._href_index_key = "index:enddevice:href" 
+        self._href_index_key = "index:enddevice:href"
         self._lfdi_metadata_key = "index:enddevice:lfdi_metadata"
 
     def fetch_index(self, href: str) -> int | None:
@@ -1913,14 +1936,14 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
 
                     # Store device using stable index
                     device_key = f"enddevice:{device_index}"
-                    
+
                     # Check if device already exists at this index
                     if self._db.exists(device_key):
                         existing_data = self._db.get_point(device_key)
                         if existing_data:
                             existing_device = pickle.loads(existing_data)
                             _log.info(f"Device already exists at index {device_index}, updating: {device.href}")
-                    
+
                     self._db.set_point(device_key, pickle.dumps(device))
 
                     # Update indices
@@ -2207,54 +2230,54 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             except Exception as e:
                 _log.error(f"Failed to fetch device by LFDI: {e}")
                 return None
-    
+
     def fetch_lfdi_metadata(self, lfdi: str | bytes) -> dict | None:
         """
         Fast lookup for LFDI metadata without loading the full device.
-        
+
         Returns dictionary with:
         - device_index: int
-        - mRID: str (if available)  
+        - mRID: str (if available)
         - href: str
         - device_uri: str (e.g. "/edev_10")
-        
+
         This is much faster than fetch_by_lfdi() for cases where you only
         need basic device metadata for routing/mapping purposes.
         """
         with self._read_lock():
             self._track_operation("fetch_lfdi_metadata")
-            
+
             try:
                 import pickle
-                
+
                 # Normalize LFDI to string format for metadata index lookup
                 lfdi_str = lfdi.hex() if isinstance(lfdi, bytes) else str(lfdi)
-                
+
                 # First check the enhanced metadata index
                 metadata_data = self._db.get_point(self._lfdi_metadata_key)
                 if metadata_data:
                     metadata_index = pickle.loads(metadata_data)
                     if lfdi_str in metadata_index:
                         return metadata_index[lfdi_str].copy()
-                
+
                 # Fallback to legacy index + device lookup for backward compatibility
                 index_data = self._db.get_point(self._lfdi_index_key)
                 if not index_data:
                     return None
-                    
+
                 lfdi_index = pickle.loads(index_data)
-                
-                # Try both string and bytes formats for legacy compatibility  
+
+                # Try both string and bytes formats for legacy compatibility
                 lfdi_bytes = bytes.fromhex(lfdi_str) if isinstance(lfdi, str) else lfdi
                 device_index = lfdi_index.get(lfdi_bytes) or lfdi_index.get(lfdi_str)
-                
+
                 if device_index is None:
                     return None
-                
+
                 # Get device for mRID extraction
-                device_key = f"enddevice:{device_index}"  
+                device_key = f"enddevice:{device_index}"
                 device_data = self._db.get_point(device_key)
-                
+
                 if device_data:
                     device = pickle.loads(device_data)
                     return {
@@ -2263,9 +2286,9 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                         'href': device.href,
                         'device_uri': f"/edev{hrefs.SEP}{device_index}"
                     }
-                
+
                 return None
-                
+
             except Exception as e:
                 _log.error(f"Failed to fetch LFDI metadata: {e}")
                 return None
@@ -2408,10 +2431,10 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             if device:
                 metadata_data = self._db.get_point(self._lfdi_metadata_key)
                 metadata_index = {} if metadata_data is None else pickle.loads(metadata_data)
-                
+
                 # Convert LFDI bytes to string for consistency with lookup methods
                 lfdi_str = lfdi.hex() if isinstance(lfdi, bytes) else str(lfdi)
-                
+
                 metadata_index[lfdi_str] = {
                     'device_index': device_index,
                     'mRID': device_id,  # Use device_id as mRID (often the same in GridAPPS-D)
@@ -2439,6 +2462,331 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
             _log.error(f"Failed to update href index: {e}")
             raise
 
+# Global mRID management with thread safety
+class ThreadSafeGlobalMRIDs:
+    """Thread-safe global mRID management."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._db = get_db()
+        self._mrid_prefix = "mrid:"  # Prefix for mRID keys in database
+
+    def _normalize_mrid_to_string(self, mrid) -> str:
+        """Normalize mRID to consistent string format for indexing."""
+        if isinstance(mrid, bytes):
+            return mrid.decode('utf-8')
+        return str(mrid)
+
+    def new_mrid(self) -> bytes:
+        """Generate a new unique mRID using uuid_2030_5."""
+        with self._lock:
+            try:
+                from ieee_2030_5.utils import uuid_2030_5
+
+                # Generate unique mRID using uuid_2030_5
+                while True:
+                    new_mrid = uuid_2030_5().lower().encode()
+                    # Check if it's already in use
+                    if self.get_location(new_mrid) is None:
+                        return new_mrid
+            except Exception as e:
+                _log.error(f"Failed to generate new mRID: {e}")
+                raise
+
+    def register_mrid(self, mrid: str, db_key: str, obj_type: str = None):
+        """Register an mRID with its database storage key.
+        
+        Args:
+            mrid: The mRID to register
+            db_key: The database key where the object is stored
+            obj_type: Optional type prefix for the stored value
+        """
+        with self._lock:
+            try:
+                # Normalize mRID to string for consistent indexing
+                normalized_mrid = self._normalize_mrid_to_string(mrid)
+                
+                # Create value with type prefix if provided
+                if obj_type:
+                    value = f"{obj_type}:{db_key}"
+                else:
+                    value = f"db:{db_key}"
+                
+                # Store mRID as individual database key with prefixed value
+                mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
+                
+                # Ensure we're storing text data as UTF-8
+                if isinstance(value, bytes):
+                    _log.warning(f"register_mrid received bytes instead of string for {normalized_mrid}, converting")
+                    value = value.decode('utf-8') if len(value) > 0 else ""
+                
+                # Check if there's already data at this key
+                existing_data = self._db.get_point(mrid_key)
+                if existing_data is not None:
+                    try:
+                        existing_value = existing_data.decode('utf-8')
+                        if existing_value != value:
+                            _log.warning(f"Overwriting mRID {normalized_mrid}: '{existing_value}' -> '{value}'")
+                    except UnicodeDecodeError:
+                        _log.error(f"Found corrupted binary data for mRID {normalized_mrid}, replacing with correct text data")
+                
+                self._db.set_point(mrid_key, value.encode('utf-8'))
+                _log.debug(f"Registered mRID {normalized_mrid} -> {value}")
+            except Exception as e:
+                _log.error(f"Failed to register mRID {normalized_mrid}: {e}")
+                raise
+    
+    def store_and_register(self, item: Any) -> bool:
+        """Store an object in the database and register its mRID if present.
+        
+        This is the main method to use for storing objects with mRIDs.
+        It handles both the database storage and mRID registration.
+        
+        Args:
+            item: The object to store (must have 'href' and optionally 'mRID')
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import pickle
+            
+            # Object must have an href to be stored
+            if not hasattr(item, 'href') or not item.href:
+                _log.error(f"Cannot store object without href: {type(item).__name__}")
+                return False
+            
+            # Store the object in the database at its href location
+            self._db.set_point(item.href, pickle.dumps(item))
+            _log.debug(f"Stored {type(item).__name__} at database key: {item.href}")
+            
+            # If it has an mRID, register it with type prefix
+            if hasattr(item, 'mRID') and item.mRID:
+                obj_type = type(item).__name__
+                self.register_mrid(item.mRID, item.href, obj_type)
+                _log.debug(f"Registered mRID {item.mRID} -> {obj_type}:{item.href}")
+            
+            return True
+            
+        except Exception as e:
+            _log.error(f"Failed to store and register object: {e}")
+            return False
+    
+    def add_item_with_mrid(self, db_key: str, item: Any):
+        """Legacy method - for backward compatibility.
+        
+        Args:
+            db_key: The database key (usually same as href)
+            item: The object with an mRID attribute
+        """
+        # For backward compatibility, store and register the item
+        if hasattr(item, 'href'):
+            self.store_and_register(item)
+        else:
+            # If no href, just register the mRID
+            if hasattr(item, 'mRID') and item.mRID:
+                self.register_mrid(item.mRID, db_key)
+
+    def get_location(self, mrid: str) -> Optional[str]:
+        """Get the database storage key for an mRID.
+        
+        Args:
+            mrid: The mRID to look up
+            
+        Returns:
+            The database key where the object is stored, or None if not found
+        """
+        with self._lock:
+            try:
+                # Normalize mRID to string for consistent lookup
+                normalized_mrid = self._normalize_mrid_to_string(mrid)
+                mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
+                
+                # Get the database key value
+                db_key_bytes = self._db.get_point(mrid_key)
+                if db_key_bytes is None:
+                    return None
+                
+                # Decode and extract the actual database key from the prefixed value
+                try:
+                    value = db_key_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    # This might be pickled data stored incorrectly - skip it
+                    _log.warning(f"Found binary data instead of text for mRID {normalized_mrid}, skipping")
+                    return None
+                
+                # Value format is "type:db_key" or "db:db_key"
+                if ':' in value:
+                    _, db_key = value.split(':', 1)
+                    return db_key
+                else:
+                    # Fallback for old format without prefix
+                    return value
+                    
+            except Exception as e:
+                _log.error(f"Failed to get location for mRID {mrid}: {e}")
+                return None
+    
+    def list_all_known_mrids(self) -> dict[str, str]:
+        """List all mRIDs currently registered in the system.
+        
+        Returns:
+            dict: Mapping of mRID -> database_location for all registered mRIDs
+        """
+        with self._lock:
+            try:
+                all_mrids = {}
+                
+                # Get all keys from database that start with our mRID prefix
+                # This is database-specific, so we'll need to implement differently for each backend
+                if hasattr(self._db, 'get_all_keys_with_prefix'):
+                    # If the database supports prefix queries
+                    mrid_keys = self._db.get_all_keys_with_prefix(self._mrid_prefix)
+                else:
+                    # Fallback: try to get keys from internal storage if available
+                    mrid_keys = []
+                    if hasattr(self._db, '_storage') and hasattr(self._db._storage, 'keys'):
+                        all_keys = list(self._db._storage.keys())
+                        mrid_keys = [k for k in all_keys if k.startswith(self._mrid_prefix)]
+                
+                for mrid_key in mrid_keys:
+                    try:
+                        # Extract mRID from key (remove prefix)
+                        mrid = mrid_key[len(self._mrid_prefix):]
+                        
+                        # Get the location value
+                        db_value = self._db.get_point(mrid_key)
+                        if db_value:
+                            try:
+                                location = db_value.decode('utf-8')
+                                all_mrids[mrid] = location
+                            except UnicodeDecodeError:
+                                all_mrids[mrid] = "<BINARY_DATA_ERROR>"
+                    except Exception as e:
+                        _log.debug(f"Error processing mRID key {mrid_key}: {e}")
+                
+                return all_mrids
+                
+            except Exception as e:
+                _log.error(f"Failed to list mRIDs: {e}")
+                return {}
+    
+    def get_item(self, mrid: str) -> Any:
+        """Get an item by its mRID.
+        
+        Args:
+            mrid: The mRID of the object to retrieve
+            
+        Returns:
+            The object if found, None otherwise
+        """
+        with self._lock:
+            try:
+                import pickle
+                
+                # First get the database key for this mRID
+                db_key = self.get_location(mrid)
+                if db_key is None:
+                    return None
+                
+                # Now retrieve the actual object from the database
+                item_data = self._db.get_point(db_key)
+                if item_data is None:
+                    _log.warning(f"mRID {mrid} points to non-existent database key: {db_key}")
+                    return None
+                    
+                # Deserialize and return the object
+                return pickle.loads(item_data)
+            except Exception as e:
+                _log.error(f"Failed to get item with mRID {mrid}: {e}")
+                return None
+    
+    def list_mrids(self) -> List[str]:
+        """List all registered mRIDs.
+        
+        Returns:
+            List of all mRID strings
+        """
+        with self._lock:
+            try:
+                # Get all keys with mRID prefix
+                all_keys = []
+                # This would need a method to scan keys in the database
+                # For now, return empty list - would need to implement db.scan_keys()
+                _log.debug("list_mrids not fully implemented - needs database key scanning")
+                return all_keys
+            except Exception as e:
+                _log.error(f"Failed to list mRIDs: {e}")
+                return []
+
+    def __len__(self) -> int:
+        """Get the number of items in the registry."""
+        # For now, we can't easily count all mRID keys without scanning
+        # This would need database support for prefix scanning
+        return 0  # TODO: Implement when database supports key prefix scanning
+
+    def debug_registry_contents(self):
+        """Debug method to list all entries in the global registry."""
+        with self._lock:
+            try:
+                # This would need database support for prefix scanning
+                _log.info("Debug registry contents not fully implemented - needs database key scanning")
+                # For debugging, we could manually check a few known mRIDs if needed
+            except Exception as e:
+                _log.error(f"Failed to debug registry contents: {e}")
+    
+    def debug_mrid_lookup(self, mrid: str):
+        """Debug method to show detailed mRID lookup information.
+        
+        Args:
+            mrid: The mRID to debug
+        """
+        with self._lock:
+            try:
+                normalized_mrid = self._normalize_mrid_to_string(mrid)
+                mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
+                
+                _log.info(f"=== mRID Debug Info for '{mrid}' ===")
+                _log.info(f"  Normalized mRID: '{normalized_mrid}'")
+                _log.info(f"  Database key: '{mrid_key}'")
+                
+                # Check if mRID exists in database
+                raw_value = self._db.get_point(mrid_key)
+                if raw_value:
+                    value = raw_value.decode('utf-8')
+                    _log.info(f"  Raw database value: '{value}'")
+                    
+                    # Parse the value
+                    if ':' in value:
+                        obj_type, db_location = value.split(':', 1)
+                        _log.info(f"  Object type: '{obj_type}'")
+                        _log.info(f"  Database location: '{db_location}'")
+                        
+                        # Check if object exists at location
+                        obj_data = self._db.get_point(db_location)
+                        if obj_data:
+                            _log.info(f"  Object found at location: {len(obj_data)} bytes")
+                            try:
+                                import pickle
+                                obj = pickle.loads(obj_data)
+                                _log.info(f"  Object type in storage: {type(obj).__name__}")
+                                if hasattr(obj, 'href'):
+                                    _log.info(f"  Object href: {obj.href}")
+                            except Exception as e:
+                                _log.error(f"  Failed to deserialize object: {e}")
+                        else:
+                            _log.error(f"  ERROR: No object found at location '{db_location}'")
+                    else:
+                        _log.info(f"  Legacy format (no type prefix): '{value}'")
+                else:
+                    _log.error(f"  ERROR: mRID not found in database")
+                    
+                _log.info("=== End mRID Debug Info ===")
+                    
+            except Exception as e:
+                _log.error(f"Failed to debug mRID lookup for '{mrid}': {e}")
+
+
 # Global adapter instances with proper initialization
 _adapters_lock = threading.Lock()
 _initialized = False
@@ -2446,6 +2794,12 @@ _initialized = False
 # Global adapter instances
 ListAdapter: ThreadSafeListAdapter | None = None
 EndDeviceAdapter: ThreadSafeEndDeviceAdapter | None = None
+_GlobalMRIDs: ThreadSafeGlobalMRIDs | None = None
+
+def get_global_mrids_instance():
+    """Get the global MRIDs instance, ensuring proper initialization."""
+    ensure_adapters_initialized()
+    return _GlobalMRIDs
 
 def initialize_adapters():
     """Initialize all global adapter instances.
@@ -2460,6 +2814,7 @@ def initialize_adapters():
     Global Adapters Created:
         ListAdapter: Generic adapter for IEEE 2030.5 List resources
         EndDeviceAdapter: Specialized adapter for EndDevice resources with indexing
+        GlobalMRIDs: Global mRID registry for cross-resource lookups
 
     Thread Safety:
         This function is thread-safe and uses a lock to ensure adapters are
@@ -2477,7 +2832,7 @@ def initialize_adapters():
         >>> if EndDeviceAdapter is not None:
         ...     device = EndDeviceAdapter.fetch_by_href("/edev/123")
     """
-    global ListAdapter, EndDeviceAdapter, _initialized
+    global ListAdapter, EndDeviceAdapter, _GlobalMRIDs, _initialized
 
     if _initialized:
         return
@@ -2491,13 +2846,14 @@ def initialize_adapters():
         # Initialize adapters
         ListAdapter = ThreadSafeListAdapter(object)  # Generic list adapter
         EndDeviceAdapter = ThreadSafeEndDeviceAdapter()
+        _GlobalMRIDs = ThreadSafeGlobalMRIDs()  # Global mRID registry
 
         # Add compatibility method to ListAdapter instance
         ListAdapter.list_size = lambda uri: ListAdapter.get_list_size(uri)
 
         _initialized = True
         _log.info("Thread-safe adapters initialized")
-        
+
         # Update global adapter references in __init__.py
         try:
             from . import _update_global_adapters

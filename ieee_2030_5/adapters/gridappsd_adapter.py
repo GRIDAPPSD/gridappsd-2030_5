@@ -1,41 +1,38 @@
 from __future__ import annotations
 
-import os
-import typing
-from dataclasses import asdict
 import json
 import logging
-import typing
-from typing import get_type_hints
-
+import os
 import re
-from threading import Timer, Lock, RLock
+from dataclasses import asdict
+from threading import RLock, Timer
 
 _log = logging.getLogger(__name__)
 ENABLED = True
 try:
-    from attrs import define, field
-    import gridappsd.topics as topics
-    from ieee_2030_5.types_ import Lfdi
-    import ieee_2030_5.models as m
-    import ieee_2030_5.hrefs as hrefs
-    import ieee_2030_5.adapters as adpt
-    from gridappsd import GridAPPSD, DifferenceBuilder
-    from gridappsd.field_interface.interfaces import FieldMessageBus
-    from cimgraph.data_profile import CIM_PROFILE
-    from gridappsd.field_interface.agents.agents import GridAPPSDMessageBus
     import cimgraph.data_profile.rc4_2021 as cim
-    from cimgraph.models import FeederModel
-    from cimgraph.databases.gridappsd import GridappsdConnection
+    import gridappsd.topics as topics
+    from attrs import define, field
+    from cimgraph.data_profile import CIM_PROFILE
     from cimgraph.databases import ConnectionParameters
+    from cimgraph.databases.gridappsd import GridappsdConnection
+    from cimgraph.models import FeederModel
+    from gridappsd import GridAPPSD
+    from gridappsd.field_interface.agents.agents import GridAPPSDMessageBus
+    from gridappsd.field_interface.interfaces import FieldMessageBus
+
+    import ieee_2030_5.adapters as adpt
+    import ieee_2030_5.hrefs as hrefs
+    import ieee_2030_5.models as m
+    from ieee_2030_5.types_ import Lfdi
 
 except ImportError:
     ENABLED = False
 
 if ENABLED:
+    import ieee_2030_5.adapters as adpt
     from ieee_2030_5.certs import TLSRepository
     from ieee_2030_5.config import DeviceConfiguration, GridappsdConfiguration
-    import ieee_2030_5.adapters as adpt
 
     @define
     class HouseLookup:
@@ -107,37 +104,43 @@ if ENABLED:
 
             assert self.gapps.connected, "Gridappsd passed is not connected."
 
-            if simulation_id := os.environ.get("GRIDAPPSD_SIMULATION_ID"): pass
-            if service_id := os.environ.get("GRIDAPPSD_SERVICE_NAME"): pass
+            # Get environment variables for simulation and service IDs
+            simulation_id = os.environ.get("GRIDAPPSD_SIMULATION_ID")
+            service_id = os.environ.get("GRIDAPPSD_SERVICE_NAME")
 
             if self.gridappsd_configuration.publish_interval_seconds:
                 self._publish_interval_seconds = self.gridappsd_configuration.publish_interval_seconds
 
-            _log.debug(f"Subscribing to topic: "
-                       f"{topics.application_input_topic(application_id=service_id, simulation_id=simulation_id)}")
+            _log.debug("Subscribing to topic: %s",
+                   topics.application_input_topic(application_id=service_id, simulation_id=simulation_id))
 
             self.gapps.subscribe(topics.application_input_topic(application_id=service_id,
                                                                 simulation_id=simulation_id), callback=self._input_detected)
 
 
 
-        def _input_detected(self, header: dict | None, message: dict | None):
+        def _input_detected(self, _header: dict | None, message: dict | None):
+            _log.info("=== GridAPPS-D Input Detected ===")
+            _log.info("Header: %s", _header)
+            _log.info("Full message structure: %s", message)
+            _log.info("Debugging global registry mrids")
+            _log.info("Note: Full registry contents scanning not implemented - use debug_mrid_lookup() for specific mRIDs")
 
-            import inspect
             forward_diffs = message['input']['message']['forward_differences']
-            rev_diffs = message['input']['message']['reverse_differences']
+            _log.info("Processing %d forward_differences", len(forward_diffs))
+            # rev_diffs not used currently
 
-            for item in forward_diffs:
+            import ieee_2030_5.hrefs as hrefs
+
+            for i, item in enumerate(forward_diffs):
+                _log.info("--- Processing forward_diff item %d ---", i)
+                _log.info("Item contents: %s", item)
 
                 if not item.get('attribute'):
                     _log.error(f"INVALID attribute detected!")
                     continue
 
-                if not item.get('value'):
-                    _log.error(f"INVALID value specified.")
-                    continue
-
-                if  not item['attribute'].startswith("DERControl"):
+                if not item['attribute'].startswith('DERControl'):
                     _log.error(f"INVALID attribute.  Must start with DERControl but was {item['attribute']}")
                     continue
 
@@ -145,37 +148,208 @@ if ENABLED:
                 # but I have seen it both ways in the docs so handle it
                 if item.get('object'):
                     object_key = 'object'
+                    _log.info("Item %d: Using 'object' key", i)
                 elif item.get('object_id'):
                     object_key = 'object_id'
+                    _log.info("Item %d: Using 'object_id' key", i)
                 else:
-                    _log.error(f"INVALID object_id.  The 'object_id' field must be set in order to use this function.")
+                    _log.error("INVALID object_id in item %d. The 'object_id' field must be set in order to use this function.", i)
                     continue
 
                 object_id_value = item[object_key]
-                obj = adpt.get_global_mrids().get_item(object_id_value)
+                _log.info("Item %d: Looking up %s='%s' directly in database", i, object_key, object_id_value)
                 
+                # Get the mRID location from GlobalMRIDs
+                mrid_location = adpt.get_global_mrids().get_location(object_id_value)
+                _log.info("Item %d: mRID %s points to location: %s", i, object_id_value, mrid_location)
+                
+                # Debug: also try direct database lookup with prefix to see if data exists
+                mrid_key = f"mrid:{object_id_value}"
+                direct_db_data = adpt.get_list_adapter()._db.get_point(mrid_key)
+                if direct_db_data:
+                    try:
+                        direct_value = direct_db_data.decode('utf-8')
+                        _log.info("Item %d: Direct DB lookup found: %s -> %s", i, mrid_key, direct_value)
+                    except UnicodeDecodeError:
+                        _log.error("Item %d: Direct DB lookup found BINARY DATA at %s (len=%d)", i, mrid_key, len(direct_db_data))
+                else:
+                    _log.info("Item %d: Direct DB lookup found nothing at %s", i, mrid_key)
+                
+                # Try to retrieve directly from database using the location
+                obj = None
+                if mrid_location:
+                    try:
+                        # Use the database directly instead of GlobalMRIDs cache
+                        db_data = adpt.get_list_adapter()._db.get_point(mrid_location)
+                        if db_data:
+                            import pickle
+                            obj = pickle.loads(db_data)
+                            _log.debug("Item %d: Retrieved object from database at location %s", i, mrid_location)
+                        else:
+                            _log.warning("Item %d: No data found in database at location %s", i, mrid_location)
+                    except Exception as e:
+                        _log.error("Item %d: Failed to retrieve from database location %s: %s", i, mrid_location, e)
+                else:
+                    _log.warning("Item %d: No mRID location found for %s", i, object_id_value)
+
                 # Note: The EndDevice should now be indexed by certificate CN during device creation
-                
+
                 if obj is None:
-                    _log.error(f"Couldn't find any object with {object_key}='{object_id_value}' in GlobalmRIDs registry")
-                    continue
-                    
+                    _log.error("Item %d: Couldn't find any object with %s='%s' in GlobalmRIDs registry", i, object_key, object_id_value)
+                    # Debug: show detailed mRID lookup information
+                    adpt.get_global_mrids().debug_mrid_lookup(object_id_value)
+
+                    # Check if this is due to a stale mRID registration pointing to wrong location
+                    if mrid_location and mrid_location.startswith('single:'):
+                        # Try to find the corresponding enddevice location
+                        href_path = mrid_location.replace('single:', '')
+                        # Extract device index from href (e.g., /edev_53036 -> 53036)
+                        if hrefs.SEP in href_path:
+                            device_index = href_path.split(hrefs.SEP)[-1]
+                            enddevice_key = f"enddevice:{device_index}"
+                            # Check if the EndDevice exists at the correct location
+                            if adpt.get_list_adapter()._db.exists(enddevice_key):
+                                _log.info("Item %d: Found EndDevice at correct location %s, updating mRID registration", i, enddevice_key)
+                                # Update mRID to point to correct location
+                                adpt.get_global_mrids().register_mrid(object_id_value, enddevice_key, "EndDevice")
+                                # Retry lookup
+                                obj = adpt.get_global_mrids().get_item(object_id_value)
+                                if obj is not None:
+                                    _log.info("Item %d: Successfully retrieved EndDevice after fixing mRID registration", i)
+
+                    if obj is None:
+                        # CRITICAL ERROR: Equipment not found in database - initialization failed
+                        _log.error("="*80)
+                        _log.error("CRITICAL: Equipment %s='%s' NOT FOUND in database!", object_key, object_id_value)
+                        _log.error("This indicates that the server initialization did not properly discover")
+                        _log.error("and register this equipment from GridAPPS-D. This equipment should have")
+                        _log.error("been registered during the create_2030_5_device_certificates_and_configurations")
+                        _log.error("process or during energy consumer certificate copying.")
+                        _log.error("="*80)
+                        _log.error("SKIPPING this control message item - FIX INITIALIZATION!")
+                        _log.error("="*80)
+                        continue
+
+                _log.info("Item %d: Found object of type %s for %s='%s'", i, type(obj), object_key, object_id_value)
+
                 if not isinstance(obj, m.EndDevice):
-                    _log.error(f"Object with {object_key}='{object_id_value}' is not an EndDevice, got {type(obj)} instead.")
+                    _log.error("Item %d: Object with %s='%s' is not an EndDevice, got %s instead.", i, object_key, object_id_value, type(obj))
                     continue
+
+                _log.info("Item %d: Confirmed EndDevice found, proceeding with DER control processing", i)
+                _log.debug("Item %d: EndDevice details - href=%s, DERListLink=%s", i, obj.href, obj.DERListLink)
+                _log.debug("Item %d: Retrieved EndDevice DERListLink type=%s, href=%s", i, type(obj.DERListLink), obj.DERListLink.href if obj.DERListLink else 'N/A')
 
                 if isinstance(obj, m.EndDevice):
                     # Get the specific DER (NOTE we are only getting the first one)
-                    # TODO: Handle multiple DERs
-                    der: m.DER = adpt.ListAdapter.get_list(obj.DERListLink.href)[0]
-                    program: m.DERProgram = next(filter(lambda x: x.href == der.CurrentDERProgramLink.href,
-                                                    adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT)))
-                    dderc: m.DefaultDERControl = next(filter(lambda x: x.href ==program.DefaultDERControlLink.href,
-                                                      adpt.ListAdapter.get_list(hrefs.DEFAULT_DDERC_ROOT)))
+                    # Handle multiple DERs in the future
+                    _log.info("Item %d: Getting DER list from href: %s", i, obj.DERListLink.href)
+                    der_list = adpt.ListAdapter.get_resource_list(obj.DERListLink.href)
+                    if not der_list or not hasattr(der_list, 'DER') or not der_list.DER:
+                        _log.error("Item %d: No DER found for EndDevice %s at href %s", i, getattr(obj, 'mRID', 'unknown'), obj.DERListLink.href)
+                        continue
+
+                    _log.info("Item %d: Found %d DER(s) for EndDevice %s", i, len(der_list.DER), getattr(obj, 'mRID', 'unknown'))
+                    der: m.DER = der_list.DER[0]
+                    _log.info("Item %d: Using DER with href: %s for processing %s='%s'", i, der.href, object_key, object_id_value)
+
+                    # Verify this DER matches the one receiving DERStatus updates in debug.log
+                    expected_der_path = f"/der{hrefs.SEP}{obj.href.split(hrefs.SEP)[1]}{hrefs.SEP}der{hrefs.SEP}0" if hrefs.SEP in obj.href else "unknown"
+                    if der.href != expected_der_path:
+                        _log.warning("Item %d: DER href mismatch! Expected %s, got %s", i, expected_der_path, der.href)
+
+                    # Find the DER program - retrieve directly from database
+                    _log.info("Item %d: Retrieving DER programs directly from database", i)
+                    try:
+                        db_data = adpt.get_list_adapter()._db.get_point(f"list:{hrefs.DEFAULT_DERP_ROOT}")
+                        if not db_data:
+                            _log.error("Item %d: No DER program list data found in database at list:%s", i, hrefs.DEFAULT_DERP_ROOT)
+                            continue
+                        
+                        import pickle
+                        der_program_list = pickle.loads(db_data)
+                        _log.info("Item %d: Retrieved %d DER programs from database", i, len(der_program_list))
+                        
+                    except Exception as e:
+                        _log.error("Item %d: Failed to retrieve DER programs from database: %s", i, e)
+                        continue
+
+                    # Find matching program for this DER
+                    if not der.CurrentDERProgramLink:
+                        _log.error("Item %d: DER %s has no CurrentDERProgramLink", i, getattr(der, 'mRID', der.href))
+                        continue
+
+                    program = None
+                    for p in der_program_list:
+                        if p.href == der.CurrentDERProgramLink.href:
+                            program = p
+                            break
+
+                    if not program:
+                        _log.error("Item %d: No matching program found for DER %s, looking for program %s", i, getattr(der, 'mRID', der.href), der.CurrentDERProgramLink.href)
+                        _log.debug("Item %d: Available programs: %s", i, [p.href for p in der_program_list])
+                        continue
+
+                    _log.info("Item %d: Found program %s for DER %s", i, program.href, der.href)
+                    _log.debug("Item %d: Program DefaultDERControlLink: %s", i, program.DefaultDERControlLink)
+
+                    # Ensure program has DefaultDERControlLink - create if missing
+                    if not program.DefaultDERControlLink:
+                        _log.warning("Program %s has no DefaultDERControlLink, creating one", getattr(program, 'mRID', program.href))
+                        # Create DefaultDERControlLink using proper href structure
+                        import ieee_2030_5.hrefs as hrefs
+                        program_index = int(program.href.split(hrefs.SEP)[1]) if hrefs.SEP in program.href else 0
+                        program_hrefs = hrefs.DERProgramHref(program_index)
+                        program.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
+
+                        # Create the DefaultDERControl object and store it
+                        default_der_control = m.DefaultDERControl(
+                            href=program.DefaultDERControlLink.href,
+                            mRID=adpt.get_global_mrids().new_mrid(),
+                            DERControlBase=m.DERControlBase(
+                                opModConnect=True,
+                                opModEnergize=True
+                            )
+                        )
+                        adpt.ListAdapter.set_single(uri=program.DefaultDERControlLink.href, obj=default_der_control)
+                        
+                        # Store in href indexer for immediate access
+                        from ieee_2030_5.data.indexer import add_href
+                        add_href(program.DefaultDERControlLink.href, default_der_control)
+
+                        # Update the program in the database with the new DefaultDERControlLink
+                        program_list = adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT)
+                        for idx, existing_program in enumerate(program_list):
+                            if existing_program.href == program.href:
+                                program_list[idx] = program
+                                adpt.ListAdapter.set_list(hrefs.DEFAULT_DERP_ROOT, program_list)
+                                break
+
+                        _log.info("Created DefaultDERControlLink and DefaultDERControl for program %s at %s", program.href, program.DefaultDERControlLink.href)
+
+                    # Get the default DER control directly from database for debugging
+                    _log.info("Item %d: Looking up DefaultDERControl '%s' directly in database", i, program.DefaultDERControlLink.href)
+                    try:
+                        db_data = adpt.get_list_adapter()._db.get_point(program.DefaultDERControlLink.href)
+                        if db_data:
+                            import pickle
+                            stored_obj = pickle.loads(db_data)
+                            # Check if it's an Index object or raw data
+                            if hasattr(stored_obj, 'item'):
+                                dderc = stored_obj.item
+                            else:
+                                dderc = stored_obj
+                            _log.info("Item %d: Successfully retrieved DefaultDERControl from database", i)
+                        else:
+                            _log.error("No default DER control found in database at href %s for program %s", program.DefaultDERControlLink.href, getattr(program, 'mRID', program.href))
+                            continue
+                    except Exception as e:
+                        _log.error("Failed to get default DER control from database href %s for program %s: %s", program.DefaultDERControlLink.href, getattr(program, 'mRID', program.href), e)
+                        continue
                     # Should be something like ['DERControl', 'DERControlBase', 'opModTargetW']
                     obj_path = item['attribute'].split('.')
 
-                    _log.debug(f"Updating dderc mrid: {dderc.mRID}")
+                    _log.debug("Updating dderc mrid: %s", dderc.mRID)
                     # Depending on whether we are controlling the outer default control or the inner base control
                     # this will be set so we can use hasattr and setattr on it.
                     controller = dderc
@@ -185,13 +359,25 @@ if ENABLED:
                         prop = obj_path[2]
 
                     if not hasattr(controller, prop):
-                        _log.error(f"Property {prop} is not on obj type {type(controller)}")
+                        _log.error("Property %s is not on obj type %s", prop, type(controller))
                         continue
-                    _log.debug(f"Before {der.href} Setting property {prop} with value: {getattr(controller, prop)}")
-                    # TODO: We are only going to use active power values here though we need more dynamic!
-                    active_power = m.ActivePower(**item['value'])
-                    setattr(controller, prop, active_power)
-                    _log.debug(f"After {der.href} Setting property {prop} with value: {active_power}")
+
+                    _log.debug("Before %s Setting property %s with value: %s", der.href, prop, getattr(controller, prop))
+
+                    # Handle value based on property type
+                    if prop == 'opModTargetW' and isinstance(item['value'], dict):
+                        # Convert to ActivePower object for proper typing
+                        active_power = m.ActivePower(**item['value'])
+                        setattr(controller, prop, active_power)
+                        _log.debug("After %s Setting property %s with value: %s", der.href, prop, active_power)
+                    else:
+                        # Set directly for other property types
+                        setattr(controller, prop, item['value'])
+                        _log.debug("After %s Setting property %s with value: %s", der.href, prop, item['value'])
+
+                    # Store the updated controller (DefaultDERControl) back to database
+                    adpt.ListAdapter.set_single(uri=program.DefaultDERControlLink.href, obj=dderc)
+                    _log.debug("Stored updated DefaultDERControl with %s=%s to database at %s", prop, getattr(controller, prop), program.DefaultDERControlLink.href)
 
 
 
@@ -203,6 +389,97 @@ if ENABLED:
                 if model['modelName'] == self._model_name:
                     return model['modelId']
             raise ValueError(f"Model {self._model_name} not found")
+
+        def get_all_equipment_from_gridappsd(self) -> dict[str, str]:
+            """Get all equipment IDs and their mRIDs from GridAPPS-D for initialization.
+            
+            Returns:
+                dict: Mapping of equipment_id -> mRID for all equipment in the model
+            """
+            try:
+                if self.gapps is None:
+                    _log.warning("GridAPPS-D connection not available for equipment discovery")
+                    return {}
+
+                # Query GridAPPS-D for equipment information
+                if self._model_id is None:
+                    self._model_id = self.get_model_id_from_name()
+
+                response = self.gapps.get_response(
+                    topic='goss.gridappsd.process.request.config',
+                    message={
+                        "configurationType": "CIM Dictionary",
+                        "parameters": {"model_id": f"{self._model_id}"}
+                    }
+                )
+
+                feeder = response['data']['feeders'][0]
+                equipment_map = {}
+
+                # Collect equipment from all categories
+                for category in ['measurements', 'energyconsumers', 'powerelectronicsconnections']:
+                    if category in feeder:
+                        for item in feeder[category]:
+                            equipment_id = item.get('mRID')
+                            if equipment_id:
+                                equipment_map[equipment_id] = equipment_id  # Equipment ID is the mRID
+                            
+                            # Also map by name if different
+                            name = item.get('name')
+                            if name and name != equipment_id:
+                                equipment_map[name] = equipment_id
+
+                _log.info(f"Retrieved {len(equipment_map)} equipment entries from GridAPPS-D")
+                return equipment_map
+
+            except Exception as e:
+                _log.error(f"Failed to get equipment list from GridAPPS-D: {e}")
+                return {}
+
+        def get_equipment_mrid_from_gridappsd(self, equipment_id: str) -> str | None:
+            """Query GridAPPS-D to get the mRID for a given equipment ID.
+
+            Args:
+                equipment_id: GridAPPS-D equipment identifier
+
+            Returns:
+                str | None: Equipment mRID if found, None otherwise
+            """
+            try:
+                if self.gapps is None:
+                    _log.warning("GridAPPS-D connection not available for mRID lookup")
+                    return None
+
+                # Query GridAPPS-D for equipment information
+                if self._model_id is None:
+                    self._model_id = self.get_model_id_from_name()
+
+                response = self.gapps.get_response(
+                    topic='goss.gridappsd.process.request.config',
+                    message={
+                        "configurationType": "CIM Dictionary",
+                        "parameters": {"model_id": f"{self._model_id}"}
+                    }
+                )
+
+                feeder = response['data']['feeders'][0]
+
+                # Look for equipment in different categories
+                for category in ['measurements', 'energyconsumers', 'powerelectronicsconnections']:
+                    if category in feeder:
+                        for item in feeder[category]:
+                            # Check if this item matches our equipment ID
+                            if item.get('mRID') == equipment_id:
+                                return equipment_id  # Equipment ID is the mRID
+                            elif item.get('name') == equipment_id:
+                                return item.get('mRID')  # Return the mRID for this equipment
+
+                _log.warning(f"Equipment {equipment_id} not found in GridAPPS-D model")
+                return None
+
+            except Exception as e:
+                _log.error(f"Failed to query GridAPPS-D for equipment {equipment_id}: {e}")
+                return None
 
         def get_house_and_utility_inverters(self) -> list[HouseLookup]:
             """
@@ -232,12 +509,11 @@ if ENABLED:
                 response = self.gapps.get_response(topic='goss.gridappsd.process.request.config',
                                                    message={"configurationType": "CIM Dictionary",
                                                             "parameters": {"model_id": f"{self._model_id}"}})
-                _log.debug(f"Response: {response}")
                 # Should have returned only a single feeder
                 feeder = response['data']['feeders'][0]
             else:
 
-                with open(self.model_dict_file, 'r') as f:
+                with open(self._model_dict_file, 'r', encoding='utf-8') as f:
                     feeder = json.load(f)['feeders'][0]
 
             re_houses = re.compile(self.gridappsd_configuration.house_named_inverters_regex)
@@ -322,7 +598,7 @@ if ENABLED:
         def get_message_for_bus(self) -> dict:
             import ieee_2030_5.models.output as mo
             msg = {}
-            _log.debug(f"=== GET_MESSAGE_FOR_BUS ENTRY ===")
+            _log.debug("=== GET_MESSAGE_FOR_BUS ENTRY ===")
 
             def detect(v):
                 if v:
@@ -331,52 +607,52 @@ if ENABLED:
 
             try:
                 # Database reads are already thread-safe - no adapter lock needed
-                _log.debug(f"About to call filter_single_dict...")
+                _log.debug("About to call filter_single_dict...")
 
                 # Debug: Get ALL URIs first to see what's in the database
                 try:
                     all_uris = adpt.ListAdapter.get_all_keys()
-                    _log.debug(f"Database contains {len(all_uris)} total URIs")
+                    _log.debug("Database contains %d total URIs", len(all_uris))
                     if len(all_uris) > 0:
-                        _log.debug(f"Sample URIs: {all_uris[:5]}")
+                        _log.debug("Sample URIs: %s", all_uris[:5])
                         ders_uris = [uri for uri in all_uris if "ders" in uri]
-                        _log.debug(f"URIs containing 'ders': {ders_uris}")
+                        _log.debug("URIs containing 'ders': %s", ders_uris)
                         der_uris = [uri for uri in all_uris if "/der" in uri]
-                        _log.debug(f"URIs containing '/der': {der_uris[:10]}")
+                        _log.debug("URIs containing '/der': %s", der_uris[:10])
                 except Exception as debug_e:
-                    _log.warning(f"Debug URI listing failed: {debug_e}")
+                    _log.warning("Debug URI listing failed: %s", debug_e)
 
-                der_status_uris = adpt.ListAdapter.filter_single_dict(lambda k: detect(k))
-                _log.debug(f"filter_single_dict returned {len(der_status_uris)} URIs: {der_status_uris}")
+                der_status_uris = adpt.ListAdapter.filter_single_dict(detect)
+                _log.debug("filter_single_dict returned %d URIs: %s", len(der_status_uris), der_status_uris)
 
                 # Take a snapshot of inverters to avoid holding lock during database reads
                 current_inverters = self._inverters[:] if self._inverters else []
-                _log.debug(f"Using {len(current_inverters)} inverters for LFDI mapping")
+                _log.debug("Using %d inverters for LFDI mapping", len(current_inverters))
 
                 for uri in der_status_uris:
-                    _log.debug(f"Testing uri: {uri}")
+                    _log.debug("Testing uri: %s", uri)
 
                     try:
-                        _log.debug(f"Getting metadata for URI: {uri}")
+                        _log.debug("Getting metadata for URI: %s", uri)
                         meta_data = adpt.ListAdapter.get_single_meta_data(uri)
-                        _log.debug(f"Metadata: {meta_data}")
+                        _log.debug("Metadata: %s", meta_data)
 
-                        _log.debug(f"Getting status from URI: {meta_data['uri']}")
+                        _log.debug("Getting status from URI: %s", meta_data['uri'])
                         status: m.DERStatus = adpt.ListAdapter.get_single(meta_data['uri'])
-                        _log.debug(f"Retrieved status: {status}")
+                        _log.debug("Retrieved status: %s", status)
                         inverter: HouseLookup | None = None
 
-                        _log.debug(f"Status is: {status}")
-                        _log.debug(f"Meta_data LFDI: {meta_data.get('lfdi')}")
+                        _log.debug("Status is: %s", status)
+                        _log.debug("Meta_data LFDI: %s", meta_data.get('lfdi'))
 
                         if status and meta_data.get('lfdi') and current_inverters:
-                            _log.debug(f"Status found: {status}")
-                            _log.debug(f"Looking for: {meta_data['lfdi']}")
+                            _log.debug("Status found: %s", status)
+                            _log.debug("Looking for: %s", meta_data['lfdi'])
 
                             for x in current_inverters:
                                 if x.lfdi == meta_data['lfdi']:
                                     inverter = x
-                                    _log.debug(f"Found inverter: {inverter}")
+                                    _log.debug("Found inverter: %s", inverter)
                                     break
 
                             if inverter:
@@ -396,9 +672,9 @@ if ENABLED:
                         continue
 
             except Exception as e:
-                _log.error(f"Error in get_message_for_bus: {e}")
+                _log.error("Error in get_message_for_bus: %s", e)
 
-            _log.debug(f"=== GET_MESSAGE_FOR_BUS EXIT === Final message: {msg}")
+            _log.debug("=== GET_MESSAGE_FOR_BUS EXIT === Final message: %s", msg)
             return msg
         def _copy_certificates_for_energy_consumers(self):
             """
@@ -416,7 +692,7 @@ if ENABLED:
                                                             "parameters": {"model_id": f"{self._model_id}"}})
                 feeder = response['data']['feeders'][0]
             else:
-                with open(self.model_dict_file, 'r') as f:
+                with open(self._model_dict_file, 'r', encoding='utf-8') as f:
                     feeder = json.load(f)['feeders'][0]
 
             # Find all energy consumers with ConductingEquipment_mRID
@@ -432,8 +708,10 @@ if ENABLED:
                         conducting_equipment_map[conducting_eq_mrid] = []
                     conducting_equipment_map[conducting_eq_mrid].append(energy_consumer_mrid)
 
-            # Copy certificates from conducting equipment to energy consumers
+            # Copy certificates from conducting equipment to energy consumers AND register them
             cert_copies_count = 0
+            registered_consumers = 0
+            
             for conducting_mrid, consumer_mrids in conducting_equipment_map.items():
                 # Check if conducting equipment certificate files exist (using direct path construction)
                 cert_file = self.tls._certs_dir / f"{conducting_mrid}.crt"
@@ -447,19 +725,41 @@ if ENABLED:
                             # Copy the certificate files
                             self.tls.copy_certificate(conducting_mrid, consumer_mrid)
                             cert_copies_count += 1
-                            _log.debug(f"  Copied to {consumer_mrid}")
+                            _log.debug(f"  Copied certificate to {consumer_mrid}")
+                            
+                            # IMPORTANT: Also register this energy consumer mRID for message routing
+                            # This allows GridAPPS-D messages referencing energy consumer mRIDs to be routed correctly
+                            # We need access to the adapter to register - get it from context
+                            import ieee_2030_5.adapters as adpt
+                            if hasattr(adpt, '_initialized') and adpt._initialized:
+                                # Map the energy consumer mRID to the same EndDevice as the conducting equipment
+                                conducting_location = adpt.get_global_mrids().get_location(conducting_mrid)
+                                if conducting_location:
+                                    adpt.get_global_mrids().register_mrid(consumer_mrid, conducting_location)
+                                    registered_consumers += 1
+                                    _log.debug(f"  Registered energy consumer {consumer_mrid} -> {conducting_location}")
+                                else:
+                                    _log.warning(f"  Could not find location for conducting equipment {conducting_mrid}")
+                                    
                         except Exception as e:
                             _log.warning(f"Failed to copy certificate from {conducting_mrid} to {consumer_mrid}: {e}")
                 else:
                     _log.debug(f"No certificate found for conducting equipment {conducting_mrid}")
 
-            _log.info(f"Completed certificate copying: {cert_copies_count} certificates copied")
+            _log.info(f"Completed certificate copying: {cert_copies_count} certificates copied, {registered_consumers} energy consumers registered")
 
         def create_2030_5_device_certificates_and_configurations(self) -> list[DeviceConfiguration]:
+            _log.error("DEBUG: create_2030_5_device_certificates_and_configurations() CALLED")
 
             self._devices = []
+            discovered_devices = []
+            
             if self.use_houses_as_inverters():
-                for house in self.get_house_and_utility_inverters():
+                houses = self.get_house_and_utility_inverters()
+                _log.info(f"Discovered {len(houses)} house/utility inverters from GridAPPS-D")
+                for house in houses:
+                    _log.debug(f"Processing house device: {house.mRID}")
+                    discovered_devices.append(house.mRID)
                     self.tls.create_cert(house.mRID)
                     if house.lfdi is None:
                         house.lfdi = self.tls.lfdi(house.mRID)
@@ -467,12 +767,72 @@ if ENABLED:
                 # Copy certificates to energy consumers after creating main certificates
                 self._copy_certificates_for_energy_consumers()
             else:
-                for inv in self.get_power_electronic_connections():
+                invs = self.get_power_electronic_connections()
+                _log.info(f"Discovered {len(invs)} power electronic connections from GridAPPS-D")
+                for inv in invs:
+                    _log.debug(f"Processing inverter device: {inv.mRID}")
+                    discovered_devices.append(inv.mRID)
                     self.tls.create_cert(inv.mRID)
 
                 # Copy certificates to energy consumers after creating main certificates
                 self._copy_certificates_for_energy_consumers()
 
+            _log.info(f"Total devices discovered from GridAPPS-D: {discovered_devices}")
+            
+            # DEBUG: Check if our problem equipment ID is in any GridAPPS-D data
+            _log.info("DEBUG: Checking if problem equipment IDs are in GridAPPS-D data...")
+            problem_equipment = ["_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595", "_CA0A0024-DA79-4395-9B05-6A7B9DE0AED9"]
+            for eq_id in problem_equipment:
+                if eq_id in discovered_devices:
+                    _log.info(f"DEBUG: {eq_id} WAS discovered as main device")
+                else:
+                    _log.warning(f"DEBUG: {eq_id} NOT discovered as main device, checking energy consumers...")
+                    
+                    # Check if it's in the energy consumer data
+                    try:
+                        # Get the CIM dictionary to check energy consumers
+                        if self._model_dict_file is None:
+                            if self._model_id is None:
+                                self._model_id = self.get_model_id_from_name()
+                            response = self.gapps.get_response(
+                                topic='goss.gridappsd.process.request.config',
+                                message={
+                                    "configurationType": "CIM Dictionary",
+                                    "parameters": {"model_id": f"{self._model_id}"}
+                                }
+                            )
+                            feeder = response['data']['feeders'][0]
+                        else:
+                            import json
+                            with open(self._model_dict_file, 'r', encoding='utf-8') as f:
+                                feeder = json.load(f)['feeders'][0]
+                        
+                        # Check measurements for energy consumers
+                        found_in_measurements = False
+                        for measurement in feeder.get('measurements', []):
+                            if eq_id in [measurement.get('mRID'), measurement.get('name')]:
+                                _log.info(f"DEBUG: {eq_id} FOUND in measurements: {measurement}")
+                                found_in_measurements = True
+                                break
+                                
+                        if not found_in_measurements:
+                            # Check other categories
+                            for category in ['energyconsumers', 'powerelectronicsconnections']:
+                                if category in feeder:
+                                    for item in feeder[category]:
+                                        if eq_id in [item.get('mRID'), item.get('name')]:
+                                            _log.info(f"DEBUG: {eq_id} FOUND in {category}: {item}")
+                                            found_in_measurements = True
+                                            break
+                                if found_in_measurements:
+                                    break
+                                    
+                        if not found_in_measurements:
+                            _log.error(f"DEBUG: {eq_id} NOT FOUND anywhere in GridAPPS-D CIM data!")
+                            
+                    except Exception as e:
+                        _log.error(f"DEBUG: Failed to check GridAPPS-D data for {eq_id}: {e}")
+            
             self._build_device_configurations()
             return self._devices
 
@@ -481,23 +841,19 @@ if ENABLED:
 
             mb = self.get_message_bus()
 
-            if field_bus := self.gridappsd_configuration.field_bus_def.id:
-                ...
-
-            if simulation_id := os.environ.get("GRIDAPPSD_SIMULATION_ID"):
-                pass
-            if service_name := os.environ.get("GRIDAPPSD_SERVICE_NAME"):
-                pass
+            # Get environment variables needed for topic construction
+            simulation_id = os.environ.get("GRIDAPPSD_SIMULATION_ID")
+            service_name = os.environ.get("GRIDAPPSD_SERVICE_NAME")
 
             output_topic = topics.application_output_topic(application_id=service_name, simulation_id=simulation_id)
-            # # TODO: the output topic goes to the field bus manager regardless of the message_bus_id for some reason.
+            # # The output topic goes to the field bus manager regardless of the message_bus_id for some reason.
             # output_topic = topics.field_output_topic(message_bus_id=field_bus)
 
             message = self.get_message_for_bus()
 
             # Write detailed output to file for debugging
-            from pathlib import Path
             import datetime
+            from pathlib import Path
             debug_file = Path("gridappsd_adapter_output.log")
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             try:

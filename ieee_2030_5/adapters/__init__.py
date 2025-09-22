@@ -6,7 +6,7 @@ import threading
 import logging
 import time
 from pathlib import Path
-from typing import Any, List
+from typing import List
 import OpenSSL
 from flask import Response, request, g
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
@@ -17,7 +17,7 @@ from ieee_2030_5.persistance.points import atomic_operation, get_db
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from blinker import Signal
 from .base import (ThreadSafeListAdapter, ThreadSafeEndDeviceAdapter, initialize_adapters,
-                   get_adapter_stats, AdapterResult, ensure_adapters_initialized)
+                   get_adapter_stats, AdapterResult)
 
 
 # Import the global instances
@@ -1084,12 +1084,17 @@ def create_or_update_usage_point_reading(
 
 
 def create_device_capability(end_device_index: int,
-                             device_cfg: DeviceConfiguration) -> m.DeviceCapability:
+                             device_cfg: DeviceConfiguration,
+                             config: ServerConfiguration = None) -> m.DeviceCapability:
     """Thread-safe device capability creation."""
     try:
         dcap_href = hrefs.DeviceCapabilityHref(end_device_index)
         device_capability = m.DeviceCapability()
         device_capability = dcap_href.fill_hrefs(device_capability)
+        
+        # Set the poll rate from config if available
+        if config:
+            device_capability.pollRate = config.poll_rate
         device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
             href=hrefs.DEFAULT_MUP_ROOT, all=0)
         device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
@@ -1200,70 +1205,6 @@ def update_active_der_event_ended(event: m.Event):
             raise
 
 
-# Global mRID management with thread safety
-class ThreadSafeGlobalMRIDs:
-    """Thread-safe global mRID management."""
-
-    def __init__(self):
-        self._lock = threading.RLock()
-        self._db = get_db()
-        self._mrid_counter_key = "global:mrid_counter"
-        self._mrid_index_key = "global:mrid_index"
-
-    def new_mrid(self) -> bytes:
-        """Generate a new unique mRID."""
-        with self._lock:
-            try:
-                import pickle
-                # Get current counter
-                counter_data = self._db.get_point(self._mrid_counter_key)
-                current_counter = 0 if counter_data is None else pickle.loads(counter_data)
-                # Generate new mRID
-                new_mrid = f"mrid_{current_counter}".encode()
-                # Update counter
-                self._db.set_point(self._mrid_counter_key, pickle.dumps(current_counter + 1))
-                return new_mrid
-            except Exception as e:
-                _log.error(f"Failed to generate new mRID: {e}")
-                raise
-
-    def add_item_with_mrid(self, key: str, item: Any):
-        """Add an item with its mRID to the global index."""
-        with self._lock:
-            try:
-                import pickle
-                # Get current index
-                index_data = self._db.get_point(self._mrid_index_key)
-                mrid_index = {} if index_data is None else pickle.loads(index_data)
-                # Add item
-                if hasattr(item, 'mRID'):
-                    mrid_index[item.mRID] = key
-                # Store updated index
-                self._db.set_point(self._mrid_index_key, pickle.dumps(mrid_index))
-            except Exception as e:
-                _log.error(f"Failed to add item with mRID: {e}")
-                raise
-
-    def get_item(self, mrid: str) -> Any:
-        """Get an item by its mRID."""
-        with self._lock:
-            try:
-                import pickle
-                # Get mRID index
-                index_data = self._db.get_point(self._mrid_index_key)
-                if index_data is None:
-                    return None
-                mrid_index = pickle.loads(index_data)
-                # Get key for this mRID
-                key = mrid_index.get(mrid)
-                if key is None:
-                    return None
-                # Get the actual item using the key
-                return self._db.get_point(key)
-            except Exception as e:
-                _log.error(f"Failed to get item with mRID {mrid}: {e}")
-                return None
-
 
 # Add missing method that might be referenced
 def clear_all_adapters():
@@ -1278,17 +1219,10 @@ def clear_all_adapters():
             raise
 
 
-# Global instance - initialized lazily
-GlobalmRIDs = None
-
-
 def get_global_mrids():
-    """Get the global MRIDs instance, initializing if necessary."""
-    global GlobalmRIDs
-    if GlobalmRIDs is None:
-        ensure_adapters_initialized()
-        GlobalmRIDs = ThreadSafeGlobalMRIDs()
-    return GlobalmRIDs
+    """Get the global MRIDs instance from base module."""
+    from .base import get_global_mrids_instance
+    return get_global_mrids_instance()
 
 
 def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
@@ -1308,7 +1242,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             index = ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
             derp = config.default_program
             if not derp.mRID:
-                derp.mRID = get_global_mrids().new_mrid()
+                derp.mRID = get_global_mrids().new_mrid().decode('utf-8')
             result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
             if not result.success:
                 raise Exception(f"Failed to add default program: {result.error}")
@@ -1322,7 +1256,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             # Add default control if configured
             if config.default_der_control:
                 dderc = config.default_der_control
-                dderc.mRID = get_global_mrids().new_mrid()
+                dderc.mRID = get_global_mrids().new_mrid().decode('utf-8')
                 dderc.href = derp.DefaultDERControlLink.href
                 ListAdapter.set_single(uri=derp.DefaultDERControlLink.href, obj=dderc)
             # Initialize sub-lists
@@ -1336,7 +1270,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 default_der_control = program_cfg.pop("DefaultDERControl", None)
                 program = m.DERProgram(**program_cfg)
                 if not program.mRID:
-                    program.mRID = get_global_mrids().new_mrid()
+                    program.mRID = get_global_mrids().new_mrid().decode('utf-8')
                 program = program_hrefs.fill_hrefs(program)
                 result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
                 if not result.success:
@@ -1346,7 +1280,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     dderc = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
                                                 **default_der_control)
                     if not dderc.mRID:
-                        dderc.mRID = get_global_mrids().new_mrid()
+                        dderc.mRID = get_global_mrids().new_mrid().decode('utf-8')
                     ListAdapter.set_single(uri=program.DefaultDERControlLink.href, obj=dderc)
                 # Initialize lists
                 ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
@@ -1364,7 +1298,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                                     str(index)]),
                                **curve_cfg)
             if not curve.mRID:
-                curve.mRID = get_global_mrids().new_mrid()
+                curve.mRID = get_global_mrids().new_mrid().decode('utf-8')
             result = ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
             if not result.success:
                 raise Exception(f"Failed to add curve: {result.error}")
@@ -1375,7 +1309,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     der_global_count = 0
     for index, cfg_device in enumerate(config.devices):
         try:
-            device_capability = create_device_capability(index, cfg_device)
+            device_capability = create_device_capability(index, cfg_device, config)
             ed_href = hrefs.EndDeviceHref(index)
             # Check if device already exists
             existing_device = EndDeviceAdapter.fetch_by_href(str(ed_href))

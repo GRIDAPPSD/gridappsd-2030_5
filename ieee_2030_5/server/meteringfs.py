@@ -170,16 +170,16 @@ class MirrorUsagePointRequest(RequestOp):
                     results=0
                 )
 
-            # Set the pollRate from server configuration
-            if hasattr(self.server_config, 'mirror_usage_point_post_rate'):
-                mup.pollRate = self.server_config.mirror_usage_point_post_rate
+            # Set the pollRate from server configuration (using post_rate for MUP)
+            if hasattr(self.server_config, 'post_rate'):
+                mup.pollRate = self.server_config.post_rate
             else:
-                # If server_config is a dict
-                if isinstance(self.server_config, dict):
-                    mup.pollRate = self.server_config.get('mirror_usage_point_post_rate', 900)
+                # Fall back to mirror_usage_point_post_rate for backward compatibility
+                if hasattr(self.server_config, 'mirror_usage_point_post_rate'):
+                    mup.pollRate = self.server_config.mirror_usage_point_post_rate
                 else:
                     # Default value if not configured
-                    mup.pollRate = 900
+                    mup.pollRate = 300
         else:
             # /mup/0 - accessing specific MUP
             # WRITE-THEN-READ CONSISTENCY: Use per-client lock to ensure MUP access
@@ -256,7 +256,7 @@ class MirrorUsagePointRequest(RequestOp):
         # Creating a new mup
         if data_type == m.MirrorUsagePoint:
             if data.postRate is None:
-                data.postRate = self.server_config.mirror_usage_point_post_rate
+                data.postRate = self.server_config.post_rate
             _log.debug(f"POST /mup request - Client LFDI: {self.lfdi}")
             _log.debug(f"POST /mup request - MUP deviceLFDI from XML: {getattr(data, 'deviceLFDI', 'None')}")
             _log.debug(f"POST /mup request - MUP deviceLFDI type: {type(getattr(data, 'deviceLFDI', None))}")

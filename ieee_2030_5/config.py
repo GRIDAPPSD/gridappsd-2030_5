@@ -218,6 +218,10 @@ class ServerConfiguration:
     device_capability_poll_rate: int = 900
     mirror_usage_point_post_rate: int = 300
     end_device_list_poll_rate: int = 86400    # daily check-in
+    
+    # General poll and post rates from config
+    poll_rate: int = 900  # Default poll rate for device capabilities (15 minutes)
+    post_rate: int = 300  # Default post rate for mirror usage points (5 minutes)
 
     generate_admin_cert: bool = False
     lfdi_client: str | None = None

@@ -295,7 +295,8 @@ class AdminEndpoints:
                 item.sFDI = get_sfdi_from_lfdi(item.lFDI)
                 index = int(item.href.rsplit(hrefs.SEP)[-1])
                 adpt.EndDeviceAdapter.put(index, item)
-                create_device_capability(index)
+                # Pass None for device_cfg as we don't have it, but pass config for poll_rate
+                create_device_capability(index, None, self.server_config)
                 response_status = 201
 
             elif request.method == 'PUT':
