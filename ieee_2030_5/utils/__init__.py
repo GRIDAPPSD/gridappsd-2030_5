@@ -214,7 +214,33 @@ class TLSWrap:
         raise NotImplementedError()
 
 
+import logging
+
+class ColorizedFormatter(logging.Formatter):
+    """A colorized log formatter that adds ANSI color codes based on log level."""
+    
+    # ANSI color codes
+    COLORS = {
+        'DEBUG': '\033[36m',    # Cyan
+        'INFO': '\033[32m',     # Green  
+        'WARNING': '\033[33m',  # Yellow
+        'ERROR': '\033[31m',    # Red
+        'CRITICAL': '\033[35m', # Magenta
+    }
+    RESET = '\033[0m'  # Reset to normal
+    
+    def format(self, record):
+        # Get the original formatted message
+        msg = super().format(record)
+        
+        # Add color based on log level
+        level_color = self.COLORS.get(record.levelname, '')
+        if level_color:
+            # Color the entire message
+            return f"{level_color}{msg}{self.RESET}"
+        return msg
+
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
 
-__all__ = ['OpensslWrapper', 'CryptographyWrapper', 'uuid_2030_5']
+__all__ = ['OpensslWrapper', 'CryptographyWrapper', 'uuid_2030_5', 'ColorizedFormatter']

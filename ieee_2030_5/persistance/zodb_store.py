@@ -57,8 +57,14 @@ class ZODBPointStore(PointStoreBase):
             transaction.abort()
             raise
 
-    def set_point(self, key: str, value: bytes) -> None:
-        """Set a point into the key/value store."""
+    def set_point(self, key: str, value: bytes, synchronous: bool = False) -> None:
+        """Set a point into the key/value store.
+        
+        Args:
+            key: The key to store the value under
+            value: The bytes value to store
+            synchronous: Ignored for ZODB (always synchronous), kept for compatibility
+        """
         normalized_key = key.replace('/', '^^^^')
 
         try:

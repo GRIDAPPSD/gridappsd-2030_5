@@ -7,17 +7,18 @@ import socket
 import ssl
 import threading
 import time
-from datetime import datetime
+import uuid
 from dataclasses import fields
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from queue import Queue
-import uuid
 
 import OpenSSL
 import werkzeug.exceptions
-from flask import (Flask, Response, g, redirect, render_template, request, url_for)
+from flask import Flask, Response, g, redirect, render_template, request, url_for
 from flask_session import Session
+
 # from flask_socketio import SocketIO, send
 from werkzeug.serving import BaseWSGIServer, make_server
 
@@ -28,12 +29,14 @@ __all__ = ["build_server"]
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi)
+from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
+
 # templates = Jinja2Templates(directory="templates")
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.data.indexer import get_href, get_href_all_names
 from ieee_2030_5.models import DeviceCategoryType
 from ieee_2030_5.server.admin_endpoints import AdminEndpoints
+
 #from ieee_2030_5.server.server_constructs import EndDevices, get_groups
 from ieee_2030_5.server.server_endpoints import ServerEndpoints
 
@@ -342,7 +345,8 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
         environ['ieee_2030_5_lfdi'] = self._normalize_lfdi(raw_lfdi)
         environ['ieee_2030_5_sfdi'] = sfdi_from_lfdi(environ['ieee_2030_5_lfdi'])
 
-        _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
+        # Log LFDI/SFDI only when debugging specific auth issues
+        # _log.debug(f"Environment lfdi: {environ['ieee_2030_5_lfdi']} sfdi: {environ['ieee_2030_5_sfdi']}")
 
     def _verify_device_authorization(self, environ):
         """Verify that the device is authorized to access the server"""
@@ -431,9 +435,10 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             # Parse connection header
             connection_header = self.headers.get('Connection', '').lower()
 
-            # Log request
-            _log.debug(f"Request: {self.command} {self.path} {self.request_version}")
-            _log.debug(f"Connection header: {connection_header}")
+            # Log only important requests at info level
+            if any(p in self.path for p in ['/edev', '/der', '/dcap', '/fsa', '/msg']):
+                _log.info(f"Request: {self.command} {self.path}")
+            # Connection header logging not needed for every request
 
             # Process the request
             handler = getattr(self, f'do_{self.command}', self.do_GET)
@@ -443,19 +448,23 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             # For HTTP/1.1, persistent is default unless 'Connection: close'
             if self.request_version >= 'HTTP/1.1' and 'close' not in connection_header:
                 self.close_connection = False
-                _log.debug(f"HTTP/1.1 default keep-alive for {self.client_address}")
+                # Keep-alive is normal, no need to log
+                pass
             # For HTTP/1.0 with keep-alive header
             elif 'keep-alive' in connection_header:
                 self.close_connection = False
-                _log.debug(f"Explicit keep-alive for {self.client_address}")
+                # Keep-alive is normal, no need to log
+                pass
             # Otherwise close
             else:
                 self.close_connection = True
-                _log.debug(f"Connection will close for {self.client_address}")
+                # Connection close is normal, no need to log
+                pass
 
         except socket.timeout:
             # Timeout reading from socket - close connection
-            _log.debug(f"Socket timeout from {self.client_address}")
+            # Socket timeouts can be logged at warning level if needed
+            _log.warning(f"Socket timeout from {self.client_address}")
             self.close_connection = True
         except Exception as e:
             # Handle any other errors
@@ -524,92 +533,116 @@ def set_socket_options(socket):
 def log_client_request(lfdi: str, request_id: str, cn: str = None):
     """Log incoming request details to client-specific file"""
     debug_dir = Path('debug_client_traffic')
-    
+
     # Ensure the debug directory exists
     debug_dir.mkdir(exist_ok=True)
-    
+
     # Use CN for filename if available, otherwise fall back to LFDI
     # Sanitize the filename to remove any invalid characters
     safe_name = cn if cn else lfdi
     safe_name = safe_name.replace('/', '_').replace('\\', '_').replace(':', '_')
-    filename = f"client_{safe_name}.log"
+    filename = f"client_{safe_name}.txt"  # Changed to .txt
     client_file = debug_dir / filename
-    
+
     timestamp = datetime.now().isoformat()
-    
-    request_data = {
-        'timestamp': timestamp,
-        'request_id': request_id,
-        'type': 'REQUEST',
-        'lfdi': lfdi,
-        'cn': cn,
-        'method': request.method,
-        'path': request.path,
-        'query_string': request.query_string.decode('utf-8') if request.query_string else '',
-        'headers': dict(request.headers),
-        'remote_addr': request.remote_addr,
-        'content_length': request.content_length,
-        'content_type': request.content_type,
-        'body': None
-    }
-    
+
     # Try to get request body if present
+    body_data = None
     if request.content_length and request.content_length > 0:
         try:
             # Get the raw data and restore it for the actual request handler
             body_data = request.get_data(as_text=True)
-            request_data['body'] = body_data
         except Exception as e:
-            request_data['body_error'] = str(e)
-    
-    # Write to file with error handling
+            body_data = f"[Error reading body: {e}]"
+
+    # Format XML body if present
+    formatted_body = ""
+    if body_data:
+        try:
+            import xml.dom.minidom
+            dom = xml.dom.minidom.parseString(body_data)
+            formatted_body = dom.toprettyxml(indent="  ")
+            # Remove the XML declaration line if present and empty lines
+            lines = formatted_body.split('\n')
+            if lines[0].startswith('<?xml'):
+                lines = lines[1:]
+            # Remove excessive empty lines
+            formatted_body = '\n'.join(line for line in lines if line.strip() or not line)
+        except Exception:
+            # If XML parsing fails, use the raw body
+            formatted_body = body_data
+
+    # Write to file with error handling in human-readable format
     try:
         with open(client_file, 'a') as f:
-            f.write(json.dumps(request_data, indent=2) + '\n\n')
+            f.write("=" * 80 + "\n")
+            f.write(f"REQUEST [{timestamp}]\n")
+            f.write(f"Request ID: {request_id}\n")
+            f.write(f"Method: {request.method}\n")
+            f.write(f"Path: {request.path}\n")
+            if request.query_string:
+                f.write(f"Query: {request.query_string.decode('utf-8')}\n")
+            f.write(f"From: {request.remote_addr}\n")
+            if formatted_body:
+                f.write(f"\nBody:\n{formatted_body}\n")
+            else:
+                f.write("\nBody: (empty)\n")
+            f.write("\n")
     except Exception as e:
         _log.error(f"Failed to write request log for {safe_name}: {e}")
 
 def log_client_response(lfdi: str, request_id: str, response: Response, duration: float, cn: str = None):
     """Log outgoing response details to client-specific file"""
     debug_dir = Path('debug_client_traffic')
-    
+
     # Ensure the debug directory exists
     debug_dir.mkdir(exist_ok=True)
-    
+
     # Use CN for filename if available, otherwise fall back to LFDI
     # Sanitize the filename to remove any invalid characters
     safe_name = cn if cn else lfdi
     safe_name = safe_name.replace('/', '_').replace('\\', '_').replace(':', '_')
-    filename = f"client_{safe_name}.log"
+    filename = f"client_{safe_name}.txt"  # Changed to .txt
     client_file = debug_dir / filename
-    
+
     timestamp = datetime.now().isoformat()
-    
-    response_data = {
-        'timestamp': timestamp,
-        'request_id': request_id,
-        'type': 'RESPONSE',
-        'lfdi': lfdi,
-        'cn': cn,
-        'status_code': response.status_code,
-        'headers': dict(response.headers),
-        'content_length': response.headers.get('Content-Length', 0),
-        'content_type': response.headers.get('Content-Type', 'unknown'),
-        'duration_seconds': duration,
-        'body': None
-    }
-    
+
     # Try to get response body
+    response_body = None
     try:
         response_body = response.get_data(as_text=True)
-        response_data['body'] = response_body
     except Exception as e:
-        response_data['body_error'] = str(e)
-    
-    # Write to file with error handling
+        response_body = f"[Error reading body: {e}]"
+
+    # Format XML body if present
+    formatted_body = ""
+    if response_body:
+        try:
+            import xml.dom.minidom
+            dom = xml.dom.minidom.parseString(response_body)
+            formatted_body = dom.toprettyxml(indent="  ")
+            # Remove the XML declaration line if present and empty lines
+            lines = formatted_body.split('\n')
+            if lines[0].startswith('<?xml'):
+                lines = lines[1:]
+            # Remove excessive empty lines
+            formatted_body = '\n'.join(line for line in lines if line.strip() or not line)
+        except Exception:
+            # If XML parsing fails, use the raw body
+            formatted_body = response_body
+
+    # Write to file with error handling in human-readable format
     try:
         with open(client_file, 'a') as f:
-            f.write(json.dumps(response_data, indent=2) + '\n\n')
+            f.write(f"RESPONSE [{timestamp}]\n")
+            f.write(f"Request ID: {request_id}\n")
+            f.write(f"Status: {response.status_code}\n")
+            f.write(f"Duration: {duration:.3f}s\n")
+            if formatted_body:
+                f.write(f"\nBody:\n{formatted_body}\n")
+            else:
+                f.write("\nBody: (empty)\n")
+            f.write("=" * 80 + "\n\n")
     except Exception as e:
         _log.error(f"Failed to write response log for {safe_name}: {e}")
 
@@ -632,42 +665,42 @@ def before_request():
     # Add request tracking
     g.start_time = time.time()
     g.request_id = str(uuid.uuid4())[:8]  # Generate short request ID for tracking
-    
+
     # Get request details early for burst detection
     method = request.method
     path = request.path
-    
+
     # Simultaneous request detection and mitigation
     # Track recent requests to detect bursts and add delays for database-intensive operations
     current_time = g.start_time
     request_signature = f"{method}:{path}"
-    
+
     # Initialize global request tracking if not exists
     if not hasattr(before_request, '_recent_requests'):
         before_request._recent_requests = []
         before_request._request_lock = threading.RLock()
-    
+
     with before_request._request_lock:
         # Clean old requests (older than 100ms)
         before_request._recent_requests = [
-            (ts, sig) for ts, sig in before_request._recent_requests 
+            (ts, sig) for ts, sig in before_request._recent_requests
             if current_time - ts < 0.1
         ]
-        
+
         # Check for simultaneous requests that could cause database contention
         simultaneous_count = len(before_request._recent_requests)
-        recent_mup_posts = sum(1 for ts, sig in before_request._recent_requests 
+        recent_mup_posts = sum(1 for ts, sig in before_request._recent_requests
                               if 'POST:' in sig and '/mup' in sig)
-        recent_db_ops = sum(1 for ts, sig in before_request._recent_requests 
+        recent_db_ops = sum(1 for ts, sig in before_request._recent_requests
                            if any(op in sig for op in ['POST:', 'PUT:']))
-        
+
         # Add this request to tracking
         before_request._recent_requests.append((current_time, request_signature))
-        
+
         # Apply burst mitigation for database-intensive operations
         should_delay = False
         delay_reason = ""
-        
+
         if method in ['POST', 'PUT'] and simultaneous_count > 0:
             if '/mup' in path and recent_mup_posts > 0:
                 # Multiple MUP operations - high contention risk
@@ -675,9 +708,9 @@ def before_request():
                 delay_reason = f"MUP burst (sim:{simultaneous_count}, mup:{recent_mup_posts})"
             elif recent_db_ops >= 2:
                 # High database operation density
-                should_delay = True  
+                should_delay = True
                 delay_reason = f"DB op burst (sim:{simultaneous_count}, db_ops:{recent_db_ops})"
-        
+
         if should_delay:
             # Add larger randomized delay to handle severe contention (100-500ms for high-risk operations)
             import random
@@ -689,7 +722,7 @@ def before_request():
                 delay = random.uniform(0.05, 0.2)  # 50-200ms
             time.sleep(delay)
             _log_http.debug(f"[{g.request_id}] Added {delay*1000:.1f}ms delay for {delay_reason}")
-            
+
             # Update start time after delay
             g.start_time = time.time()
 
@@ -712,7 +745,7 @@ def before_request():
     # Log client certificate info if available
     if 'ieee_2030_5_lfdi' in request.environ:
         _log_http.debug(f"[{g.request_id}] Client LFDI: {request.environ.get('ieee_2030_5_lfdi')}")
-        
+
         # Client-specific debug logging to file
         lfdi = request.environ.get('ieee_2030_5_lfdi')
         if lfdi and getattr(server_config, 'debug_client_traffic', False):
@@ -755,7 +788,7 @@ def after_request(response: Response) -> Response:
     _log.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
     resp = response.get_data().decode('utf-8')
     _log.debug(f"\nRESP: {resp}")
-    
+
     # Client-specific debug logging to file
     lfdi = request.environ.get('ieee_2030_5_lfdi')
     if lfdi and getattr(server_config, 'debug_client_traffic', False):
@@ -1028,8 +1061,8 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             db = get_db()
             if hasattr(db, 'get_monitoring_data'):
                 monitoring_data = db.get_monitoring_data()
-            
-            return render_template("admin/performance.html", 
+
+            return render_template("admin/performance.html",
                                  monitoring_data=monitoring_data,
                                  current_time=datetime.now().isoformat())
         except Exception as e:
@@ -1045,7 +1078,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             db = get_db()
             if hasattr(db, 'get_monitoring_data'):
                 data = db.get_monitoring_data()
-                return Response(json.dumps(data, indent=2, default=str), 
+                return Response(json.dumps(data, indent=2, default=str),
                               mimetype='application/json')
             else:
                 return Response(json.dumps({
@@ -1087,7 +1120,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     @app.route("/admin/message-bus")
     def admin_message_bus():
         """GridAPPS-D message bus traffic monitoring dashboard."""
-        return render_template("admin/message_bus.html", 
+        return render_template("admin/message_bus.html",
                              current_time=datetime.now().isoformat())
 
     @app.route("/api/message-bus/events")
@@ -1096,26 +1129,26 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         def generate_events():
             from ieee_2030_5.monitoring import get_message_monitor
             monitor = get_message_monitor()
-            
+
             # Send initial messages
             recent_messages = monitor.get_recent_messages(50)  # Last 50 messages
             for msg in recent_messages:
                 yield f"data: {json.dumps(msg.to_dict())}\n\n"
-            
+
             # Set up real-time subscription
             import queue
             import threading
-            
+
             message_queue = queue.Queue(maxsize=100)
-            
+
             def message_callback(event):
                 try:
                     message_queue.put(event, block=False)
                 except queue.Full:
                     pass  # Drop messages if queue is full
-            
+
             monitor.subscribe(message_callback)
-            
+
             try:
                 while True:
                     try:
@@ -1127,7 +1160,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                         yield f"data: {{\"type\":\"keepalive\",\"timestamp\":\"{datetime.now().isoformat()}\"}}\n\n"
             finally:
                 monitor.unsubscribe(message_callback)
-        
+
         return Response(generate_events(), mimetype='text/event-stream',
                        headers={'Cache-Control': 'no-cache'})
 
@@ -1138,7 +1171,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             from ieee_2030_5.monitoring import get_message_monitor
             monitor = get_message_monitor()
             stats = monitor.get_stats()
-            return Response(json.dumps(stats, indent=2, default=str), 
+            return Response(json.dumps(stats, indent=2, default=str),
                           mimetype='application/json')
         except Exception as e:
             _log.error(f"Error getting message bus stats: {e}")
@@ -1153,13 +1186,13 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         try:
             query = request.args.get('q', '')
             topic_filter = request.args.get('topic', None)
-            
+
             from ieee_2030_5.monitoring import get_message_monitor
             monitor = get_message_monitor()
             results = monitor.search_messages(query, topic_filter)
-            
-            return Response(json.dumps([msg.to_dict() for msg in results], 
-                                     indent=2, default=str), 
+
+            return Response(json.dumps([msg.to_dict() for msg in results],
+                                     indent=2, default=str),
                           mimetype='application/json')
         except Exception as e:
             _log.error(f"Error searching messages: {e}")
@@ -1193,14 +1226,14 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         try:
             from ieee_2030_5.monitoring import get_message_monitor
             monitor = get_message_monitor()
-            
+
             if monitor.is_enabled():
                 monitor.disable()
                 status = 'disabled'
             else:
                 monitor.enable()
                 status = 'enabled'
-                
+
             return Response(json.dumps({
                 'success': True,
                 'status': status,
@@ -1244,14 +1277,15 @@ def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
 def run_dual_server(config: ServerConfiguration, tlsrepo: TLSRepository, admin_http_port: int = 5001, **kwargs):
     """Run both HTTPS server (for IEEE 2030.5 API) and HTTP server (for admin only)"""
     import threading
+
     from werkzeug.serving import run_simple
     global server_config, tls_repository
     server_config = config
     tls_repository = tlsrepo
-    
+
     # Build the main app
     app = __build_app__(config, tlsrepo)
-    
+
     # Parse main server configuration
     try:
         host, port = config.server_hostname.split(":")
@@ -1259,14 +1293,14 @@ def run_dual_server(config: ServerConfiguration, tlsrepo: TLSRepository, admin_h
     except ValueError:
         host = config.server_hostname
         port = 8443
-    
+
     # Set up request handler
     IEEE2030_5_RequestHandler.config = config
     IEEE2030_5_RequestHandler.tlsrepo = tlsrepo
-    
+
     # Create SSL context for HTTPS server
     ssl_context = __build_ssl_context__(tlsrepo) if not config.lfdi_client else None
-    
+
     def start_https_server():
         """Start the main HTTPS server for IEEE 2030.5 API"""
         _log.info(f"Starting HTTPS server on {host}:{port}")
@@ -1276,25 +1310,25 @@ def run_dual_server(config: ServerConfiguration, tlsrepo: TLSRepository, admin_h
                 port=port,
                 request_handler=IEEE2030_5_RequestHandler,
                 **kwargs)
-    
+
     def start_http_admin_server():
         """Start HTTP server for admin access only"""
         # Use the same Flask app but different server (simpler approach)
         # Bind HTTP admin server to all interfaces for convenience
         # This will allow the same routes to be accessible via both HTTPS and HTTP
-        
+
         admin_host = "0.0.0.0"  # Allow access from any interface for HTTP admin
         _log.info(f"Starting HTTP admin server on {admin_host}:{admin_http_port}")
-        run_simple(admin_host, admin_http_port, app, 
+        run_simple(admin_host, admin_http_port, app,
                   threaded=True, use_reloader=False, use_debugger=kwargs.get('debug', False))
-    
+
     # Start both servers in separate threads
     https_thread = threading.Thread(target=start_https_server, daemon=True)
     http_thread = threading.Thread(target=start_http_admin_server, daemon=True)
-    
+
     https_thread.start()
     http_thread.start()
-    
+
     # Wait for both threads
     try:
         https_thread.join()
@@ -1341,7 +1375,7 @@ def build_server(config: ServerConfiguration, tlsrepo: TLSRepository, **kwargs) 
     global server_config, tls_repository
     server_config = config
     tls_repository = tlsrepo
-    
+
     # Create debug directory for client traffic logs if debug is enabled
     if getattr(config, 'debug_client_traffic', False):
         debug_dir = Path('debug_client_traffic')

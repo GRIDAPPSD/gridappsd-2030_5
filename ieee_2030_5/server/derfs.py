@@ -176,8 +176,20 @@ class DERProgramRequests(RequestOp):
                 _log.debug(f"Retrieving DERC")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
                 if hasattr(retval, 'mRID'):
-                    retval = adpt.GlobalmRIDs.get_item(retval.mRID)
+                    # Use the global mRIDs registry to get the latest version
+                    found_item = adpt.get_global_mrids().get_item(retval.mRID)
+                    if found_item is not None:
+                        retval = found_item
+                        _log.debug(f"Found DERC in GlobalmRIDs registry: {retval.mRID}")
             elif parsed.at(2) == hrefs.DDERC:
+                _log.debug(f"Retrieving DDERC")
+                retval = adpt.ListAdapter.get_single(request.path)
+                if hasattr(retval, 'mRID'):
+                    # Use the global mRIDs registry to get the latest version
+                    found_item = adpt.get_global_mrids().get_item(retval.mRID)
+                    if found_item is not None:
+                        retval = found_item
+                        _log.debug(f"Found DDERC in GlobalmRIDs registry: {retval.mRID}")
                 _log.debug(f"Retrieving DDERC")
                 retval = adpt.ListAdapter.get_single(request.path)
                 if hasattr(retval, 'mRID'):

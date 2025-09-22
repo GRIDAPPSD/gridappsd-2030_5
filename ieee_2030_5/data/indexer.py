@@ -65,13 +65,39 @@ class Indexer:
         # If using a link, we need the true href to cache the object.
         if isinstance(href, Link):
             href = href.href
+        
+        # First check in-memory cache
         if href in self.__items__:
-            index = pickle.loads(get_point(href))    # pickle.loads(get_point(href))
-            # index = pickle.loads(self.__items__.get(href))
-            # index = deserialize_dataclass(data, SerializeType.JSON)
-            data = index.item
+            data = self.__items__[href].item
         else:
-            data = None
+            # If not in cache, check the database
+            try:
+                point_data = get_point(href)
+                if point_data:
+                    index = pickle.loads(point_data)
+                    # Check if it's an Index object or raw data
+                    if hasattr(index, 'item'):
+                        data = index.item
+                        # Update in-memory cache
+                        self.__items__[href] = index
+                    else:
+                        # Raw data - wrap it in an Index for consistency
+                        data = index
+                        from datetime import datetime
+                        from email.utils import format_datetime
+                        wrapped_index = Index(
+                            href=href,
+                            item=data,
+                            added=format_datetime(datetime.utcnow()),
+                            last_written=format_datetime(datetime.utcnow()),
+                            last_hash=None
+                        )
+                        self.__items__[href] = wrapped_index
+                else:
+                    data = None
+            except Exception as e:
+                _log.debug(f"Failed to get href {href} from database: {e}")
+                data = None
 
         return data
 
