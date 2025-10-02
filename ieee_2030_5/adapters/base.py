@@ -1215,7 +1215,14 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     obj_key = f"single:{uri}"
                     #print(f"!!!! STORAGE DEBUG: Storing object with key: {obj_key}")
                     _log.info(f"STORAGE_DEBUG: Storing object with key: {obj_key}")
-                    self._db.set_point(obj_key, pickle.dumps(obj))
+                    # Force synchronous write for critical single objects
+                    # Check if the database backend supports synchronous writes
+                    if hasattr(self._db, 'set_point') and 'synchronous' in self._db.set_point.__code__.co_varnames:
+                        # SQLite backend - force synchronous write
+                        self._db.set_point(obj_key, pickle.dumps(obj), synchronous=True)
+                    else:
+                        # Other backends
+                        self._db.set_point(obj_key, pickle.dumps(obj))
                     #print(f"!!!! STORAGE DEBUG: Object stored successfully")
                     _log.info(f"STORAGE_DEBUG: Object stored successfully")
 
@@ -1441,7 +1448,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             list_uri: The URI of the list to retrieve (e.g., "/edev", "/programs")
             start: Zero-based starting index for pagination (default: 0)
             after: Alternative pagination parameter, items after this index (default: 0)
-            limit: Maximum number of items to return. 0 means no limit (default: 0)
+            limit: Maximum number of items to return. 0 or unspecified defaults to 10 (default: 0)
             sort_by: Name of the attribute to sort by (e.g., "href", "lFDI")
             reverse: If True, sort in descending order (default: False)
 
@@ -1497,11 +1504,13 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 if after > 0:
                     start = after + 1
 
-                if limit > 0:
-                    end_index = start + limit
-                    page_items = current_list[start:end_index]
-                else:
-                    page_items = current_list[start:]
+                # Default limit is 10 items if not specified (IEEE 2030.5 best practice)
+                # This prevents returning massive lists by default
+                if limit <= 0:
+                    limit = 10
+
+                end_index = start + limit
+                page_items = current_list[start:end_index]
 
                 # Create appropriate list type based on metadata
                 metadata = self._get_list_metadata(list_uri)
@@ -1514,6 +1523,28 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     result.href = list_uri
                     result.all = total_count
                     result.results = len(page_items)
+                    
+                    # Set pollRate if the list class has this attribute
+                    if hasattr(result, 'pollRate'):
+                        # Determine the resource type from the list class name
+                        from ieee_2030_5.adapters import get_poll_rate
+                        
+                        # Map list class names to resource types
+                        resource_type_map = {
+                            'EndDeviceList': 'end_device_list',
+                            'DERList': 'der_list',
+                            'DERProgramList': 'der_program_list',
+                            'DERControlList': 'der_control_list',
+                            'FunctionSetAssignmentsList': 'fsa_list',
+                            'MirrorUsagePointList': 'mirror_usage_point',
+                            'UsagePointList': 'usage_point',
+                            'LogEventList': 'log_event_list',
+                            'MeterReadingList': 'meter_reading',
+                            'ReadingSetList': 'reading_set',
+                        }
+                        
+                        resource_type = resource_type_map.get(list_class_name, 'default')
+                        result.pollRate = get_poll_rate(resource_type)
 
                     # Set the list items using the metadata type name
                     list_attr = model_type_name
@@ -2474,7 +2505,8 @@ class ThreadSafeGlobalMRIDs:
     def _normalize_mrid_to_string(self, mrid) -> str:
         """Normalize mRID to consistent string format for indexing."""
         if isinstance(mrid, bytes):
-            return mrid.decode('utf-8')
+            # mRID is raw bytes (16 bytes), convert to hex string (32 chars)
+            return mrid.hex()
         return str(mrid)
 
     def new_mrid(self) -> bytes:
@@ -2485,7 +2517,10 @@ class ThreadSafeGlobalMRIDs:
 
                 # Generate unique mRID using uuid_2030_5
                 while True:
-                    new_mrid = uuid_2030_5().lower().encode()
+                    # uuid_2030_5() returns hex string, convert to actual bytes
+                    # This ensures we get 16 bytes instead of 32 ASCII characters
+                    hex_string = uuid_2030_5().lower()
+                    new_mrid = bytes.fromhex(hex_string)
                     # Check if it's already in use
                     if self.get_location(new_mrid) is None:
                         return new_mrid
@@ -2501,6 +2536,7 @@ class ThreadSafeGlobalMRIDs:
             db_key: The database key where the object is stored
             obj_type: Optional type prefix for the stored value
         """
+        normalized_mrid = None  # Initialize to avoid undefined variable in error handler
         with self._lock:
             try:
                 # Normalize mRID to string for consistent indexing
@@ -2533,7 +2569,9 @@ class ThreadSafeGlobalMRIDs:
                 self._db.set_point(mrid_key, value.encode('utf-8'))
                 _log.debug(f"Registered mRID {normalized_mrid} -> {value}")
             except Exception as e:
-                _log.error(f"Failed to register mRID {normalized_mrid}: {e}")
+                # Use mrid if normalized_mrid failed to be set
+                mrid_str = normalized_mrid if normalized_mrid else str(mrid)
+                _log.error(f"Failed to register mRID {mrid_str}: {e}")
                 raise
     
     def store_and_register(self, item: Any) -> bool:
@@ -2564,7 +2602,9 @@ class ThreadSafeGlobalMRIDs:
             if hasattr(item, 'mRID') and item.mRID:
                 obj_type = type(item).__name__
                 self.register_mrid(item.mRID, item.href, obj_type)
-                _log.debug(f"Registered mRID {item.mRID} -> {obj_type}:{item.href}")
+                # Format mRID for logging (handle both bytes and strings)
+                mrid_str = self._normalize_mrid_to_string(item.mRID)
+                _log.debug(f"Registered mRID {mrid_str} -> {obj_type}:{item.href}")
             
             return True
             

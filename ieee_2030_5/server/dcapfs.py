@@ -47,8 +47,8 @@ class DcapRequest(RequestOp):
                     # Create a DeviceCapability using DeviceCapabilityHref helper
                     dcap_href_helper = hrefs.DeviceCapabilityHref(device_index)
                     cap = dcap_href_helper.fill_hrefs(m.DeviceCapability())
-                    # Set the poll rate from server configuration
-                    cap.pollRate = self.server_config.poll_rate
+                    # Set the poll rate for device capability
+                    cap.pollRate = adpt.get_poll_rate('device_capability')
                     # Store it for future requests
                     result = adpt.DeviceCapabilityAdapter.set_single(dcap_href, cap)
                     if not result.success:

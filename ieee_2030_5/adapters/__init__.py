@@ -38,6 +38,74 @@ def get_end_device_adapter():
 ListAdapter = None
 EndDeviceAdapter = None
 
+# Global poll rate settings for different resource types
+# These can be individually configured as needed
+_poll_rates = {
+    'default': 120,  # 2 minutes for all resources
+    'device_capability': 120,
+    'end_device_list': 120,
+    'der_list': 120,
+    'der_program_list': 120,
+    # Note: 'der_control_list' removed - DERControlList does not have pollRate per IEEE 2030.5
+    'fsa_list': 120,
+    'mirror_usage_point': 120,
+    'usage_point': 120,
+    'registration': 120,
+    'log_event_list': 120,
+    # Note: 'meter_reading' removed - MeterReadingList does not have pollRate per IEEE 2030.5
+    'reading_set': 120,
+    'time': 120,
+}
+
+
+def set_poll_rate(resource_type: str, poll_rate: int):
+    """Set the poll rate for a specific resource type."""
+    _poll_rates[resource_type] = poll_rate
+    _log.debug(f"Poll rate for {resource_type} set to {poll_rate} seconds")
+
+
+def get_poll_rate(resource_type: str = 'default') -> int:
+    """Get the poll rate for a specific resource type."""
+    return _poll_rates.get(resource_type, _poll_rates['default'])
+
+
+def configure_poll_rates(config):
+    """Configure poll rates from server configuration."""
+    # Set the default poll rate
+    if hasattr(config, 'poll_rate'):
+        _poll_rates['default'] = config.poll_rate
+        # Also set as default for all unspecified types
+        for key in _poll_rates:
+            if key != 'default':
+                _poll_rates[key] = config.poll_rate
+    
+    # Override with specific poll rates if configured
+    if hasattr(config, 'device_capability_poll_rate'):
+        _poll_rates['device_capability'] = config.device_capability_poll_rate
+    
+    if hasattr(config, 'log_event_list_poll_rate'):
+        _poll_rates['log_event_list'] = config.log_event_list_poll_rate
+    
+    if hasattr(config, 'mirror_usage_point_post_rate'):
+        _poll_rates['mirror_usage_point'] = config.mirror_usage_point_post_rate
+    
+    # Future poll rates can be added here
+    # if hasattr(config, 'der_control_poll_rate'):
+    #     _poll_rates['der_control_list'] = config.der_control_poll_rate
+    
+    _log.info(f"Poll rates configured: {_poll_rates}")
+
+
+# Backward compatibility
+def set_global_poll_rate(poll_rate: int):
+    """Set the default poll rate (backward compatibility)."""
+    set_poll_rate('default', poll_rate)
+
+
+def get_global_poll_rate() -> int:
+    """Get the default poll rate (backward compatibility)."""
+    return get_poll_rate('default')
+
 
 def _update_global_adapters():
     """Update the global adapter references after initialization."""
@@ -1242,7 +1310,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             index = ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
             derp = config.default_program
             if not derp.mRID:
-                derp.mRID = get_global_mrids().new_mrid().decode('utf-8')
+                derp.mRID = get_global_mrids().new_mrid()
             result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, derp)
             if not result.success:
                 raise Exception(f"Failed to add default program: {result.error}")
@@ -1256,7 +1324,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             # Add default control if configured
             if config.default_der_control:
                 dderc = config.default_der_control
-                dderc.mRID = get_global_mrids().new_mrid().decode('utf-8')
+                dderc.mRID = get_global_mrids().new_mrid()
                 dderc.href = derp.DefaultDERControlLink.href
                 ListAdapter.set_single(uri=derp.DefaultDERControlLink.href, obj=dderc)
             # Initialize sub-lists
@@ -1270,7 +1338,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 default_der_control = program_cfg.pop("DefaultDERControl", None)
                 program = m.DERProgram(**program_cfg)
                 if not program.mRID:
-                    program.mRID = get_global_mrids().new_mrid().decode('utf-8')
+                    program.mRID = get_global_mrids().new_mrid()
                 program = program_hrefs.fill_hrefs(program)
                 result = ListAdapter.append(hrefs.DEFAULT_DERP_ROOT, program)
                 if not result.success:
@@ -1280,7 +1348,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     dderc = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
                                                 **default_der_control)
                     if not dderc.mRID:
-                        dderc.mRID = get_global_mrids().new_mrid().decode('utf-8')
+                        dderc.mRID = get_global_mrids().new_mrid()
                     ListAdapter.set_single(uri=program.DefaultDERControlLink.href, obj=dderc)
                 # Initialize lists
                 ListAdapter.initialize_uri(program.DERControlListLink.href, m.DERControl)
@@ -1298,7 +1366,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                                     str(index)]),
                                **curve_cfg)
             if not curve.mRID:
-                curve.mRID = get_global_mrids().new_mrid().decode('utf-8')
+                curve.mRID = get_global_mrids().new_mrid()
             result = ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
             if not result.success:
                 raise Exception(f"Failed to add curve: {result.error}")
