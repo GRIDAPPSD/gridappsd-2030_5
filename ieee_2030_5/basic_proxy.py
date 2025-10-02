@@ -45,8 +45,9 @@ from urllib.parse import urlparse
 import time
 import OpenSSL
 import yaml
-from ieee_2030_5.certs import (TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi)
+from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration
+
 
 # Create a custom formatter that includes file name and line number
 class DetailedFormatter(logging.Formatter):
@@ -63,6 +64,7 @@ class DetailedFormatter(logging.Formatter):
     Example output:
         2025-07-30 10:30:45,123 - basic_proxy.py:245 - ieee_2030_5.basic_proxy - INFO - Message
     """
+
     def format(self, record):
         """
         Format a log record with file information.
@@ -74,14 +76,15 @@ class DetailedFormatter(logging.Formatter):
             str: Formatted log message string with file information
         """
         # Add file name and line number to the log message
-        if hasattr(record, 'pathname'):
+        if hasattr(record, "pathname"):
             record.file_info = f"{os.path.basename(record.pathname)}:{record.lineno}"
         else:
             record.file_info = "unknown:0"
         return super().format(record)
 
+
 # Setup root logger with the detailed formatter
-def setup_logging(debug=False, use_syslog=False, syslog_facility='local0'):
+def setup_logging(debug=False, use_syslog=False, syslog_facility="local0"):
     """
     Configure the application logging system with enhanced formatting.
 
@@ -120,9 +123,7 @@ def setup_logging(debug=False, use_syslog=False, syslog_facility='local0'):
     # Create console handler
     console = logging.StreamHandler()
     console.setLevel(level)
-    formatter = DetailedFormatter(
-        '%(asctime)s - %(file_info)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    formatter = DetailedFormatter("%(asctime)s - %(file_info)s - %(name)s - %(levelname)s - %(message)s")
     console.setFormatter(formatter)
     root_logger.addHandler(console)
 
@@ -131,37 +132,37 @@ def setup_logging(debug=False, use_syslog=False, syslog_facility='local0'):
         try:
             # Map facility names to syslog constants
             facility_map = {
-                'kern': logging.handlers.SysLogHandler.LOG_KERN,
-                'user': logging.handlers.SysLogHandler.LOG_USER,
-                'mail': logging.handlers.SysLogHandler.LOG_MAIL,
-                'daemon': logging.handlers.SysLogHandler.LOG_DAEMON,
-                'auth': logging.handlers.SysLogHandler.LOG_AUTH,
-                'syslog': logging.handlers.SysLogHandler.LOG_SYSLOG,
-                'lpr': logging.handlers.SysLogHandler.LOG_LPR,
-                'news': logging.handlers.SysLogHandler.LOG_NEWS,
-                'uucp': logging.handlers.SysLogHandler.LOG_UUCP,
-                'cron': logging.handlers.SysLogHandler.LOG_CRON,
-                'authpriv': logging.handlers.SysLogHandler.LOG_AUTHPRIV,
-                'ftp': logging.handlers.SysLogHandler.LOG_FTP,
-                'local0': logging.handlers.SysLogHandler.LOG_LOCAL0,
-                'local1': logging.handlers.SysLogHandler.LOG_LOCAL1,
-                'local2': logging.handlers.SysLogHandler.LOG_LOCAL2,
-                'local3': logging.handlers.SysLogHandler.LOG_LOCAL3,
-                'local4': logging.handlers.SysLogHandler.LOG_LOCAL4,
-                'local5': logging.handlers.SysLogHandler.LOG_LOCAL5,
-                'local6': logging.handlers.SysLogHandler.LOG_LOCAL6,
-                'local7': logging.handlers.SysLogHandler.LOG_LOCAL7,
+                "kern": logging.handlers.SysLogHandler.LOG_KERN,
+                "user": logging.handlers.SysLogHandler.LOG_USER,
+                "mail": logging.handlers.SysLogHandler.LOG_MAIL,
+                "daemon": logging.handlers.SysLogHandler.LOG_DAEMON,
+                "auth": logging.handlers.SysLogHandler.LOG_AUTH,
+                "syslog": logging.handlers.SysLogHandler.LOG_SYSLOG,
+                "lpr": logging.handlers.SysLogHandler.LOG_LPR,
+                "news": logging.handlers.SysLogHandler.LOG_NEWS,
+                "uucp": logging.handlers.SysLogHandler.LOG_UUCP,
+                "cron": logging.handlers.SysLogHandler.LOG_CRON,
+                "authpriv": logging.handlers.SysLogHandler.LOG_AUTHPRIV,
+                "ftp": logging.handlers.SysLogHandler.LOG_FTP,
+                "local0": logging.handlers.SysLogHandler.LOG_LOCAL0,
+                "local1": logging.handlers.SysLogHandler.LOG_LOCAL1,
+                "local2": logging.handlers.SysLogHandler.LOG_LOCAL2,
+                "local3": logging.handlers.SysLogHandler.LOG_LOCAL3,
+                "local4": logging.handlers.SysLogHandler.LOG_LOCAL4,
+                "local5": logging.handlers.SysLogHandler.LOG_LOCAL5,
+                "local6": logging.handlers.SysLogHandler.LOG_LOCAL6,
+                "local7": logging.handlers.SysLogHandler.LOG_LOCAL7,
             }
 
             facility = facility_map.get(syslog_facility.lower(), logging.handlers.SysLogHandler.LOG_LOCAL0)
 
             # Try to connect to syslog daemon
-            syslog_handler = logging.handlers.SysLogHandler(address='/dev/log', facility=facility)
+            syslog_handler = logging.handlers.SysLogHandler(address="/dev/log", facility=facility)
             syslog_handler.setLevel(level)
 
             # Use a simpler format for syslog (syslog daemon adds timestamp)
             syslog_formatter = logging.Formatter(
-                'ieee2030_5_proxy[%(process)d]: %(file_info)s - %(name)s - %(levelname)s - %(message)s'
+                "ieee2030_5_proxy[%(process)d]: %(file_info)s - %(name)s - %(levelname)s - %(message)s"
             )
             syslog_handler.setFormatter(syslog_formatter)
             root_logger.addHandler(syslog_handler)
@@ -177,7 +178,9 @@ def setup_logging(debug=False, use_syslog=False, syslog_facility='local0'):
 
     return root_logger
 
+
 _log = logging.getLogger(__name__)
+
 
 @dataclass
 class ContextWithPaths:
@@ -198,9 +201,11 @@ class ContextWithPaths:
         >>> ccp = ContextWithPaths(ctx, "/path/cert.pem", "/path/key.pem")
         >>> connection = HTTPSConnection(host, context=ccp.context)
     """
+
     context: ssl.SSLContext
     certpath: str
     keypath: str
+
 
 class HTTPSConnectionWithTimeout(HTTPSConnection):
     """
@@ -242,11 +247,11 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
                 context (ssl.SSLContext): SSL context for the connection
         """
         # Set reasonable timeouts
-        self.timeout_connect = kwargs.pop('timeout_connect', 30)
-        self.timeout_read = kwargs.pop('timeout_read', 30)
+        self.timeout_connect = kwargs.pop("timeout_connect", 30)
+        self.timeout_read = kwargs.pop("timeout_read", 30)
 
         # Save context explicitly as an instance attribute
-        self.context = kwargs.get('context')
+        self.context = kwargs.get("context")
 
         _log.debug(
             f"Creating HTTPSConnection with timeouts: connect={self.timeout_connect}s, read={self.timeout_read}s"
@@ -276,7 +281,7 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
                 self._tunnel()
 
             # Apply SSL context
-            if hasattr(self, 'context') and self.context:
+            if hasattr(self, "context") and self.context:
                 _log.debug(f"Wrapping socket with provided SSL context")
                 self.sock = self.context.wrap_socket(self.sock, server_hostname=self.host)
                 _log.debug(
@@ -284,12 +289,8 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
                 )
             else:
                 # Fallback to default SSL
-                _log.debug(
-                    f"Wrapping socket with default SSL (cert={self.cert_file}, key={self.key_file})"
-                )
-                self.sock = ssl.wrap_socket(self.sock,
-                                            keyfile=self.key_file,
-                                            certfile=self.cert_file)
+                _log.debug(f"Wrapping socket with default SSL (cert={self.cert_file}, key={self.key_file})")
+                self.sock = ssl.wrap_socket(self.sock, keyfile=self.key_file, certfile=self.cert_file)
 
             # Set socket read timeout
             self.sock.settimeout(self.timeout_read)
@@ -298,16 +299,16 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
         except ssl.SSLError as e:
             _log.error(f"SSL Error connecting to {self.host}:{self.port}: {e}", exc_info=True)
             # Log SSL specific details if available
-            if hasattr(e, 'verify_message'):
+            if hasattr(e, "verify_message"):
                 _log.error(f"SSL verification error: {e.verify_message}")
             raise
         except socket.timeout:
-            _log.error(
-                f"Connection timeout to {self.host}:{self.port} after {self.timeout_connect}s")
+            _log.error(f"Connection timeout to {self.host}:{self.port} after {self.timeout_connect}s")
             raise
         except Exception as e:
             _log.error(f"Error connecting to {self.host}:{self.port}: {e}", exc_info=True)
             raise
+
 
 class RequestForwarder(BaseHTTPRequestHandler):
     """
@@ -338,13 +339,13 @@ class RequestForwarder(BaseHTTPRequestHandler):
     """
 
     # Use HTTP/1.1 to support persistent connections with clients
-    protocol_version = 'HTTP/1.1'
+    protocol_version = "HTTP/1.1"
 
     # Set reasonable timeouts for client connections
     timeout = 300  # 5 minutes for client socket timeout
 
     # Type annotation for the server to ensure it has our required attributes
-    server: 'ProxyServer'
+    server: "ProxyServer"
 
     def setup(self):
         """
@@ -359,15 +360,15 @@ class RequestForwarder(BaseHTTPRequestHandler):
         """
         super().setup()
         # Set client socket timeout to prevent hanging connections
-        if hasattr(self.connection, 'settimeout'):
+        if hasattr(self.connection, "settimeout"):
             self.connection.settimeout(self.timeout)
             _log.debug(f"Set client connection timeout to {self.timeout}s for {self.client_address}")
 
         # Verify server has required attributes
-        if not hasattr(self.server, 'tls_repo'):
+        if not hasattr(self.server, "tls_repo"):
             _log.error(f"Server {type(self.server)} does not have tls_repo attribute")
             raise RuntimeError("Server missing tls_repo attribute")
-        if not hasattr(self.server, 'proxy_target'):
+        if not hasattr(self.server, "proxy_target"):
             _log.error(f"Server {type(self.server)} does not have proxy_target attribute")
             raise RuntimeError("Server missing proxy_target attribute")
 
@@ -444,13 +445,13 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 return False
 
             # Check if client wants to close connection
-            connection_header = self.headers.get('Connection', '').lower()
-            if 'close' in connection_header:
+            connection_header = self.headers.get("Connection", "").lower()
+            if "close" in connection_header:
                 self.close_connection = True
                 _log.debug(f"Client {self.client_address} requested connection close for {self.path}")
 
             # Handle the request
-            mname = 'do_' + self.command
+            mname = "do_" + self.command
             if not hasattr(self, mname):
                 self.send_error(501, f"Unsupported method ({self.command})")
                 return False
@@ -617,7 +618,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         _log.debug("Getting SSL context and certificate pair for client connection")
 
         # Ensure we have access to the TLS repository
-        if not hasattr(self.server, 'tls_repo'):
+        if not hasattr(self.server, "tls_repo"):
             raise RuntimeError("Server does not have tls_repo attribute")
 
         # Initialize with default certificate paths
@@ -665,7 +666,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 raise FileNotFoundError(f"Certificate file {cert_file} or key file {key_file} not found")
 
             # Explicitly set cipher suites to be more permissive for compatibility
-            context.set_ciphers('ALL:@SECLEVEL=1')
+            context.set_ciphers("ALL:@SECLEVEL=1")
             _log.debug("Set cipher suite: ALL:@SECLEVEL=1")
 
             return ContextWithPaths(context=context, certpath=cert_file, keypath=key_file)
@@ -722,30 +723,32 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         for attempt in range(max_retries):
             try:
-                _log.debug(f"Connection attempt {attempt+1}/{max_retries} to {host}:{port} for client {client_info}")
+                _log.debug(f"Connection attempt {attempt + 1}/{max_retries} to {host}:{port} for client {client_info}")
 
                 # Create connection with reasonable timeouts
                 conn = HTTPSConnectionWithTimeout(
                     host=host,
                     port=port,
                     context=ccp.context,
-                    timeout_connect=30,   # Reasonable connect timeout
-                    timeout_read=60       # Reasonable read timeout
+                    timeout_connect=30,  # Reasonable connect timeout
+                    timeout_read=60,  # Reasonable read timeout
                 )
 
                 _log.debug(f"Establishing connection for client {client_info}...")
                 conn.connect()
-                _log.debug(f"Created server connection on attempt {attempt+1} for client {client_info}")
+                _log.debug(f"Created server connection on attempt {attempt + 1} for client {client_info}")
                 return conn
 
             except (ssl.SSLError, socket.timeout) as e:
-                _log.warning(f"Connection attempt {attempt+1} failed for client {client_info}: {e}")
+                _log.warning(f"Connection attempt {attempt + 1} failed for client {client_info}: {e}")
                 if attempt < max_retries - 1:
                     _log.debug(f"Retrying in {retry_delay}s for client {client_info}...")
                     time.sleep(retry_delay)
                 else:
                     _log.error(f"All {max_retries} connection attempts failed for client {client_info}")
-                    raise RuntimeError(f"Failed to establish server connection after {max_retries} attempts: {e}") from e
+                    raise RuntimeError(
+                        f"Failed to establish server connection after {max_retries} attempts: {e}"
+                    ) from e
             except Exception as e:
                 _log.error(f"Unexpected error creating connection for client {client_info}: {e}")
                 raise RuntimeError(f"Unexpected error creating server connection: {e}") from e
@@ -788,7 +791,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.info(f"Response Body from backend ({len(data)} bytes):")
                 try:
                     # Try to decode as UTF-8 for text content
-                    response_text = data.decode('utf-8')
+                    response_text = data.decode("utf-8")
                     _log.info(f"  {response_text}")
                 except UnicodeDecodeError:
                     # Log as hex for binary content
@@ -804,7 +807,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             self.send_response(response.status, response.reason)
 
             # Send headers, filtering out problematic ones
-            skip_headers = {'connection', 'transfer-encoding', 'content-length'}
+            skip_headers = {"connection", "transfer-encoding", "content-length"}
 
             # Log what headers we're sending back to client
             _log.info(f"=== RESPONSE TO CLIENT {client_info} ===")
@@ -822,32 +825,32 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # Set content length
             _log.debug(f"Setting Content-Length: {len(data)}")
             _log.info(f"  Content-Length: {len(data)}")
-            self.send_header('Content-Length', str(len(data)))
+            self.send_header("Content-Length", str(len(data)))
 
             # Handle client connection based on request headers
-            client_connection = self.headers.get('Connection', '').lower()
-            if self.request_version >= 'HTTP/1.1':
+            client_connection = self.headers.get("Connection", "").lower()
+            if self.request_version >= "HTTP/1.1":
                 # HTTP/1.1 defaults to keep-alive unless client requests close
-                if 'close' not in client_connection:
-                    self.send_header('Connection', 'keep-alive')
-                    self.send_header('Keep-Alive', 'timeout=300, max=1000')
+                if "close" not in client_connection:
+                    self.send_header("Connection", "keep-alive")
+                    self.send_header("Keep-Alive", "timeout=300, max=1000")
                     _log.info(f"  Connection: keep-alive")
                     _log.info(f"  Keep-Alive: timeout=300, max=1000")
                     _log.debug("Maintaining keep-alive connection with client")
                 else:
-                    self.send_header('Connection', 'close')
+                    self.send_header("Connection", "close")
                     _log.info(f"  Connection: close")
                     _log.debug("Client requested connection close")
-            elif 'keep-alive' in client_connection:
+            elif "keep-alive" in client_connection:
                 # HTTP/1.0 with explicit keep-alive
-                self.send_header('Connection', 'keep-alive')
-                self.send_header('Keep-Alive', 'timeout=300, max=1000')
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Keep-Alive", "timeout=300, max=1000")
                 _log.info(f"  Connection: keep-alive")
                 _log.info(f"  Keep-Alive: timeout=300, max=1000")
                 _log.debug("HTTP/1.0 client requested keep-alive")
             else:
                 # HTTP/1.0 default or explicit close
-                self.send_header('Connection', 'close')
+                self.send_header("Connection", "close")
                 _log.info(f"  Connection: close")
                 _log.debug("Using connection close for HTTP/1.0 client")
 
@@ -857,7 +860,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             if data:
                 _log.info(f"Response Body to client ({len(data)} bytes):")
                 try:
-                    response_text = data.decode('utf-8')
+                    response_text = data.decode("utf-8")
                     _log.info(f"  {response_text}")
                 except UnicodeDecodeError:
                     _log.info(f"  [Binary content: {data.hex()}]")
@@ -928,14 +931,14 @@ class RequestForwarder(BaseHTTPRequestHandler):
         - Zero-length bodies
         - Large request bodies (limited by available memory)
         """
-        content_length = int(self.headers.get('Content-Length', 0))
+        content_length = int(self.headers.get("Content-Length", 0))
         _log.debug(f"Reading request body, Content-Length: {content_length}")
 
         if content_length > 0:
             body = self.rfile.read(content_length)
             _log.debug(f"Read {len(body)} bytes from request body")
             return body
-        return b''
+        return b""
 
     def _forward_request(self, method: str) -> None:
         """
@@ -987,7 +990,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
             # Read request body for methods that may have one
             body = None
-            if method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            if method in ("POST", "PUT", "PATCH", "DELETE"):
                 _log.debug(f"Reading body for {method} request from client {client_info}")
                 body = self._read_request_body()
                 _log.debug(f"Request body size: {len(body) if body else 0} bytes for client {client_info}")
@@ -997,7 +1000,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     _log.info(f"Request Body ({len(body)} bytes):")
                     try:
                         # Try to decode as UTF-8 for text content
-                        body_text = body.decode('utf-8')
+                        body_text = body.decode("utf-8")
                         _log.info(f"  {body_text}")
                     except UnicodeDecodeError:
                         # Log as hex for binary content
@@ -1010,12 +1013,12 @@ class RequestForwarder(BaseHTTPRequestHandler):
             headers = {
                 k: v
                 for k, v in self.headers.items()
-                if k.lower() not in ('connection', 'keep-alive', 'transfer-encoding')
+                if k.lower() not in ("connection", "keep-alive", "transfer-encoding")
             }
 
             # Set the host header to the target host
             host, port = self.server.proxy_target
-            headers['Host'] = f"{host}:{port}"
+            headers["Host"] = f"{host}:{port}"
             _log.debug(f"Set Host header to {host}:{port} for client {client_info}")
 
             # Add client certificate information as headers (similar to Nginx)
@@ -1025,10 +1028,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, x509_binary)
 
                     # Convert to PEM format for header
-                    cert_pem = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, x509).decode('ascii')
+                    cert_pem = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, x509).decode("ascii")
 
                     # Get certificate fingerprint for LFDI calculation
-                    fingerprint = x509.digest("sha256").decode('ascii')
+                    fingerprint = x509.digest("sha256").decode("ascii")
                     cert_common_name = x509.get_subject().CN
 
                     # Calculate LFDI and SFDI from certificate fingerprint
@@ -1046,7 +1049,9 @@ class RequestForwarder(BaseHTTPRequestHandler):
                                 client_sfdi = self.server.tls_repo.sfdi(cert_common_name)
 
                                 # Get the file fingerprint for logging
-                                file_fingerprint = self.server.tls_repo.fingerprint(cert_common_name, without_colan=False)
+                                file_fingerprint = self.server.tls_repo.fingerprint(
+                                    cert_common_name, without_colan=False
+                                )
 
                                 _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (FILE-BASED METHOD) ===")
                                 _log.info(f"Client {client_info}:")
@@ -1086,20 +1091,22 @@ class RequestForwarder(BaseHTTPRequestHandler):
                             _log.info(f"  Fingerprint: {fingerprint}")
 
                         # Add LFDI and SFDI as custom headers
-                        headers['SSL-Client-LFDI'] = str(client_lfdi)
-                        headers['SSL-Client-SFDI'] = str(client_sfdi)
+                        headers["SSL-Client-LFDI"] = str(client_lfdi)
+                        headers["SSL-Client-SFDI"] = str(client_sfdi)
 
                     except Exception as lfdi_error:
                         _log.warning(f"Could not calculate LFDI/SFDI for client {client_info}: {lfdi_error}")
 
                     # Add client certificate headers (Nginx-style)
-                    headers['SSL-Client-Cert'] = cert_pem.replace('\n', ' ')
-                    headers['SSL-Client-S-DN'] = str(x509.get_subject())
-                    headers['SSL-Client-I-DN'] = str(x509.get_issuer())
-                    headers['SSL-Client-Serial'] = str(x509.get_serial_number())
-                    headers['SSL-Client-Fingerprint'] = fingerprint
+                    headers["SSL-Client-Cert"] = cert_pem.replace("\n", " ")
+                    headers["SSL-Client-S-DN"] = str(x509.get_subject())
+                    headers["SSL-Client-I-DN"] = str(x509.get_issuer())
+                    headers["SSL-Client-Serial"] = str(x509.get_serial_number())
+                    headers["SSL-Client-Fingerprint"] = fingerprint
 
-                    _log.debug(f"Added client certificate headers for CN: {x509.get_subject().CN} from client {client_info}")
+                    _log.debug(
+                        f"Added client certificate headers for CN: {x509.get_subject().CN} from client {client_info}"
+                    )
                 else:
                     _log.debug(f"No client certificate provided by client {client_info}")
             except OpenSSL.crypto.Error as e:
@@ -1108,14 +1115,18 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.warning(f"Could not extract client certificate info for client {client_info}: {e}")
 
             # Add Connection: close to server request to ensure proper cleanup
-            headers['Connection'] = 'close'
+            headers["Connection"] = "close"
 
             _log.info(f"Forwarding {method} {self.path} to {host}:{port} for client {client_info}")
-            if 'SSL-Client-Cert' in headers:
-                if 'SSL-Client-LFDI' in headers:
-                    _log.debug(f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} (LFDI: {headers['SSL-Client-LFDI']}, SFDI: {headers['SSL-Client-SFDI']}) from client {client_info}")
+            if "SSL-Client-Cert" in headers:
+                if "SSL-Client-LFDI" in headers:
+                    _log.debug(
+                        f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} (LFDI: {headers['SSL-Client-LFDI']}, SFDI: {headers['SSL-Client-SFDI']}) from client {client_info}"
+                    )
                 else:
-                    _log.debug(f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} from client {client_info}")
+                    _log.debug(
+                        f"Forwarding client certificate for CN: {headers.get('SSL-Client-S-DN', 'unknown')} from client {client_info}"
+                    )
 
             # COMPREHENSIVE OUTGOING REQUEST LOGGING - Log all data being sent to backend
             _log.info(f"=== OUTGOING REQUEST TO BACKEND {host}:{port} ===")
@@ -1124,9 +1135,9 @@ class RequestForwarder(BaseHTTPRequestHandler):
             _log.info(f"Headers being sent to backend:")
             for header_name, header_value in headers.items():
                 # Truncate SSL-Client-Cert for readability, highlight LFDI/SFDI
-                if header_name == 'SSL-Client-Cert':
+                if header_name == "SSL-Client-Cert":
                     _log.info(f"  {header_name}: [Client certificate - {len(header_value)} chars]")
-                elif header_name in ('SSL-Client-LFDI', 'SSL-Client-SFDI'):
+                elif header_name in ("SSL-Client-LFDI", "SSL-Client-SFDI"):
                     _log.info(f"  {header_name}: {header_value} *** IEEE 2030.5 IDENTIFIER ***")
                 else:
                     _log.info(f"  {header_name}: {header_value}")
@@ -1134,7 +1145,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             if body:
                 _log.info(f"Body being sent to backend ({len(body)} bytes):")
                 try:
-                    body_text = body.decode('utf-8')
+                    body_text = body.decode("utf-8")
                     _log.info(f"  {body_text}")
                 except UnicodeDecodeError:
                     _log.info(f"  [Binary content: {body.hex()}]")
@@ -1158,7 +1169,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # Handle the response - this will close the server connection
             _log.debug(f"Getting response from server for client {client_info}")
             response = self.__handle_response__(conn)
-            conn = None    # Connection is now closed
+            conn = None  # Connection is now closed
 
             if not response:
                 _log.error(f"{method} {self.path} -> Failed to get response for client {client_info}")
@@ -1194,81 +1205,88 @@ class RequestForwarder(BaseHTTPRequestHandler):
     def do_GET(self):
         """Handle HTTP GET requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW GET REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received GET request for {self.path}")
-        self._forward_request('GET')
+        self._forward_request("GET")
         end_time = time.time()
         _log.info(f"GET request completed in {end_time - start_time:.3f} seconds")
 
     def do_HEAD(self):
         """Handle HTTP HEAD requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW HEAD REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received HEAD request for {self.path}")
-        self._forward_request('HEAD')
+        self._forward_request("HEAD")
         end_time = time.time()
         _log.info(f"HEAD request completed in {end_time - start_time:.3f} seconds")
 
     def do_POST(self):
         """Handle HTTP POST requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW POST REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received POST request for {self.path}")
-        self._forward_request('POST')
+        self._forward_request("POST")
         end_time = time.time()
         _log.info(f"POST request completed in {end_time - start_time:.3f} seconds")
 
     def do_PUT(self):
         """Handle HTTP PUT requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW PUT REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received PUT request for {self.path}")
-        self._forward_request('PUT')
+        self._forward_request("PUT")
         end_time = time.time()
         _log.info(f"PUT request completed in {end_time - start_time:.3f} seconds")
 
     def do_DELETE(self):
         """Handle HTTP DELETE requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW DELETE REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received DELETE request for {self.path}")
-        self._forward_request('DELETE')
+        self._forward_request("DELETE")
         end_time = time.time()
         _log.info(f"DELETE request completed in {end_time - start_time:.3f} seconds")
 
     def do_OPTIONS(self):
         """Handle HTTP OPTIONS requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW OPTIONS REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received OPTIONS request for {self.path}")
-        self._forward_request('OPTIONS')
+        self._forward_request("OPTIONS")
         end_time = time.time()
         _log.info(f"OPTIONS request completed in {end_time - start_time:.3f} seconds")
 
     def do_PATCH(self):
         """Handle HTTP PATCH requests by forwarding to backend server."""
         import time
+
         start_time = time.time()
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
         _log.info(f"=== NEW PATCH REQUEST FROM CLIENT {client_info} ===")
         _log.debug(f"Received PATCH request for {self.path}")
-        self._forward_request('PATCH')
+        self._forward_request("PATCH")
         end_time = time.time()
         _log.info(f"PATCH request completed in {end_time - start_time:.3f} seconds")
 
-    def log_request(self, code='-', size='-'):
+    def log_request(self, code="-", size="-"):
         """
         Custom request logging with appropriate log levels.
 
@@ -1290,6 +1308,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         """Override to use our logger instead of stderr."""
         _log.info(format % args)
+
 
 class ProxyServer(ThreadingHTTPServer):
     """
@@ -1320,8 +1339,7 @@ class ProxyServer(ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True  # Don't wait for threads to finish on shutdown
 
-    def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int],
-                 config: ServerConfiguration, **kwargs):
+    def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int], config: ServerConfiguration, **kwargs):
         """
         Initialize the proxy server with TLS repository and target configuration.
 
@@ -1376,11 +1394,11 @@ class ProxyServer(ThreadingHTTPServer):
 
         # Set TCP keep-alive parameters if available (Linux-specific)
         try:
-            if hasattr(socket, 'TCP_KEEPIDLE'):
+            if hasattr(socket, "TCP_KEEPIDLE"):
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-            if hasattr(socket, 'TCP_KEEPINTVL'):
+            if hasattr(socket, "TCP_KEEPINTVL"):
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-            if hasattr(socket, 'TCP_KEEPCNT'):
+            if hasattr(socket, "TCP_KEEPCNT"):
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6)
             _log.debug("Set TCP keep-alive parameters for client connections")
         except (AttributeError, OSError) as e:
@@ -1412,8 +1430,9 @@ class ProxyServer(ThreadingHTTPServer):
                 pass
 
 
-def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
-                proxy_target: Tuple[str, int], config: ServerConfiguration):
+def start_proxy(
+    server_address: Tuple[str, int], tls_repo: TLSRepository, proxy_target: Tuple[str, int], config: ServerConfiguration
+):
     """
     Start the proxy server with SSL/TLS configuration.
 
@@ -1448,20 +1467,22 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
     _log.info(f"Serving proxy at {server_address} -> {proxy_target}")
     try:
         _log.debug(f"Creating ProxyServer instance at {server_address}")
-        httpd = ProxyServer(tls_repo=tls_repo,
-                            proxy_target=proxy_target,
-                            server_address=server_address,
-                            RequestHandlerClass=RequestForwarder,
-                            config=config)
+        httpd = ProxyServer(
+            tls_repo=tls_repo,
+            proxy_target=proxy_target,
+            server_address=server_address,
+            RequestHandlerClass=RequestForwarder,
+            config=config,
+        )
         _log.debug("ProxyServer instance created successfully")
 
         # Verify the server has the required attributes
-        if hasattr(httpd, 'tls_repo'):
+        if hasattr(httpd, "tls_repo"):
             _log.debug(f"Server tls_repo verified: {type(httpd.tls_repo)}")
         else:
             _log.error("Server missing tls_repo attribute after creation")
 
-        if hasattr(httpd, 'proxy_target'):
+        if hasattr(httpd, "proxy_target"):
             _log.debug(f"Server proxy_target verified: {httpd.proxy_target}")
         else:
             _log.error("Server missing proxy_target attribute after creation")
@@ -1476,7 +1497,7 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
         sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
         # Configure SSL to require client certificates
-        sslctx.verify_mode = ssl.CERT_REQUIRED    # Require client certificates
+        sslctx.verify_mode = ssl.CERT_REQUIRED  # Require client certificates
         sslctx.check_hostname = False
         _log.debug("SSL context configured with verify_mode=CERT_REQUIRED, check_hostname=False")
 
@@ -1488,19 +1509,14 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
             _log.warning(f"CA certificate file not found: {tls_repo.ca_cert_file}")
 
         if Path(tls_repo.server_cert_file).exists() and Path(tls_repo.server_key_file).exists():
-            _log.debug(
-                f"Loading server certificate: {tls_repo.server_cert_file}, {tls_repo.server_key_file}"
-            )
-            sslctx.load_cert_chain(certfile=tls_repo.server_cert_file,
-                                   keyfile=tls_repo.server_key_file)
+            _log.debug(f"Loading server certificate: {tls_repo.server_cert_file}, {tls_repo.server_key_file}")
+            sslctx.load_cert_chain(certfile=tls_repo.server_cert_file, keyfile=tls_repo.server_key_file)
         else:
-            _log.error(
-                f"Server certificate files not found: {tls_repo.server_cert_file}, {tls_repo.server_key_file}"
-            )
+            _log.error(f"Server certificate files not found: {tls_repo.server_cert_file}, {tls_repo.server_key_file}")
             return
 
         # Set cipher suites to be more permissive
-        sslctx.set_ciphers('ALL:@SECLEVEL=1')
+        sslctx.set_ciphers("ALL:@SECLEVEL=1")
         _log.debug("Set cipher suite: ALL:@SECLEVEL=1")
 
         _log.debug("Wrapping server socket with SSL")
@@ -1518,6 +1534,7 @@ def start_proxy(server_address: Tuple[str, int], tls_repo: TLSRepository,
         _log.debug("Closing server")
         httpd.server_close()
         _log.info("Proxy server shut down")
+
 
 def build_address_tuple(hostname: str) -> Tuple[str, int]:
     """
@@ -1555,7 +1572,7 @@ def build_address_tuple(hostname: str) -> Tuple[str, int]:
         port = parsed.port
         if port is None:
             # Default port based on scheme
-            port = 443 if parsed.scheme == 'https' else 80
+            port = 443 if parsed.scheme == "https" else 80
         hostname_tuple = (parsed.hostname, port)
         _log.debug(f"Parsed URL format: {hostname_tuple}")
     else:
@@ -1567,6 +1584,7 @@ def build_address_tuple(hostname: str) -> Tuple[str, int]:
             hostname_tuple = (parts[0], 443)
         _log.debug(f"Parsed host:port format: {hostname_tuple}")
     return hostname_tuple
+
 
 def _main():
     """
@@ -1602,32 +1620,49 @@ def _main():
     7. Handle shutdown and cleanup
     """
     import argparse
-    parser = argparse.ArgumentParser(
-        description="IEEE 2030.5 proxy server with client certificate forwarding"
-    )
+
+    parser = argparse.ArgumentParser(description="IEEE 2030.5 proxy server with client certificate forwarding")
     parser.add_argument(dest="config", help="Configuration file for the server.")
-    parser.add_argument("--debug",
-                      action="store_true",
-                      default=False,
-                      help="Turns debugging on for logging of the proxy.")
-    parser.add_argument("--syslog",
-                      action="store_true",
-                      default=False,
-                      help="Enable syslog logging in addition to console logging.")
-    parser.add_argument("--syslog-facility",
-                      default="local0",
-                      choices=['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr',
-                              'news', 'uucp', 'cron', 'authpriv', 'ftp', 'local0', 'local1',
-                              'local2', 'local3', 'local4', 'local5', 'local6', 'local7'],
-                      help="Syslog facility to use (default: local0)")
+    parser.add_argument(
+        "--debug", action="store_true", default=False, help="Turns debugging on for logging of the proxy."
+    )
+    parser.add_argument(
+        "--syslog", action="store_true", default=False, help="Enable syslog logging in addition to console logging."
+    )
+    parser.add_argument(
+        "--syslog-facility",
+        default="local0",
+        choices=[
+            "kern",
+            "user",
+            "mail",
+            "daemon",
+            "auth",
+            "syslog",
+            "lpr",
+            "news",
+            "uucp",
+            "cron",
+            "authpriv",
+            "ftp",
+            "local0",
+            "local1",
+            "local2",
+            "local3",
+            "local4",
+            "local5",
+            "local6",
+            "local7",
+        ],
+        help="Syslog facility to use (default: local0)",
+    )
     opts = parser.parse_args()
 
     # If syslog facility is specified (and it's not the default), enable syslog automatically
-    use_syslog = opts.syslog or opts.syslog_facility != 'local0'
+    use_syslog = opts.syslog or opts.syslog_facility != "local0"
 
     # Setup enhanced logging with optional syslog
-    logger = setup_logging(debug=opts.debug, use_syslog=use_syslog,
-                          syslog_facility=opts.syslog_facility)
+    logger = setup_logging(debug=opts.debug, use_syslog=use_syslog, syslog_facility=opts.syslog_facility)
     _log.debug(f"Starting 2030.5 proxy server with config: {opts.config}")
 
     if use_syslog:
@@ -1643,7 +1678,7 @@ def _main():
 
         # Set environment variable for LFDI calculation mode
         if config.lfdi_mode == "lfdi_mode_from_file":
-            os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
+            os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = "1"
             _log.info("Using LFDI calculation from combined certificate file")
 
         if config.proxy_hostname is None:
@@ -1651,11 +1686,13 @@ def _main():
             return
 
         _log.debug(f"Initializing TLS repository: {config.tls_repository}")
-        tls_repo = TLSRepository(repo_dir=config.tls_repository,
-                               openssl_cnffile_template=config.openssl_cnf,
-                               serverhost=config.server_hostname,
-                               proxyhost=config.proxy_hostname,
-                               clear=False)
+        tls_repo = TLSRepository(
+            repo_dir=config.tls_repository,
+            openssl_cnffile_template=config.openssl_cnf,
+            serverhost=config.server_hostname,
+            proxyhost=config.proxy_hostname,
+            clear=False,
+        )
         _log.debug("TLS repository initialized successfully")
 
         proxy_host = build_address_tuple(config.proxy_hostname)
@@ -1664,14 +1701,17 @@ def _main():
         _log.debug(f"Proxy host tuple: {proxy_host}")
         _log.debug(f"Server host tuple: {server_host}")
 
-        start_proxy(server_address=(proxy_host[0], int(proxy_host[1])),
-                  tls_repo=tls_repo,
-                  proxy_target=(server_host[0], int(server_host[1])),
-                  config=config)
+        start_proxy(
+            server_address=(proxy_host[0], int(proxy_host[1])),
+            tls_repo=tls_repo,
+            proxy_target=(server_host[0], int(server_host[1])),
+            config=config,
+        )
 
     except Exception as e:
         _log.critical(f"Fatal error in proxy server: {e}", exc_info=True)
         return 1
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     _main()

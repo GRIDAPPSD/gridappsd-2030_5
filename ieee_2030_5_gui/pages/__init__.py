@@ -11,19 +11,18 @@ class PageContext:
     title: str
     uri: str
     module: Callable = None
-    
-    
+
 
 class Pages(Enum):
-    HOME = PageContext('home', 'Home', '/')
-    CERTS = PageContext('certs', 'Certificates', '/certs')
-    CURVES = PageContext('curves', 'Curves', '/curves')
-    CONTROLS = PageContext('controls', 'DER Controls', '/controls')
-    DEFAULT_CONTROLS = PageContext('default_controls', 'Default DER Controls', '/default_controls')
-    ENDDEVICES = PageContext('enddevices', 'End Devices', '/enddevices')
-    PROGRAMS = PageContext('programs', 'DER Programs', '/programs')
-    FSA = PageContext('fsa', 'Function Set Assignments', '/fsa')
-    DER = PageContext('der', 'DER', '/der')
+    HOME = PageContext("home", "Home", "/")
+    CERTS = PageContext("certs", "Certificates", "/certs")
+    CURVES = PageContext("curves", "Curves", "/curves")
+    CONTROLS = PageContext("controls", "DER Controls", "/controls")
+    DEFAULT_CONTROLS = PageContext("default_controls", "Default DER Controls", "/default_controls")
+    ENDDEVICES = PageContext("enddevices", "End Devices", "/enddevices")
+    PROGRAMS = PageContext("programs", "DER Programs", "/programs")
+    FSA = PageContext("fsa", "Function Set Assignments", "/fsa")
+    DER = PageContext("der", "DER", "/der")
     # LOGIN = 'login'
     # LOGOUT = 'logout'
     # SETTINGS = 'settings'
@@ -31,12 +30,12 @@ class Pages(Enum):
 
 
 def show_global_header(page: PageContext):
-    
-    with ui.header(elevated=True).style('background-color: #3874c8'): #.classes('justify-between'):
+    with ui.header(elevated=True).style("background-color: #3874c8"):  # .classes('justify-between'):
         for index, pg in enumerate(Pages):
-            link = ui.link(pg.value.title, pg.value.uri).style('color: white')
+            link = ui.link(pg.value.title, pg.value.uri).style("color: white")
             if pg.value == page:
-                link.style('font-weight: bold')
+                link.style("font-weight: bold")
+
 
 from .certs import show_certs
 from .controls import show_controls
@@ -59,4 +58,3 @@ Pages.DER.value.module = show_der
 #     from os.path import basename, dirname, isfile, join
 #     modules = glob.glob(join(dirname(__file__), "*.py"))
 #     __all__ = [ basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
-    

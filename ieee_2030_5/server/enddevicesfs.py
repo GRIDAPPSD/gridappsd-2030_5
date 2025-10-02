@@ -36,7 +36,7 @@ class EDevRequests(RequestOp):
             _log.debug(f"PUT data length: {len(request.data)}")
 
             parsed = hrefs.EdevHref.parse(request.path)
-            mysubobj = xml_to_dataclass(request.data.decode('utf-8'))
+            mysubobj = xml_to_dataclass(request.data.decode("utf-8"))
 
             _log.debug(f"Parsed object type: {type(mysubobj)}")
 
@@ -87,7 +87,7 @@ class EDevRequests(RequestOp):
 
             _log.debug(f"POST data length: {len(request.data)}")
 
-            ed: m.EndDevice = xml_to_dataclass(request.data.decode('utf-8'))
+            ed: m.EndDevice = xml_to_dataclass(request.data.decode("utf-8"))
 
             if not isinstance(ed, m.EndDevice):
                 _log.warning(f"Invalid data type received: {type(ed)}")
@@ -116,7 +116,7 @@ class EDevRequests(RequestOp):
                 status = 201
                 _log.debug(f"Created new EndDevice: {ed_href}")
 
-            response = Response(status=status, headers={'Location': ed_href})
+            response = Response(status=status, headers={"Location": ed_href})
             _log.info(f"EDevRequests POST {request.path} - Status: {status}, Location: {ed_href}")
             return response
 
@@ -149,7 +149,7 @@ class EDevRequests(RequestOp):
 
             edev_href = hrefs.HrefParser(request.path)
 
-            ed = adpt.EndDeviceAdapter.fetch_by_property('lFDI', self.lfdi)
+            ed = adpt.EndDeviceAdapter.fetch_by_property("lFDI", self.lfdi)
 
             if ed is None:
                 _log.warning(f"No EndDevice found for LFDI: {self.lfdi}")
@@ -158,20 +158,24 @@ class EDevRequests(RequestOp):
             _log.debug(f"Found EndDevice: {ed.href}")
 
             # /edev_0_dstat
-            if hasattr(ed, 'DERListLink') and ed.DERListLink and request.path == ed.DERListLink.href:
+            if hasattr(ed, "DERListLink") and ed.DERListLink and request.path == ed.DERListLink.href:
                 _log.debug(f"Getting DER list for path: {request.path}")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
-            elif hasattr(ed, 'LogEventListLink') and ed.LogEventListLink and request.path == ed.LogEventListLink.href:
+            elif hasattr(ed, "LogEventListLink") and ed.LogEventListLink and request.path == ed.LogEventListLink.href:
                 _log.debug(f"Getting LogEvent list for path: {request.path}")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
-            elif hasattr(ed, 'FunctionSetAssignmentsListLink') and ed.FunctionSetAssignmentsListLink and request.path == ed.FunctionSetAssignmentsListLink.href:
+            elif (
+                hasattr(ed, "FunctionSetAssignmentsListLink")
+                and ed.FunctionSetAssignmentsListLink
+                and request.path == ed.FunctionSetAssignmentsListLink.href
+            ):
                 _log.debug(f"Getting FunctionSetAssignments list for path: {request.path}")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
             elif edev_href.count() > 2:
                 _log.debug(f"Getting nested resource for path: {request.path}")
                 if retval := get_href(request.path):
                     pass
-                elif request.path.endswith('_rg'):
+                elif request.path.endswith("_rg"):
                     # Handle registration requests - these are single Registration objects, not lists
                     _log.debug(f"Getting Registration object for path: {request.path}")
                     retval = adpt.ListAdapter.get_single(request.path)
@@ -187,8 +191,9 @@ class EDevRequests(RequestOp):
                         _log.debug(f"Populated EndDevice links for {ed.href}")
                     except Exception as e:
                         _log.warning(f"Failed to populate EndDevice links: {e}")
-                retval = m.EndDeviceList(href=request.path, all=1, results=1, 
-                                        pollRate=adpt.get_poll_rate('end_device_list'), EndDevice=[ed])
+                retval = m.EndDeviceList(
+                    href=request.path, all=1, results=1, pollRate=adpt.get_poll_rate("end_device_list"), EndDevice=[ed]
+                )
             else:
                 _log.debug(f"Getting single resource for path: {request.path}")
                 if retval := get_href(request.path):
@@ -253,13 +258,11 @@ class SDevRequests(RequestOp):
 
 
 class FSARequests(RequestOp):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def get(self) -> Response:
-        """ Retrieve a FSA or Program List
-        """
+        """Retrieve a FSA or Program List"""
         _log.debug(f"FSARequests GET: {request.path} - LFDI: {self.lfdi}")
 
         try:

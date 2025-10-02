@@ -1,6 +1,7 @@
 from ieee_2030_5.utils import CryptographyWrapper
 from pathlib import Path
 
+
 def test_create_pk():
     pth = Path("testing/pk/abc.pem")
     wrapper = CryptographyWrapper()
@@ -10,6 +11,7 @@ def test_create_pk():
     assert "BEGIN PRIVATE KEY" in pem_key
     assert "END PRIVATE KEY" in pem_key
     pth.unlink()
+
 
 def test_create_ca():
     try:

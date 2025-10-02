@@ -3,6 +3,7 @@
 Provides a configurable key/value store interface for setting retrieving points from a datastore.
 Supports both ZODB and SQLite backends, configurable via configuration.
 """
+
 import logging
 import threading
 from pathlib import Path
@@ -19,19 +20,19 @@ _log = logging.getLogger(__name__)
 def create_point_store(backend: str = "zodb", db_path: Optional[Path] = None) -> PointStoreBase:
     """
     Factory function to create a point store based on backend type.
-    
+
     Args:
         backend: Backend type ("zodb" or "sqlite")
         db_path: Optional path to database file
-        
+
     Returns:
         PointStore instance
-        
+
     Raises:
         ValueError: If backend type is not supported
     """
     backend = backend.lower()
-    
+
     if backend == "zodb":
         return ZODBPointStore(db_path)
     elif backend == "sqlite":
@@ -51,18 +52,18 @@ def configure_point_store(backend: str = "zodb", db_path: Optional[Path] = None)
     """
     Configure the global point store backend.
     Must be called before first use of get_db().
-    
+
     Args:
         backend: Backend type ("zodb" or "sqlite")
         db_path: Optional path to database file
     """
     global _backend_type, _db_path, _db_instance
-    
+
     with _db_lock:
         if _db_instance is not None:
             _log.warning("Point store already initialized, configuration change requires restart")
             return
-            
+
         _backend_type = backend
         _db_path = db_path
         _log.info(f"Point store configured for backend: {backend}")
@@ -163,26 +164,26 @@ def atomic_operation():
         yield
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test both implementations
     print("Testing configurable point store...")
 
     # Test SQLite
     print("\n=== Testing SQLite Backend ===")
     configure_point_store("sqlite")
-    
+
     set_point("sqlite_test", b"sqlite_value")
     print(f"sqlite_test = {get_point('sqlite_test')}")
     print(f"Count: {point_count()}")
-    
+
     reset_db()  # Clear for next test
-    
+
     # Test ZODB
     print("\n=== Testing ZODB Backend ===")
     configure_point_store("zodb")
-    
+
     set_point("zodb_test", b"zodb_value")
     print(f"zodb_test = {get_point('zodb_test')}")
     print(f"Count: {point_count()}")
-    
+
     print("\nConfigurable point store test completed.")

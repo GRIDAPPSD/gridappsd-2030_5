@@ -20,8 +20,8 @@ _log = logging.getLogger(__name__)
 class Index:
     href: str
     item: object
-    added: str    # Optional[Union[datetime | str]]
-    last_written: str    # Optional[Union[datetime | str]]
+    added: str  # Optional[Union[datetime | str]]
+    last_written: str  # Optional[Union[datetime | str]]
     last_hash: Optional[int]
 
 
@@ -50,14 +50,12 @@ class Indexer:
         #     _log.debug(f"Item already cached {href}")
         # else:
         added = format_datetime(datetime.utcnow())
-        serialized_item = pickle.dumps(
-            item)    # serialize_dataclass(item, serialization_type=SerializeType.JSON)
+        serialized_item = pickle.dumps(item)  # serialize_dataclass(item, serialization_type=SerializeType.JSON)
         obj = Index(href, item, added=added, last_written=added, last_hash=hash(serialized_item))
         # serialized_obj = serialize_dataclass(obj, serialization_type=SerializeType.JSON)
 
         # note storing Index object.
-        set_point(href, pickle.dumps(
-            obj))    # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
+        set_point(href, pickle.dumps(obj))  # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
         self.__items__[href] = obj
 
     def get(self, href) -> dataclass:
@@ -65,7 +63,7 @@ class Indexer:
         # If using a link, we need the true href to cache the object.
         if isinstance(href, Link):
             href = href.href
-        
+
         # First check in-memory cache
         if href in self.__items__:
             data = self.__items__[href].item
@@ -76,7 +74,7 @@ class Indexer:
                 if point_data:
                     index = pickle.loads(point_data)
                     # Check if it's an Index object or raw data
-                    if hasattr(index, 'item'):
+                    if hasattr(index, "item"):
                         data = index.item
                         # Update in-memory cache
                         self.__items__[href] = index
@@ -85,12 +83,13 @@ class Indexer:
                         data = index
                         from datetime import datetime
                         from email.utils import format_datetime
+
                         wrapped_index = Index(
                             href=href,
                             item=data,
                             added=format_datetime(datetime.utcnow()),
                             last_written=format_datetime(datetime.utcnow()),
-                            last_hash=None
+                            last_hash=None,
                         )
                         self.__items__[href] = wrapped_index
                 else:
@@ -120,10 +119,7 @@ def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
     if __indexer__.__items__ is None:
         return []
 
-    return [
-        v.item for k, v in __indexer__.__items__.items()
-        if k.startswith(href_prefix) and v.item is not None
-    ]
+    return [v.item for k, v in __indexer__.__items__.items() if k.startswith(href_prefix) and v.item is not None]
 
 
 def get_href_all_names():

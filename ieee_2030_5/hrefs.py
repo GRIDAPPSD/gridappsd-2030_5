@@ -27,10 +27,11 @@ SEP = "_"
 # Path component constants - centralized in one place
 class PathComponent:
     """Centralized path components for IEEE 2030.5 URLs."""
+
     EDEV = "edev"
     DCAP = "dcap"
     UPT = "upt"
-    UTP = "upt"    # Add this alias for backward compatibility
+    UTP = "upt"  # Add this alias for backward compatibility
     MUP = "mup"
     DRP = "drp"
     SDEV = "sdev"
@@ -63,6 +64,7 @@ class PathComponent:
 # Root URLs - constructed from components for consistency
 class RootURLs:
     """Root URLs for IEEE 2030.5 resources."""
+
     DEFAULT_TIME_ROOT = f"/{PathComponent.TIME}"
     DEFAULT_DCAP_ROOT = f"/{PathComponent.DCAP}"
     DEFAULT_EDEV_ROOT = f"/{PathComponent.EDEV}"
@@ -84,6 +86,7 @@ class RootURLs:
 # Resource types
 class ResourceType(Enum):
     """Enumeration of IEEE 2030.5 resource types."""
+
     END_DEVICE = "EndDevice"
     DER = "DER"
     DER_PROGRAM = "DERProgram"
@@ -108,6 +111,7 @@ class ResourceType(Enum):
 # Sub-resource types
 class DERSubType(Enum):
     """Sub-resource types for DER resources."""
+
     CAPABILITY = PathComponent.DER_CAPABILITY
     SETTINGS = PathComponent.DER_SETTINGS
     STATUS = PathComponent.DER_STATUS
@@ -118,12 +122,14 @@ class DERSubType(Enum):
 
 class FSASubType(Enum):
     """Sub-resource types for FSA resources."""
+
     DER_PROGRAM = "derp"
     NONE = None
 
 
 class EDevSubType(Enum):
     """Sub-resource types for EndDevice resources."""
+
     NONE = None
     REGISTRATION = PathComponent.END_DEVICE_REGISTRATION
     DEVICE_STATUS = PathComponent.END_DEVICE_STATUS
@@ -137,6 +143,7 @@ class EDevSubType(Enum):
 
 class DERProgramSubType(Enum):
     """Sub-resource types for DERProgram resources."""
+
     NONE = 0
     ACTIVE_DER_CONTROL_LIST = 1
     DEFAULT_DER_CONTROL = 2
@@ -230,7 +237,7 @@ class URLRegistry:
     _lock = threading.RLock()
 
     @classmethod
-    def get_instance(cls) -> 'URLRegistry':
+    def get_instance(cls) -> "URLRegistry":
         """Get the singleton instance of the URL registry."""
         with cls._lock:
             if cls._instance is None:
@@ -266,7 +273,7 @@ class URLBuilder:
     _lock = threading.RLock()
 
     @classmethod
-    def get_instance(cls) -> 'URLBuilder':
+    def get_instance(cls) -> "URLBuilder":
         """Get the singleton instance of the URL builder."""
         with cls._lock:
             if cls._instance is None:
@@ -314,25 +321,17 @@ class URLBuilder:
         elif index == NO_INDEX and edev_index != NO_INDEX:
             return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.FSA])
         else:
-            return SEP.join(
-                [RootURLs.DEFAULT_EDEV_ROOT,
-                 str(edev_index), PathComponent.FSA,
-                 str(index)])
+            return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.FSA, str(index)])
 
     @thread_safe_cached
     def derp_href(self, edev_index: int, fsa_index: int) -> str:
         """Get a DER program URL for an end device FSA."""
-        return SEP.join([
-            RootURLs.DEFAULT_EDEV_ROOT,
-            str(edev_index), PathComponent.FSA,
-            str(fsa_index), PathComponent.DER_PROGRAM
-        ])
+        return SEP.join(
+            [RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.FSA, str(fsa_index), PathComponent.DER_PROGRAM]
+        )
 
     @thread_safe_cached
-    def der_href(self,
-                 index: int = NO_INDEX,
-                 fsa_index: int = NO_INDEX,
-                 edev_index: int = NO_INDEX) -> str:
+    def der_href(self, index: int = NO_INDEX, fsa_index: int = NO_INDEX, edev_index: int = NO_INDEX) -> str:
         """Get a DER URL."""
         if index == NO_INDEX and fsa_index == NO_INDEX and edev_index == NO_INDEX:
             return RootURLs.DEFAULT_DER_ROOT
@@ -343,10 +342,7 @@ class URLBuilder:
         elif edev_index != NO_INDEX and fsa_index == NO_INDEX and index == NO_INDEX:
             return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.FSA])
         elif edev_index != NO_INDEX and fsa_index != NO_INDEX and index == NO_INDEX:
-            return SEP.join(
-                [RootURLs.DEFAULT_EDEV_ROOT,
-                 str(edev_index), PathComponent.FSA,
-                 str(fsa_index)])
+            return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.FSA, str(fsa_index)])
         else:
             raise ValueError(f"index={index}, fsa_index={fsa_index}, edev_index={edev_index}")
 
@@ -355,35 +351,22 @@ class URLBuilder:
         """Get a DER URL for an end device."""
         if der_index == NO_INDEX:
             return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.DER])
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(edev_index), PathComponent.DER,
-             str(der_index)])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.DER, str(der_index)])
 
     @thread_safe_cached
-    def der_sub_href(self,
-                     edev_index: int,
-                     index: int = NO_INDEX,
-                     subtype: DERSubType = None) -> str:
+    def der_sub_href(self, edev_index: int, index: int = NO_INDEX, subtype: DERSubType = None) -> str:
         """Get a DER sub-resource URL."""
         if subtype is None and index == NO_INDEX:
             return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.DER])
         elif subtype is None:
-            return SEP.join(
-                [RootURLs.DEFAULT_EDEV_ROOT,
-                 str(edev_index), PathComponent.DER,
-                 str(index)])
+            return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.DER, str(index)])
         else:
-            return SEP.join([
-                RootURLs.DEFAULT_EDEV_ROOT,
-                str(edev_index), PathComponent.DER,
-                str(index), subtype.value
-            ])
+            return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.DER, str(index), subtype.value])
 
     @thread_safe_cached
     def mirror_usage_point_href(self, mirror_usage_point_index: int = NO_INDEX, device_id: str = None) -> str:
         """Get a mirror usage point URL.
-        
+
         Args:
             mirror_usage_point_index: The index of the mirror usage point (deprecated, use device_id)
             device_id: The device ID to generate a hashed index from
@@ -399,15 +382,17 @@ class URLBuilder:
             return SEP.join([RootURLs.DEFAULT_MUP_ROOT, str(index)])
 
     @thread_safe_cached
-    def usage_point_href(self,
-                         usage_point_index: int | str = NO_INDEX,
-                         meter_reading_list: bool = False,
-                         meter_reading_list_index: int = NO_INDEX,
-                         meter_reading_index: int = NO_INDEX,
-                         meter_reading_type: bool = False,
-                         reading_set: bool = False,
-                         reading_set_index: int = NO_INDEX,
-                         reading_index: int = NO_INDEX) -> str:
+    def usage_point_href(
+        self,
+        usage_point_index: int | str = NO_INDEX,
+        meter_reading_list: bool = False,
+        meter_reading_list_index: int = NO_INDEX,
+        meter_reading_index: int = NO_INDEX,
+        meter_reading_type: bool = False,
+        reading_set: bool = False,
+        reading_set_index: int = NO_INDEX,
+        reading_index: int = NO_INDEX,
+    ) -> str:
         """Get a usage point URL with various options."""
         if isinstance(usage_point_index, str):
             base_upt = usage_point_index
@@ -471,9 +456,7 @@ class URLBuilder:
     @thread_safe_cached
     def registration_href(self, edev_index: int) -> str:
         """Get a registration URL for an end device."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(edev_index), PathComponent.END_DEVICE_REGISTRATION])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(edev_index), PathComponent.END_DEVICE_REGISTRATION])
 
     @thread_safe_cached
     def get_configuration_href(self, edev_index: int) -> str:
@@ -555,10 +538,7 @@ class URLBuilder:
                         result += f"/{p}"
         return result
 
-    def extend_url(self,
-                   base_url: str,
-                   index: Optional[int] = None,
-                   suffix: Optional[str] = None) -> str:
+    def extend_url(self, base_url: str, index: Optional[int] = None, suffix: Optional[str] = None) -> str:
         """Extend a URL with optional index and suffix."""
         result = base_url
         if index is not None:
@@ -572,6 +552,7 @@ class URLBuilder:
 @dataclass
 class EndDeviceHref:
     """URLs for an end device resource."""
+
     index: int = None
     _root: str = None
 
@@ -586,13 +567,13 @@ class EndDeviceHref:
         if edev_href is not None:
             try:
                 # Handle both slash and underscore separators
-                if '/' in edev_href and '_' not in edev_href:
+                if "/" in edev_href and "_" not in edev_href:
                     # Handle slash format (e.g., "/edev/0")
-                    parts = edev_href.split('/')
+                    parts = edev_href.split("/")
                     # Find the part after "edev"
                     for i, part in enumerate(parts):
-                        if part == "edev" and i+1 < len(parts) and parts[i+1].isdigit():
-                            self.index = int(parts[i+1])
+                        if part == "edev" and i + 1 < len(parts) and parts[i + 1].isdigit():
+                            self.index = int(parts[i + 1])
                             break
                 else:
                     # Handle underscore format (e.g., "/edev_0")
@@ -607,7 +588,8 @@ class EndDeviceHref:
                 _log.error(f"Error parsing EndDevice href '{edev_href}': {e}")
                 # Fallback to a deterministic index
                 import hashlib
-                hash_obj = hashlib.md5(edev_href.encode('utf-8'))
+
+                hash_obj = hashlib.md5(edev_href.encode("utf-8"))
                 self.index = int(hash_obj.hexdigest(), 16) % 10000
 
         self._root = SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index)])
@@ -635,44 +617,32 @@ class EndDeviceHref:
     @property
     def device_information(self) -> str:
         """Get the device information URL."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(self.index), PathComponent.END_DEVICE_INFORMATION])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index), PathComponent.END_DEVICE_INFORMATION])
 
     @property
     def device_status(self) -> str:
         """Get the device status URL."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(self.index), PathComponent.END_DEVICE_STATUS])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index), PathComponent.END_DEVICE_STATUS])
 
     @property
     def power_status(self) -> str:
         """Get the power status URL."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(self.index), PathComponent.END_DEVICE_POWER_STATUS])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index), PathComponent.END_DEVICE_POWER_STATUS])
 
     @property
     def registration(self) -> str:
         """Get the registration URL."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(self.index), PathComponent.END_DEVICE_REGISTRATION])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index), PathComponent.END_DEVICE_REGISTRATION])
 
     @property
     def function_set_assignments(self) -> str:
         """Get the FSA URL."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(self.index), PathComponent.END_DEVICE_FSA])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index), PathComponent.END_DEVICE_FSA])
 
     @property
     def log_event_list(self) -> str:
         """Get the log event list URL."""
-        return SEP.join(
-            [RootURLs.DEFAULT_EDEV_ROOT,
-             str(self.index), PathComponent.END_DEVICE_LOG_EVENT_LIST])
+        return SEP.join([RootURLs.DEFAULT_EDEV_ROOT, str(self.index), PathComponent.END_DEVICE_LOG_EVENT_LIST])
 
     def fill_hrefs(self, enddevice: m.EndDevice) -> m.EndDevice:
         """Fill the hrefs for an end device."""
@@ -682,46 +652,51 @@ class EndDeviceHref:
         enddevice.DeviceStatusLink = m.DeviceStatusLink(self.device_status)
         enddevice.PowerStatusLink = m.PowerStatusLink(self.power_status)
         enddevice.RegistrationLink = m.RegistrationLink(self.registration)
-        
+
         # Preserve existing FSA link count if it was already set
         # Otherwise, check the actual list size
         existing_fsa_count = 0
-        if hasattr(enddevice, 'FunctionSetAssignmentsListLink') and enddevice.FunctionSetAssignmentsListLink:
+        if hasattr(enddevice, "FunctionSetAssignmentsListLink") and enddevice.FunctionSetAssignmentsListLink:
             existing_fsa_count = enddevice.FunctionSetAssignmentsListLink.all
-        
+
         # If we have an existing count, preserve it, otherwise try to get the actual count
         if existing_fsa_count > 0:
             enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-                self.function_set_assignments, all=existing_fsa_count)
+                self.function_set_assignments, all=existing_fsa_count
+            )
         else:
             # Try to get the actual count from the list adapter
             try:
                 import ieee_2030_5.adapters as adpt
+
                 actual_count = adpt.ListAdapter.get_list_size(self.function_set_assignments)
                 enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-                    self.function_set_assignments, all=actual_count)
+                    self.function_set_assignments, all=actual_count
+                )
             except:
                 # Fall back to 0 if we can't get the count
                 enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-                    self.function_set_assignments, all=0)
-        
+                    self.function_set_assignments, all=0
+                )
+
         # Similar for other list links - preserve existing counts
         existing_log_count = 0
-        if hasattr(enddevice, 'LogEventListLink') and enddevice.LogEventListLink:
+        if hasattr(enddevice, "LogEventListLink") and enddevice.LogEventListLink:
             existing_log_count = enddevice.LogEventListLink.all
         enddevice.LogEventListLink = m.LogEventListLink(self.log_event_list, all=existing_log_count)
-        
+
         existing_der_count = 0
-        if hasattr(enddevice, 'DERListLink') and enddevice.DERListLink:
+        if hasattr(enddevice, "DERListLink") and enddevice.DERListLink:
             existing_der_count = enddevice.DERListLink.all
         enddevice.DERListLink = m.DERListLink(self.der_list, all=existing_der_count)
-        
+
         return enddevice
 
 
 @dataclass
 class DERHref:
     """URLs for a DER resource."""
+
     root: str
 
     def __init__(self, root: str) -> None:
@@ -767,6 +742,7 @@ class DERHref:
 @dataclass
 class DeviceCapabilityHref:
     """URLs for a device capability resource."""
+
     _end_device_index: str
     root: str
 
@@ -804,8 +780,7 @@ class DeviceCapabilityHref:
         """Fill the hrefs for a device capability."""
         dcap.href = self.root
         dcap.EndDeviceListLink = m.EndDeviceListLink(self.enddevice_href, all=1)
-        dcap.MirrorUsagePointListLink = m.MirrorUsagePointListLink(self.mirror_usage_point_href,
-                                                                   all=0)
+        dcap.MirrorUsagePointListLink = m.MirrorUsagePointListLink(self.mirror_usage_point_href, all=0)
         dcap.SelfDeviceLink = m.SelfDeviceLink(self.self_device_href)
         dcap.TimeLink = m.TimeLink(self.time_href)
         dcap.UsagePointListLink = m.UsagePointListLink(self.usage_point_href, all=0)
@@ -820,6 +795,7 @@ class DeviceCapabilityHref:
 @dataclass
 class DERProgramHref:
     """URLs for a DER program resource."""
+
     _root: str
 
     def __init__(self, program_index: int) -> None:
@@ -849,8 +825,7 @@ class DERProgramHref:
     def fill_hrefs(self, program: m.DERProgram) -> m.DERProgram:
         """Fill the hrefs for a DER program."""
         program.href = self._root
-        program.ActiveDERControlListLink = m.ActiveDERControlListLink(self.active_control_href,
-                                                                      all=0)
+        program.ActiveDERControlListLink = m.ActiveDERControlListLink(self.active_control_href, all=0)
         program.DefaultDERControlLink = m.DefaultDERControlLink(self.default_control_href)
         program.DERControlListLink = m.DERControlListLink(href=self.der_control_list_href, all=0)
         program.DERCurveListLink = m.DERCurveListLink(href=self.der_curve_list_href, all=0)
@@ -860,6 +835,7 @@ class DERProgramHref:
 @dataclass
 class ParsedUsagePointHref:
     """Parser for usage point hrefs."""
+
     _href: str
     _split: List[str]
 
@@ -880,8 +856,12 @@ class ParsedUsagePointHref:
 
     def has_extra(self) -> bool:
         """Check if there are extra components."""
-        return (self.has_meter_reading_list() or self.has_reading_list()
-                or self.has_reading_set_list() or self.has_reading_set_reading_list())
+        return (
+            self.has_meter_reading_list()
+            or self.has_reading_list()
+            or self.has_reading_set_list()
+            or self.has_reading_set_reading_list()
+        )
 
     def has_meter_reading_list(self) -> bool:
         """Check if there is a meter reading list."""
@@ -982,8 +962,9 @@ class ParsedUsagePointHref:
 @dataclass
 class UsagePointHref:
     """URLs for usage point resources."""
+
     _href: str = None
-    _root: str = '/upt'
+    _root: str = "/upt"
 
     def is_root(self) -> bool:
         """Check if this is a root URL."""
@@ -1013,26 +994,21 @@ class UsagePointHref:
         """Get a reading type URL."""
         return SEP.join([self.meterreading(usage_point_index, meter_reading_index), "rt"])
 
-    def readingset(self, usage_point_index: int, meter_reading_index: int,
-                   reading_set_index: int) -> str:
+    def readingset(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int) -> str:
         """Get a reading set URL."""
-        return SEP.join(
-            [self.readingset_list(usage_point_index, meter_reading_index),
-             str(reading_set_index)])
+        return SEP.join([self.readingset_list(usage_point_index, meter_reading_index), str(reading_set_index)])
 
-    def readingsetreading_list(self, usage_point_index: int, meter_reading_index: int,
-                               reading_set_index: int) -> str:
+    def readingsetreading_list(self, usage_point_index: int, meter_reading_index: int, reading_set_index: int) -> str:
         """Get a reading set reading list URL."""
-        return SEP.join(
-            [self.readingset(usage_point_index, meter_reading_index, reading_set_index), "r"])
+        return SEP.join([self.readingset(usage_point_index, meter_reading_index, reading_set_index), "r"])
 
-    def readingsetreading(self, usage_point_index: int, meter_reading_index: int,
-                          reading_set_index: int, reading_index: int) -> str:
+    def readingsetreading(
+        self, usage_point_index: int, meter_reading_index: int, reading_set_index: int, reading_index: int
+    ) -> str:
         """Get a reading set reading URL."""
-        return SEP.join([
-            self.readingsetreading_list(usage_point_index, meter_reading_index, reading_set_index),
-            str(reading_index)
-        ])
+        return SEP.join(
+            [self.readingsetreading_list(usage_point_index, meter_reading_index, reading_set_index), str(reading_index)]
+        )
 
     def reading_list(self, usage_point_index: int, meter_reading_index: int) -> str:
         """Get a reading list URL."""
@@ -1040,14 +1016,13 @@ class UsagePointHref:
 
     def reading(self, usage_point_index: int, meter_reading_index: int, reading_index: int) -> str:
         """Get a reading URL."""
-        return SEP.join(
-            [self.reading_list(usage_point_index, meter_reading_index),
-             str(reading_index)])
+        return SEP.join([self.reading_list(usage_point_index, meter_reading_index), str(reading_index)])
 
 
 @dataclass
 class MirrorUsagePointHref:
     """Mirror usage point href data."""
+
     mirror_usage_point_index: int = NO_INDEX
     meter_reading_list_index: int = NO_INDEX
     meter_reading_index: int = NO_INDEX
@@ -1055,7 +1030,7 @@ class MirrorUsagePointHref:
     reading_index: int = NO_INDEX
 
     @staticmethod
-    def parse(href: str) -> 'MirrorUsagePointHref':
+    def parse(href: str) -> "MirrorUsagePointHref":
         """Parse an href into a MirrorUsagePointHref."""
         items = href.split(SEP)
         if len(items) == 1:
@@ -1068,6 +1043,7 @@ class MirrorUsagePointHref:
 @dataclass
 class EdevHref:
     """End device href data."""
+
     edev_index: int
     edev_subtype: EDevSubType = EDevSubType.NONE
     edev_subtype_index: int = NO_INDEX
@@ -1087,7 +1063,7 @@ class EdevHref:
         return value
 
     @staticmethod
-    def parse(path: str) -> 'EdevHref':
+    def parse(path: str) -> "EdevHref":
         """Parse a path into an EdevHref."""
         split_pth = path.split(SEP)
         if split_pth[0] != PathComponent.EDEV and split_pth[0][1:] != PathComponent.EDEV:
@@ -1100,14 +1076,16 @@ class EdevHref:
         elif len(split_pth) == 3:
             return EdevHref(int(split_pth[1]), edev_subtype=EDevSubType(split_pth[2]))
         elif len(split_pth) == 4:
-            return EdevHref(int(split_pth[1]),
-                            edev_subtype=EDevSubType(split_pth[2]),
-                            edev_subtype_index=int(split_pth[3]))
+            return EdevHref(
+                int(split_pth[1]), edev_subtype=EDevSubType(split_pth[2]), edev_subtype_index=int(split_pth[3])
+            )
         elif len(split_pth) == 5:
-            return EdevHref(int(split_pth[1]),
-                            edev_subtype=EDevSubType(split_pth[2]),
-                            edev_subtype_index=int(split_pth[3]),
-                            edev_der_subtype=DERSubType(split_pth[4]))
+            return EdevHref(
+                int(split_pth[1]),
+                edev_subtype=EDevSubType(split_pth[2]),
+                edev_subtype_index=int(split_pth[3]),
+                edev_der_subtype=DERSubType(split_pth[4]),
+            )
         else:
             raise ValueError("Out of bounds parsing.")
 
@@ -1115,13 +1093,17 @@ class EdevHref:
         """Compare for equality."""
         if not isinstance(other, EdevHref):
             return False
-        return (other.edev_index == self.edev_index and other.edev_subtype == self.edev_subtype
-                and other.edev_subtype_index == self.edev_subtype_index
-                and other.edev_der_subtype == self.edev_der_subtype)
+        return (
+            other.edev_index == self.edev_index
+            and other.edev_subtype == self.edev_subtype
+            and other.edev_subtype_index == self.edev_subtype_index
+            and other.edev_der_subtype == self.edev_der_subtype
+        )
 
 
 class FSAHref(NamedTuple):
     """Function set assignments href data."""
+
     fsa_index: int = NO_INDEX
     fsa_sub: FSASubType = FSASubType.NONE
 
@@ -1140,13 +1122,14 @@ def fsa_parse(path: str) -> FSAHref:
 
 class DERProgramHrefOld(NamedTuple):
     """Old-style DER program href data."""
+
     root: str
     index: int
     derp_subtype: DERProgramSubType = DERProgramSubType.NONE
     derp_subtype_index: int = NO_INDEX
 
     @staticmethod
-    def parse(href: str) -> 'DERProgramHrefOld':
+    def parse(href: str) -> "DERProgramHrefOld":
         """Parse an href into a DERProgramHrefOld."""
         parsed = href.split(SEP)
         if len(parsed) == 1:
@@ -1160,8 +1143,7 @@ class DERProgramHrefOld(NamedTuple):
                 PathComponent.DDERC: DERProgramSubType.DEFAULT_DER_CONTROL,
             }
             if len(parsed) == 4:
-                return DERProgramHrefOld(parsed[0], int(parsed[1]), mapped[parsed[2]],
-                                         int(parsed[3]))
+                return DERProgramHrefOld(parsed[0], int(parsed[1]), mapped[parsed[2]], int(parsed[3]))
             return DERProgramHrefOld(parsed[0], int(parsed[1]), mapped[parsed[2]])
 
 
@@ -1175,9 +1157,9 @@ def der_program_parse(href: str) -> DERProgramHrefOld:
     return DERProgramHrefOld.parse(href)
 
 
-def der_program_href(index: int = NO_INDEX,
-                     sub: DERProgramSubType = DERProgramSubType.NONE,
-                     subindex: int = NO_INDEX) -> str:
+def der_program_href(
+    index: int = NO_INDEX, sub: DERProgramSubType = DERProgramSubType.NONE, subindex: int = NO_INDEX
+) -> str:
     """Build a DER program href."""
     if index == NO_INDEX:
         return RootURLs.DEFAULT_DERP_ROOT
@@ -1268,19 +1250,21 @@ def der_sub_href(edev_index: int, index: int = NO_INDEX, subtype: DERSubType = N
 @thread_safe_cached
 def get_device_hashed_index(device_id: str) -> int:
     """Get the consistent hashed index for a device ID.
-    
+
     This function provides the standard hashing mechanism used throughout
     the IEEE 2030.5 server for converting device IDs to consistent indices.
-    
+
     Args:
         device_id: The device identifier string
-        
+
     Returns:
         int: Hashed index (0-99999)
     """
     import hashlib
-    hash_obj = hashlib.sha256(device_id.encode('utf-8'))
+
+    hash_obj = hashlib.sha256(device_id.encode("utf-8"))
     return int(hash_obj.hexdigest()[:8], 16) % 100000  # Limit to 5 digits
+
 
 def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX, device_id: str = None) -> str:
     """Get a mirror usage point URL."""
@@ -1288,19 +1272,27 @@ def mirror_usage_point_href(mirror_usage_point_index: int = NO_INDEX, device_id:
 
 
 @thread_safe_cached
-def usage_point_href(usage_point_index: int | str = NO_INDEX,
-                     meter_reading_list: bool = False,
-                     meter_reading_list_index: int = NO_INDEX,
-                     meter_reading_index: int = NO_INDEX,
-                     meter_reading_type: bool = False,
-                     reading_set: bool = False,
-                     reading_set_index: int = NO_INDEX,
-                     reading_index: int = NO_INDEX) -> str:
+def usage_point_href(
+    usage_point_index: int | str = NO_INDEX,
+    meter_reading_list: bool = False,
+    meter_reading_list_index: int = NO_INDEX,
+    meter_reading_index: int = NO_INDEX,
+    meter_reading_type: bool = False,
+    reading_set: bool = False,
+    reading_set_index: int = NO_INDEX,
+    reading_index: int = NO_INDEX,
+) -> str:
     """Get a usage point URL with various options."""
-    return url_builder.usage_point_href(usage_point_index, meter_reading_list,
-                                        meter_reading_list_index, meter_reading_index,
-                                        meter_reading_type, reading_set, reading_set_index,
-                                        reading_index)
+    return url_builder.usage_point_href(
+        usage_point_index,
+        meter_reading_list,
+        meter_reading_list_index,
+        meter_reading_index,
+        meter_reading_type,
+        reading_set,
+        reading_set_index,
+        reading_index,
+    )
 
 
 @thread_safe_cached
@@ -1428,83 +1420,83 @@ uuid_gen: str = "/uuid"
 
 # Default export of important symbols
 __all__ = [
-    'NO_INDEX',
-    'SEP',
-    'PathComponent',
-    'RootURLs',
-    'ResourceType',
-    'DERSubType',
-    'FSASubType',
-    'EDevSubType',
-    'DERProgramSubType',
-    'URLBuilder',
-    'URLRegistry',
-    'HrefParser',
-    'HrefEventParser',
-    'EndDeviceHref',
-    'DERHref',
-    'DeviceCapabilityHref',
-    'DERProgramHref',
-    'ParsedUsagePointHref',
-    'UsagePointHref',
-    'MirrorUsagePointHref',
-    'EdevHref',
-    'FSAHref',
-    'get_server_config_href',
-    'get_enddevice_list_href',
-    'curve_href',
-    'fsa_href',
-    'derp_href',
-    'der_href',
-    'edev_der_href',
-    'der_sub_href',
-    'mirror_usage_point_href',
-    'usage_point_href',
-    'get_der_program_list',
-    'get_dr_program_list',
-    'get_fsa_list_href',
-    'get_response_set_href',
-    'get_der_list_href',
-    'get_enddevice_href',
-    'registration_href',
-    'get_configuration_href',
-    'get_power_status_href',
-    'get_device_status',
-    'get_device_information',
-    'get_time_href',
-    'get_log_list_href',
-    'get_dcap_href',
-    'get_dderc_href',
-    'get_derc_default_href',
-    'get_derc_href',
-    'get_program_href',
-    'build_link',
-    'extend_url',
-    'DEFAULT_TIME_ROOT',
-    'DEFAULT_DCAP_ROOT',
-    'DEFAULT_EDEV_ROOT',
-    'DEFAULT_UPT_ROOT',
-    'DEFAULT_MUP_ROOT',
-    'DEFAULT_DRP_ROOT',
-    'DEFAULT_SELF_ROOT',
-    'DEFAULT_MESSAGE_ROOT',
-    'DEFAULT_DER_ROOT',
-    'DEFAULT_CURVE_ROOT',
-    'DEFAULT_RSPS_ROOT',
-    'DEFAULT_LOG_EVENT_ROOT',
-    'DEFAULT_FSA_ROOT',
-    'DEFAULT_DERP_ROOT',
-    'DEFAULT_DDERC_ROOT',
-    'DEFAULT_CONTROL_ROOT',
+    "NO_INDEX",
+    "SEP",
+    "PathComponent",
+    "RootURLs",
+    "ResourceType",
+    "DERSubType",
+    "FSASubType",
+    "EDevSubType",
+    "DERProgramSubType",
+    "URLBuilder",
+    "URLRegistry",
+    "HrefParser",
+    "HrefEventParser",
+    "EndDeviceHref",
+    "DERHref",
+    "DeviceCapabilityHref",
+    "DERProgramHref",
+    "ParsedUsagePointHref",
+    "UsagePointHref",
+    "MirrorUsagePointHref",
+    "EdevHref",
+    "FSAHref",
+    "get_server_config_href",
+    "get_enddevice_list_href",
+    "curve_href",
+    "fsa_href",
+    "derp_href",
+    "der_href",
+    "edev_der_href",
+    "der_sub_href",
+    "mirror_usage_point_href",
+    "usage_point_href",
+    "get_der_program_list",
+    "get_dr_program_list",
+    "get_fsa_list_href",
+    "get_response_set_href",
+    "get_der_list_href",
+    "get_enddevice_href",
+    "registration_href",
+    "get_configuration_href",
+    "get_power_status_href",
+    "get_device_status",
+    "get_device_information",
+    "get_time_href",
+    "get_log_list_href",
+    "get_dcap_href",
+    "get_dderc_href",
+    "get_derc_default_href",
+    "get_derc_href",
+    "get_program_href",
+    "build_link",
+    "extend_url",
+    "DEFAULT_TIME_ROOT",
+    "DEFAULT_DCAP_ROOT",
+    "DEFAULT_EDEV_ROOT",
+    "DEFAULT_UPT_ROOT",
+    "DEFAULT_MUP_ROOT",
+    "DEFAULT_DRP_ROOT",
+    "DEFAULT_SELF_ROOT",
+    "DEFAULT_MESSAGE_ROOT",
+    "DEFAULT_DER_ROOT",
+    "DEFAULT_CURVE_ROOT",
+    "DEFAULT_RSPS_ROOT",
+    "DEFAULT_LOG_EVENT_ROOT",
+    "DEFAULT_FSA_ROOT",
+    "DEFAULT_DERP_ROOT",
+    "DEFAULT_DDERC_ROOT",
+    "DEFAULT_CONTROL_ROOT",
 ]
 
 # Add backward compatibility constants to __all__
 for attr_name in dir(PathComponent):
-    if not attr_name.startswith('_'):
+    if not attr_name.startswith("_"):
         globals()[attr_name] = getattr(PathComponent, attr_name)
         __all__.append(attr_name)
 
 for attr_name in dir(RootURLs):
-    if not attr_name.startswith('_'):
+    if not attr_name.startswith("_"):
         globals()[attr_name] = getattr(RootURLs, attr_name)
         __all__.append(attr_name)

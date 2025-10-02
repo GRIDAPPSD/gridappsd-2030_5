@@ -1,6 +1,7 @@
 """
 Abstract base class for point store implementations.
 """
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
@@ -13,7 +14,7 @@ class PointStoreBase(ABC):
     def set_point(self, key: str, value: bytes) -> None:
         """
         Set a point into the key/value store.
-        
+
         Args:
             key: The key to store the value under
             value: The bytes value to store
@@ -24,10 +25,10 @@ class PointStoreBase(ABC):
     def get_point(self, key: str) -> Optional[bytes]:
         """
         Retrieve a point from the key/value store.
-        
+
         Args:
             key: The key to retrieve
-            
+
         Returns:
             The stored bytes value, or None if key doesn't exist
         """
@@ -37,10 +38,10 @@ class PointStoreBase(ABC):
     def delete_point(self, key: str) -> bool:
         """
         Delete a point from the store.
-        
+
         Args:
             key: The key to delete
-            
+
         Returns:
             True if the key existed and was deleted, False otherwise
         """
@@ -50,7 +51,7 @@ class PointStoreBase(ABC):
     def get_hrefs(self) -> List[str]:
         """
         Get all stored href keys.
-        
+
         Returns:
             List of all keys in the store
         """
@@ -60,10 +61,10 @@ class PointStoreBase(ABC):
     def get_keys_matching(self, pattern: str) -> List[str]:
         """
         Get all keys that match a pattern.
-        
+
         Args:
             pattern: Pattern to match (supports '*' as wildcard)
-            
+
         Returns:
             List of matching keys
         """
@@ -88,7 +89,7 @@ class PointStoreBase(ABC):
     def bulk_set(self, items: Dict[str, bytes]) -> None:
         """
         Set multiple points in a single operation.
-        
+
         Args:
             items: Dictionary mapping keys to values
         """
@@ -98,10 +99,10 @@ class PointStoreBase(ABC):
     def bulk_get(self, keys: List[str]) -> Dict[str, bytes]:
         """
         Get multiple points in a single operation.
-        
+
         Args:
             keys: List of keys to retrieve
-            
+
         Returns:
             Dictionary mapping found keys to their values
         """
@@ -117,7 +118,7 @@ class PointStoreBase(ABC):
     def atomic_operation(self):
         """
         Context manager for atomic operations across multiple point operations.
-        
+
         Example:
             with db.atomic_operation():
                 db.set_point("key1", b"value1")

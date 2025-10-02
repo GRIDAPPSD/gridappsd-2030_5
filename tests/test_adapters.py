@@ -8,7 +8,6 @@ import os
 
 
 def test_missing_type():
-
     with pytest.raises(ValueError):
         me = Adapter[m.EndDevice](hrefs.get_enddevice_href())
 
@@ -37,9 +36,9 @@ def test_verify_href_populated_correctly(ignore_adapter_load):
     assert ed2.href == hrefs.get_enddevice_href(1)
 
     me = Adapter[m.EndDevice](hrefs.get_enddevice_href(), generic_type=m.EndDevice)
-    ed = m.EndDevice(href='FooFar')
+    ed = m.EndDevice(href="FooFar")
     me.add(ed)
-    assert ed.href == 'FooFar'
+    assert ed.href == "FooFar"
 
 
 def test_fetch_all_without_list():
@@ -125,11 +124,7 @@ def test_two_lists(ignore_adapter_load):
     gl = ResourceListAdapter()
     gl.append(edl.href, edl)
 
-    foo_list = [
-        m.DER(href="c", subscribable=1),
-        m.DER("b", subscribable=2),
-        m.DER("a", subscribable=3)
-    ]
+    foo_list = [m.DER(href="c", subscribable=1), m.DER("b", subscribable=2), m.DER("a", subscribable=3)]
 
     foo_href = "/foo"
 
@@ -142,12 +137,7 @@ def test_two_lists(ignore_adapter_load):
 
 
 def test_generic_list(ignore_adapter_load):
-
-    foo_list = [
-        m.DER(href="c", subscribable=1),
-        m.DER("b", subscribable=2),
-        m.DER("a", subscribable=3)
-    ]
+    foo_list = [m.DER(href="c", subscribable=1), m.DER("b", subscribable=2), m.DER("a", subscribable=3)]
 
     foo_href = "/foo"
     me = ResourceListAdapter()
