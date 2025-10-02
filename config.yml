@@ -38,12 +38,27 @@ generate_admin_cert: True
 #device_capability_poll_rate: 60
 #mirror_usage_point_post_rate: 15
 
-log_event_list_poll_rate: 9
-device_capability_poll_rate: 15
-mirror_usage_point_post_rate: 9
+# These are all optional and default to 120 seconds.
+log_event_list_poll_rate: 30
+device_capability_poll_rate: 30
+mirror_usage_point_post_rate: 30
+
+device_capability: 30
+end_device_list: 30
+der_list: 30
+der_program_list: 30
+# Note: 'der_control_list' removed - DERControlList does not have pollRate per IEEE 2030.5
+fsa_list: 30
+mirror_usage_point: 30
+usage_point: 30
+registration: 30
+log_event_list: 30
+# Note: 'meter_reading' removed - MeterReadingList does not have pollRate per IEEE 2030.5
+reading_set: 30
+time: 30
 
 #post_rate: 60
-poll_rate: 60
+poll_rate: 30
 
 # Reset storage so no memory when server restarts.
 cleanse_storage: false
