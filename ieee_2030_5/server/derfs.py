@@ -181,6 +181,8 @@ class DERProgramRequests(RequestOp):
                     if found_item is not None:
                         retval = found_item
                         _log.debug(f"Found DERC in GlobalmRIDs registry: {retval.mRID}")
+                # Note: IEEE 2030.5 does not define pollRate for DERControlList
+                # Empty DERControlList means client should check DefaultDERControl if available
             elif parsed.at(2) == hrefs.DDERC:
                 _log.debug(f"Retrieving DDERC")
                 retval = adpt.ListAdapter.get_single(request.path)

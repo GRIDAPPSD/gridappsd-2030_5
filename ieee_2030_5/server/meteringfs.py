@@ -130,6 +130,14 @@ class MirrorUsagePointRequest(RequestOp):
         mup_href = hrefs.ParsedUsagePointHref(request.path)
         if not mup_href.has_usage_point_index():
             # /mup - return filtered list for this client only
+            
+            # Get pagination parameters from query string
+            start = int(request.args.get("s", 0))  # Start index (default 0)
+            limit = int(request.args.get("l", 10))  # Limit (default 10 per IEEE 2030.5)
+            after = int(request.args.get("a", 0))  # After time (for time-based filtering)
+            
+            _log.debug(f"MUP list request with pagination: start={start}, limit={limit}, after={after}")
+            
             try:
                 # WRITE-THEN-READ CONSISTENCY: Use per-client lock for reads to ensure consistency
                 # but don't block reads from different clients (only block against writes)
@@ -148,15 +156,20 @@ class MirrorUsagePointRequest(RequestOp):
                     
                     _log.debug(f"Filtered {len(filtered_mups)} MUPs from {len(all_mups)} total for client LFDI: {client_lfdi}")
                     
-                    # Create filtered MirrorUsagePointList
+                    # Apply pagination to the filtered list
+                    total_count = len(filtered_mups)
+                    end_index = min(start + limit, total_count)
+                    paginated_mups = filtered_mups[start:end_index] if start < total_count else []
+                    
+                    # Create filtered and paginated MirrorUsagePointList
                     mup = m.MirrorUsagePointList(
                         href=request.path,
-                        MirrorUsagePoint=filtered_mups,
-                        all=len(filtered_mups),
-                        results=len(filtered_mups)
+                        MirrorUsagePoint=paginated_mups,
+                        all=total_count,  # Total count of filtered MUPs
+                        results=len(paginated_mups)  # Count of MUPs in this response
                     )
                     
-                    _log.debug(f"Returning {len(filtered_mups)} MUPs for client {client_lfdi} (with per-client lock protection)")
+                    _log.debug(f"Returning {len(paginated_mups)} of {total_count} MUPs for client {client_lfdi} (start={start}, limit={limit})")
 
             except KeyError:
                 # Initialize the URI if it doesn't exist yet
@@ -170,16 +183,8 @@ class MirrorUsagePointRequest(RequestOp):
                     results=0
                 )
 
-            # Set the pollRate from server configuration (using post_rate for MUP)
-            if hasattr(self.server_config, 'post_rate'):
-                mup.pollRate = self.server_config.post_rate
-            else:
-                # Fall back to mirror_usage_point_post_rate for backward compatibility
-                if hasattr(self.server_config, 'mirror_usage_point_post_rate'):
-                    mup.pollRate = self.server_config.mirror_usage_point_post_rate
-                else:
-                    # Default value if not configured
-                    mup.pollRate = 300
+            # Set the poll rate for mirror usage point
+            mup.pollRate = adpt.get_poll_rate('mirror_usage_point')
         else:
             # /mup/0 - accessing specific MUP
             # WRITE-THEN-READ CONSISTENCY: Use per-client lock to ensure MUP access

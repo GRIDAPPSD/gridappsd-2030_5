@@ -682,10 +682,40 @@ class EndDeviceHref:
         enddevice.DeviceStatusLink = m.DeviceStatusLink(self.device_status)
         enddevice.PowerStatusLink = m.PowerStatusLink(self.power_status)
         enddevice.RegistrationLink = m.RegistrationLink(self.registration)
-        enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-            self.function_set_assignments, all=0)
-        enddevice.LogEventListLink = m.LogEventListLink(self.log_event_list, all=0)
-        enddevice.DERListLink = m.DERListLink(self.der_list, all=0)
+        
+        # Preserve existing FSA link count if it was already set
+        # Otherwise, check the actual list size
+        existing_fsa_count = 0
+        if hasattr(enddevice, 'FunctionSetAssignmentsListLink') and enddevice.FunctionSetAssignmentsListLink:
+            existing_fsa_count = enddevice.FunctionSetAssignmentsListLink.all
+        
+        # If we have an existing count, preserve it, otherwise try to get the actual count
+        if existing_fsa_count > 0:
+            enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                self.function_set_assignments, all=existing_fsa_count)
+        else:
+            # Try to get the actual count from the list adapter
+            try:
+                import ieee_2030_5.adapters as adpt
+                actual_count = adpt.ListAdapter.get_list_size(self.function_set_assignments)
+                enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                    self.function_set_assignments, all=actual_count)
+            except:
+                # Fall back to 0 if we can't get the count
+                enddevice.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                    self.function_set_assignments, all=0)
+        
+        # Similar for other list links - preserve existing counts
+        existing_log_count = 0
+        if hasattr(enddevice, 'LogEventListLink') and enddevice.LogEventListLink:
+            existing_log_count = enddevice.LogEventListLink.all
+        enddevice.LogEventListLink = m.LogEventListLink(self.log_event_list, all=existing_log_count)
+        
+        existing_der_count = 0
+        if hasattr(enddevice, 'DERListLink') and enddevice.DERListLink:
+            existing_der_count = enddevice.DERListLink.all
+        enddevice.DERListLink = m.DERListLink(self.der_list, all=existing_der_count)
+        
         return enddevice
 
 
@@ -780,6 +810,10 @@ class DeviceCapabilityHref:
         dcap.TimeLink = m.TimeLink(self.time_href)
         dcap.UsagePointListLink = m.UsagePointListLink(self.usage_point_href, all=0)
         dcap.DERProgramListLink = m.DERProgramListLink(href=RootURLs.DEFAULT_DERP_ROOT, all=0)
+        # Add the global FSA list link - points to the shared FSA list available to all devices
+        # The count will be updated dynamically based on actual FSAs available
+        # For now, set to 1 assuming at least the default FSA exists
+        dcap.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(href="/fsa", all=1)
         return dcap
 
 

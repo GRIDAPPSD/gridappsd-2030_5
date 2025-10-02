@@ -55,9 +55,19 @@ class CADoesNotExist(Exception):
 def serialize_dataclass(obj: dataclass) -> str:
     """
     Serializes a dataclass that was created via xsdata to an xml string for
-    returning to a client.
+    returning to a client. Ensures mRID fields are lowercase.
     """
-    return __serializer__.render(obj, ns_map=__ns_map__)
+    xml = __serializer__.render(obj, ns_map=__ns_map__)
+    
+    # Replace any uppercase hex in mRID tags with lowercase
+    import re
+    # Match mRID tags with hex content and convert to lowercase
+    def lowercase_mrid(match):
+        return f'<mRID>{match.group(1).lower()}</mRID>'
+    
+    xml = re.sub(r'<mRID>([0-9A-Fa-f]+)</mRID>', lowercase_mrid, xml)
+    
+    return xml
 
 
 def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:

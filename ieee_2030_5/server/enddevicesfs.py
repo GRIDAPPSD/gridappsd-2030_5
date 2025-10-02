@@ -187,7 +187,8 @@ class EDevRequests(RequestOp):
                         _log.debug(f"Populated EndDevice links for {ed.href}")
                     except Exception as e:
                         _log.warning(f"Failed to populate EndDevice links: {e}")
-                retval = m.EndDeviceList(href=request.path, all=1, results=1, EndDevice=[ed])
+                retval = m.EndDeviceList(href=request.path, all=1, results=1, 
+                                        pollRate=adpt.get_poll_rate('end_device_list'), EndDevice=[ed])
             else:
                 _log.debug(f"Getting single resource for path: {request.path}")
                 if retval := get_href(request.path):
