@@ -1,9 +1,6 @@
-from typing import Dict
-
-
 class Base:
     __count__: int = 0
-    __config__: Dict = {}
+    __config__: dict = {}
 
     @classmethod
     def do_it(kls):
@@ -16,7 +13,6 @@ class Base:
 
 
 class A(Base):
-
     def get_count(self):
         return A.__count__
 
@@ -25,7 +21,6 @@ class A(Base):
 
 
 class B(Base):
-
     def get_count(self):
         return B.__count__
 
@@ -51,6 +46,6 @@ B.do_it()
 print(B.__count__)
 print(A.__count__)
 
-print(C.config_update('foo', 'bar'))
-print(C.config_update('woot', 'here_ i am'))
-print(A.config_update('alpha', 'beta'))
+print(C.config_update("foo", "bar"))
+print(C.config_update("woot", "here_ i am"))
+print(A.config_update("alpha", "beta"))

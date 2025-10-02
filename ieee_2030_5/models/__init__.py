@@ -1,5 +1,4 @@
 from ieee_2030_5.models.Config import (
-    TypeName,
     CompoundFields,
     Config,
     ConstantName,
@@ -11,6 +10,7 @@ from ieee_2030_5.models.Config import (
     PackageName,
     Substitution,
     Substitutions,
+    TypeName,
 )
 from ieee_2030_5.models.derforecasts import (
     DERFlexibility,

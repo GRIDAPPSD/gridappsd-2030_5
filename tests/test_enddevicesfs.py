@@ -1,4 +1,3 @@
-import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.client.client import IEEE2030_5_Client
 
 
@@ -36,16 +35,16 @@ def test_can_get_fsa_link(first_client: IEEE2030_5_Client):
     fsa = first_client.function_set_assignment_list()
 
     assert fsa.FunctionSetAssignments
-    assert 1 == fsa.results
-    assert 1 == fsa.all
+    assert fsa.results == 1
+    assert fsa.all == 1
 
 
 def test_can_get_der_link(first_client: IEEE2030_5_Client):
     der_list = first_client.der_list()
 
-    assert 1 == der_list.all
+    assert der_list.all == 1
     assert der_list.DER[0]
-    assert 1 == der_list.results
+    assert der_list.results == 1
 
     der = der_list.DER[0]
     assert der.DERAvailabilityLink

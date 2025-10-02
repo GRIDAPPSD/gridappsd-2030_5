@@ -1,8 +1,3 @@
-from pathlib import Path
-
-import pytest
-
-
 def test_comm_002(first_client):
     capability = first_client.device_capability()
 

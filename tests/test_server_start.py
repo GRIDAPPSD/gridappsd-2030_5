@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import ieee_2030_5.models as m
 from ieee_2030_5.client import IEEE2030_5_Client
 
 

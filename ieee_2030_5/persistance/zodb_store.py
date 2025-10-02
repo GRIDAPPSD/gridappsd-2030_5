@@ -6,13 +6,13 @@ Refactored from the original points.py implementation.
 import atexit
 import logging
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional
 from contextlib import contextmanager
+from pathlib import Path
+
 import transaction
-from ZODB import FileStorage, DB
-from ZODB.Connection import Connection
 from persistent.mapping import PersistentMapping
+from ZODB import DB, FileStorage
+from ZODB.Connection import Connection
 
 from .base import PointStoreBase
 
@@ -22,7 +22,7 @@ _log = logging.getLogger(__name__)
 class ZODBPointStore(PointStoreBase):
     """Thread-safe point store using ZODB for persistence."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         if db_path is None:
             db_path = Path("~/.ieee_2030_5_data/points.fs").expanduser().resolve()
 
@@ -78,7 +78,7 @@ class ZODBPointStore(PointStoreBase):
             transaction.abort()
             raise
 
-    def get_point(self, key: str) -> Optional[bytes]:
+    def get_point(self, key: str) -> bytes | None:
         """Retrieve a point from the key/value store."""
         normalized_key = key.replace("/", "^^^^")
 
@@ -110,7 +110,7 @@ class ZODBPointStore(PointStoreBase):
             transaction.abort()
             raise
 
-    def get_hrefs(self) -> List[str]:
+    def get_hrefs(self) -> list[str]:
         """Get all stored href keys."""
         try:
             with self._get_connection() as conn:
@@ -121,7 +121,7 @@ class ZODBPointStore(PointStoreBase):
             _log.error(f"Failed to get hrefs: {e}")
             return []
 
-    def get_keys_matching(self, pattern: str) -> List[str]:
+    def get_keys_matching(self, pattern: str) -> list[str]:
         """Get all keys that match a pattern."""
         try:
             with self._get_connection() as conn:
@@ -181,7 +181,7 @@ class ZODBPointStore(PointStoreBase):
             _log.error(f"Failed to check if key exists {key}: {e}")
             return False
 
-    def bulk_set(self, items: Dict[str, bytes]) -> None:
+    def bulk_set(self, items: dict[str, bytes]) -> None:
         """Set multiple points in a single transaction."""
         try:
             with self._get_connection() as conn:
@@ -195,7 +195,7 @@ class ZODBPointStore(PointStoreBase):
             transaction.abort()
             raise
 
-    def bulk_get(self, keys: List[str]) -> Dict[str, bytes]:
+    def bulk_get(self, keys: list[str]) -> dict[str, bytes]:
         """Get multiple points in a single operation."""
         try:
             with self._get_connection() as conn:

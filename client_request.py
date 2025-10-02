@@ -1,6 +1,6 @@
+import ssl
 from http.client import HTTPSConnection
 from pathlib import Path
-import ssl
 
 from icecream import ic
 

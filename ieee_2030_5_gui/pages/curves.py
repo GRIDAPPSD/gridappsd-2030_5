@@ -1,7 +1,6 @@
 import dataclasses
 import json
 import logging
-from typing import List
 
 from nicegui import ui
 
@@ -13,7 +12,7 @@ from ..session import get_curve_list, send_curve
 
 _log = logging.getLogger(__name__)
 
-curve_data_points: List[m.CurveData] = [m.CurveData() for x in range(10)]
+curve_data_points: list[m.CurveData] = [m.CurveData() for x in range(10)]
 curve_list: m.DERCurveList = m.DERCurveList()
 current_curve: m.DERCurve = m.DERCurve()
 der_ref_type: DERUnitRefType = DERUnitRefType.NA
@@ -99,17 +98,16 @@ def curve_type_refresh(select: ui.select):
 @ui.refreshable
 def render_curve_form():
     _log.debug("Rendering curve form")
-    with ui.row():
-        with ui.column():
-            curveType = (
-                ui.select(
-                    {curve_type.value: curve_type.name for index, curve_type in enumerate(CurveType)},
-                    label="Curve Type",
-                )
-                .classes("w-64")
-                .bind_value_from(current_curve, "curveType")
+    with ui.row(), ui.column():
+        curveType = (
+            ui.select(
+                {curve_type.value: curve_type.name for index, curve_type in enumerate(CurveType)},
+                label="Curve Type",
             )
-            curveType.on_value_change = lambda e: curve_type_refresh(curveType)
+            .classes("w-64")
+            .bind_value_from(current_curve, "curveType")
+        )
+        curveType.on_value_change = lambda e: curve_type_refresh(curveType)
     with ui.row():
         with ui.column():
             mRID = ui.input("mRID").bind_value(current_curve, "mRID")

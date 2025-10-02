@@ -852,7 +852,7 @@ if ENABLED:
                 # Should have returned only a single feeder
                 feeder = response["data"]["feeders"][0]
             else:
-                with open(self._model_dict_file, "r", encoding="utf-8") as f:
+                with open(self._model_dict_file, encoding="utf-8") as f:
                     feeder = json.load(f)["feeders"][0]
 
             re_houses = re.compile(self.gridappsd_configuration.house_named_inverters_regex)
@@ -1033,7 +1033,7 @@ if ENABLED:
                 )
                 feeder = response["data"]["feeders"][0]
             else:
-                with open(self._model_dict_file, "r", encoding="utf-8") as f:
+                with open(self._model_dict_file, encoding="utf-8") as f:
                     feeder = json.load(f)["feeders"][0]
 
             # Find all energy consumers with ConductingEquipment_mRID
@@ -1173,7 +1173,7 @@ if ENABLED:
                         else:
                             import json
 
-                            with open(self._model_dict_file, "r", encoding="utf-8") as f:
+                            with open(self._model_dict_file, encoding="utf-8") as f:
                                 feeder = json.load(f)["feeders"][0]
 
                         # Check measurements for energy consumers

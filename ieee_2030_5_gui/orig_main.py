@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 
-from der_programs import program_add, programs_list
+from der_programs import programs_list
 from enddevices import add_end_device, show_end_device, show_list
 from nicegui import ui
 from router import global_router as router
@@ -73,7 +73,7 @@ async def main():
                 for der_index, der in enumerate(derlist.DER):
                     der_tree.append({"id": der.href, "label": f"DER {der_index}"})
 
-    resp = backend_session.get(endpoint(f"/derp"))
+    resp = backend_session.get(endpoint("/derp"))
     if resp.ok:
         derplist: m.DERProgramList = xml_to_dataclass(resp.text)
 
@@ -98,26 +98,25 @@ async def main():
     with ui.header(elevated=True).style("background-color: #3874c8").classes("items-center justify-between"):
         ui.label("HEADER")
 
-    with ui.left_drawer().style("background-color: #d7e3f4"):
-        with ui.column():
-            ui.tree(
-                [
-                    {"id": "end_devices", "label": "End Devices", "children": ed_tree},
-                    {"id": "der_programs", "label": "DER Programs", "children": derp_tree},
-                    {"id": "usage_points", "label": "Usage Points"},
-                    {"id": "ders", "label": "DERs", "children": der_tree},
-                    {"id": "curves", "label": "Curves"},
-                ],
-                label_key="label",
-                node_key="id",
-                on_select=lambda e: ui.notify(e.value),
-            ).classes("text-lg")
-            ui.button("DER Programs", on_click=lambda: router.open(programs_list)).classes("w-64")
-            ui.button("End Devices", on_click=lambda: router.open(show_end_devices)).classes("w-64")
-            ui.button("Add End Device", on_click=lambda: router.open(add_enddevice)).classes("w-64")
-            ui.button("One", on_click=lambda: router.open(show_one)).classes("w-64")
-            ui.button("Two", on_click=lambda: router.open(show_two)).classes("w-64")
-            ui.button("Three", on_click=lambda: router.open(show_three)).classes("w-64")
+    with ui.left_drawer().style("background-color: #d7e3f4"), ui.column():
+        ui.tree(
+            [
+                {"id": "end_devices", "label": "End Devices", "children": ed_tree},
+                {"id": "der_programs", "label": "DER Programs", "children": derp_tree},
+                {"id": "usage_points", "label": "Usage Points"},
+                {"id": "ders", "label": "DERs", "children": der_tree},
+                {"id": "curves", "label": "Curves"},
+            ],
+            label_key="label",
+            node_key="id",
+            on_select=lambda e: ui.notify(e.value),
+        ).classes("text-lg")
+        ui.button("DER Programs", on_click=lambda: router.open(programs_list)).classes("w-64")
+        ui.button("End Devices", on_click=lambda: router.open(show_end_devices)).classes("w-64")
+        ui.button("Add End Device", on_click=lambda: router.open(add_enddevice)).classes("w-64")
+        ui.button("One", on_click=lambda: router.open(show_one)).classes("w-64")
+        ui.button("Two", on_click=lambda: router.open(show_two)).classes("w-64")
+        ui.button("Three", on_click=lambda: router.open(show_three)).classes("w-64")
 
     with ui.footer().style("background-color: #3874c8"):
         ui.label("FOOTER")

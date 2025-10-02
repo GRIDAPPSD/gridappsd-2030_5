@@ -4,7 +4,6 @@ import logging
 import os
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -30,7 +29,7 @@ _tls_repo = TLSRepository(
     clear=False,
 )
 
-_log.debug(f"Loading context vars for tls and server config")
+_log.debug("Loading context vars for tls and server config")
 tls_repo_var = ContextVar("tls_repo_var", default=_tls_repo)
 server_config_var = ContextVar("server_config_var", default=_server_config)
 

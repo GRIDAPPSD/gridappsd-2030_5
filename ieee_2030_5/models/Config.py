@@ -1,6 +1,6 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 __NAMESPACE__ = "http://pypi.org/project/xsdata"
 
@@ -11,14 +11,14 @@ class TypeName:
         name = "ClassName"
         namespace = "http://pypi.org/project/xsdata"
 
-    case: Optional[str] = field(
+    case: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    safePrefix: Optional[str] = field(
+    safePrefix: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -32,21 +32,21 @@ class CompoundFields:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    defaultName: Optional[str] = field(
+    defaultName: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    forceDefaultName: Optional[bool] = field(
+    forceDefaultName: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    value: Optional[bool] = field(
+    value: bool | None = field(
         default=None,
         metadata={
             "required": True,
@@ -59,14 +59,14 @@ class ConstantName:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    case: Optional[str] = field(
+    case: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    safePrefix: Optional[str] = field(
+    safePrefix: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -80,14 +80,14 @@ class FieldName:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    case: Optional[str] = field(
+    case: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    safePrefix: Optional[str] = field(
+    safePrefix: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -101,49 +101,49 @@ class Format:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    repr: Optional[bool] = field(
+    repr: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    eq: Optional[bool] = field(
+    eq: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    order: Optional[bool] = field(
+    order: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    unsafeHash: Optional[bool] = field(
+    unsafeHash: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    frozen: Optional[bool] = field(
+    frozen: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    slots: Optional[bool] = field(
+    slots: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    kwOnly: Optional[bool] = field(
+    kwOnly: bool | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -163,14 +163,14 @@ class ModuleName:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    case: Optional[str] = field(
+    case: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    safePrefix: Optional[str] = field(
+    safePrefix: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -184,14 +184,14 @@ class PackageName:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    case: Optional[str] = field(
+    case: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    safePrefix: Optional[str] = field(
+    safePrefix: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -205,7 +205,7 @@ class Substitution:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    type_value: Optional[str] = field(
+    type_value: str | None = field(
         default=None,
         metadata={
             "name": "type",
@@ -213,14 +213,14 @@ class Substitution:
             "required": True,
         },
     )
-    search: Optional[str] = field(
+    search: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    replace: Optional[str] = field(
+    replace: str | None = field(
         default=None,
         metadata={
             "type": "Attribute",
@@ -234,35 +234,35 @@ class Conventions:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    ClassName: Optional[TypeName] = field(
+    ClassName: TypeName | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    FieldName: Optional[FieldName] = field(
+    FieldName: FieldName | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    ConstantName: Optional[ConstantName] = field(
+    ConstantName: ConstantName | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    ModuleName: Optional[ModuleName] = field(
+    ModuleName: ModuleName | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    PackageName: Optional[PackageName] = field(
+    PackageName: PackageName | None = field(
         default=None,
         metadata={
             "type": "Element",
@@ -276,77 +276,77 @@ class Output:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    maxLineLength: Optional[int] = field(
+    maxLineLength: int | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    Package: Optional[str] = field(
+    Package: str | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    Format: Optional[Format] = field(
+    Format: Format | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    Structure: Optional[str] = field(
+    Structure: str | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    DocstringStyle: Optional[str] = field(
+    DocstringStyle: str | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    FilterStrategy: Optional[str] = field(
+    FilterStrategy: str | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    RelativeImports: Optional[bool] = field(
+    RelativeImports: bool | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    CompoundFields: Optional[CompoundFields] = field(
+    CompoundFields: CompoundFields | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    PostponedAnnotations: Optional[bool] = field(
+    PostponedAnnotations: bool | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    UnnestClasses: Optional[bool] = field(
+    UnnestClasses: bool | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    IgnorePatterns: Optional[bool] = field(
+    IgnorePatterns: bool | None = field(
         default=None,
         metadata={
             "type": "Element",
@@ -360,7 +360,7 @@ class Substitutions:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    Substitution: List[Substitution] = field(
+    Substitution: list[Substitution] = field(
         default_factory=list,
         metadata={
             "type": "Element",
@@ -374,28 +374,28 @@ class Config:
     class Meta:
         namespace = "http://pypi.org/project/xsdata"
 
-    version: Optional[float] = field(
+    version: float | None = field(
         default=None,
         metadata={
             "type": "Attribute",
             "required": True,
         },
     )
-    Output: Optional[Output] = field(
+    Output: Output | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    Conventions: Optional[Conventions] = field(
+    Conventions: Conventions | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    Substitutions: Optional[Substitutions] = field(
+    Substitutions: Substitutions | None = field(
         default=None,
         metadata={
             "type": "Element",

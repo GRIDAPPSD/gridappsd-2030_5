@@ -1,11 +1,9 @@
-import sys
 import time
-from pprint import pprint
-from typing import Any, Optional
+from typing import Any
 
 import cimlab.loaders.gridappsd as gridappsd_loader
 from cimlab.data_profile import CIM_PROFILE
-from cimlab.loaders import ConnectionParameters, Parameter
+from cimlab.loaders import ConnectionParameters
 from cimlab.loaders.gridappsd import GridappsdConnection
 from cimlab.models import DistributedModel
 from gridappsd import GridAPPSD

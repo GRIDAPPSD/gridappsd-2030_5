@@ -1,19 +1,17 @@
 import logging
-from copy import deepcopy
-from typing import Dict, List
 
 from nicegui import ui
 
 import ieee_2030_5.models as m
 
 from ..pages import Pages, show_global_header
-from ..session import get_control_list, get_curve_list, send_control
+from ..session import get_curve_list, send_control
 
 _log = logging.getLogger(__name__)
 
 # Curves and Curve Type are here only for read only purposes.
 curve_list: m.DERCurveList = m.DERCurveList()
-curve_type_filtered: Dict[m.CurveType, List[m.DERCurve]] = {}
+curve_type_filtered: dict[m.CurveType, list[m.DERCurve]] = {}
 
 # This is the list of controls that are available.
 controls = m.DERControlList()
@@ -35,15 +33,14 @@ current_control.DERControlBase = der_base
 def render_select():
     der_controls = [c.description for c in controls.DERControl]
     der_controls.insert(0, "NEW")
-    with ui.row():
-        with ui.column():
-            if not current_control.description:
-                ui.select(der_controls, label="Controls", value=der_controls[0]).classes("w-64")
-            else:
-                ui.select(der_controls, label="Controls", value=current_control.description).classes("w-64")
+    with ui.row(), ui.column():
+        if not current_control.description:
+            ui.select(der_controls, label="Controls", value=der_controls[0]).classes("w-64")
+        else:
+            ui.select(der_controls, label="Controls", value=current_control.description).classes("w-64")
 
-            if current_control.href:
-                ui.label(f"Href: {current_control.href}")
+        if current_control.href:
+            ui.label(f"Href: {current_control.href}")
 
 
 def change_control(new_control: str):

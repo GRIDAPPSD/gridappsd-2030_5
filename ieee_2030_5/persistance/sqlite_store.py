@@ -3,19 +3,20 @@ SQLite implementation of the point store interface.
 """
 
 import atexit
+import json
 import logging
+import queue
 import sqlite3
+import sys
 import threading
 import time
-from pathlib import Path
-from typing import Dict, List, Optional, Callable, Any, Union, Tuple
-from contextlib import contextmanager
-from functools import wraps
 from collections import OrderedDict, deque
-import queue
-import sys
-import json
-from datetime import datetime, timedelta
+from collections.abc import Callable
+from contextlib import contextmanager
+from datetime import datetime
+from functools import wraps
+from pathlib import Path
+from typing import Any
 
 from .base import PointStoreBase
 
@@ -81,7 +82,7 @@ def adaptive_retry_db_operation(base_max_retries: int = 5, base_delay: float = 0
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             _load_monitor.connection_started()
-            last_exception: Optional[Exception] = None
+            last_exception: Exception | None = None
 
             try:
                 # Get current load metrics to adapt retry behavior
@@ -176,7 +177,7 @@ class SQLitePointStore(PointStoreBase):
 
     def __init__(
         self,
-        db_path: Optional[Path] = None,
+        db_path: Path | None = None,
         max_connections: int = 20,
         cache_size: int = 10000,
         cache_ttl: float = 300.0,
@@ -603,7 +604,7 @@ class SQLitePointStore(PointStoreBase):
             while len(self._cache) > self._cache_size:
                 self._evict_lru(reason="size")
 
-    def _get_from_cache(self, key: str) -> Optional[bytes]:
+    def _get_from_cache(self, key: str) -> bytes | None:
         """Get value from cache if available and not expired."""
         with self._cache_lock:
             if key in self._cache:
@@ -690,7 +691,7 @@ class SQLitePointStore(PointStoreBase):
             self._invalidate_cache(key)  # Remove from cache since we couldn't queue
             return self.set_point(key, value, synchronous=True)
 
-    def get_point(self, key: str) -> Optional[bytes]:
+    def get_point(self, key: str) -> bytes | None:
         """Retrieve a point, checking cache first then database."""
         # Check if there's a pending write for this key
         with self._pending_writes_lock:
@@ -726,7 +727,7 @@ class SQLitePointStore(PointStoreBase):
             _log.error(f"Failed to get point {key}: {e}")
             return None
 
-    def get_hrefs(self) -> List[str]:
+    def get_hrefs(self) -> list[str]:
         """Get all stored href keys."""
         try:
             conn = self._get_connection()
@@ -738,7 +739,7 @@ class SQLitePointStore(PointStoreBase):
             _log.error(f"Failed to get hrefs: {e}")
             return []
 
-    def get_keys_matching(self, pattern: str) -> List[str]:
+    def get_keys_matching(self, pattern: str) -> list[str]:
         """Get all keys that match a pattern."""
         try:
             conn = self._get_connection()
@@ -835,7 +836,7 @@ class SQLitePointStore(PointStoreBase):
             return False
 
     @adaptive_retry_db_operation(base_max_retries=5, base_delay=0.02, max_delay=2.0)
-    def bulk_set(self, items: Dict[str, bytes]) -> None:
+    def bulk_set(self, items: dict[str, bytes]) -> None:
         """Set multiple points in a single transaction."""
         conn = None
         try:
@@ -855,7 +856,7 @@ class SQLitePointStore(PointStoreBase):
             if conn:
                 self._return_pooled_connection(conn)
 
-    def bulk_get(self, keys: List[str]) -> Dict[str, bytes]:
+    def bulk_get(self, keys: list[str]) -> dict[str, bytes]:
         """Get multiple points in a single operation."""
         try:
             conn = self._get_connection()
@@ -1087,7 +1088,7 @@ class SQLitePointStore(PointStoreBase):
         except Exception as e:
             _log.error(f"Error closing SQLite point store: {e}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get comprehensive database and connection pool statistics."""
         conn = None
         try:
@@ -1291,7 +1292,7 @@ class SQLitePointStore(PointStoreBase):
             # Log as structured data for monitoring
             _log.info(f"PERF_MONITOR: {json.dumps(stats_snapshot, separators=(',', ':'))}")
 
-    def get_monitoring_data(self) -> Dict[str, Any]:
+    def get_monitoring_data(self) -> dict[str, Any]:
         """Get comprehensive monitoring data for visualization dashboards."""
         # Get current stats
         current_stats = self.get_stats()

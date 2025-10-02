@@ -1,15 +1,11 @@
-import flet as ft
-
 import json
-from http.client import HTTPSConnection
-import ssl
-from typing import Callable
-
 import logging
 import os
-from pathlib import Path
-from fastapi.middleware.wsgi import WSGIMiddleware
+import ssl
+from http.client import HTTPSConnection
 from urllib.parse import urlparse
+
+import flet as ft
 
 _log = logging.getLogger(__name__)
 

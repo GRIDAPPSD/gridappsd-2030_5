@@ -1,4 +1,4 @@
-from typing import Awaitable, Callable, Dict, Union
+from collections.abc import Awaitable, Callable
 
 from nicegui import background_tasks, ui
 from nicegui.dependencies import register_component
@@ -8,7 +8,7 @@ register_component("router_frame", __file__, "router_frame.js")
 
 class Router:
     def __init__(self) -> None:
-        self.routes: Dict[str, Callable] = {}
+        self.routes: dict[str, Callable] = {}
         self.content: ui.element = None
 
     def add(self, path: str):
@@ -21,7 +21,7 @@ class Router:
     def add_route(self, path: str, func: Callable):
         self.routes[path] = func
 
-    def open(self, target: Union[Callable, str]):
+    def open(self, target: Callable | str):
         if isinstance(target, str):
             path = target
             builder = self.routes[target]

@@ -1,6 +1,4 @@
 import logging
-from copy import deepcopy
-from typing import Dict, List
 
 from nicegui import ui
 
@@ -27,15 +25,14 @@ def render_select():
     der_selection = [p.description for p in der_list.DER]
     der_selection.insert(0, "NEW")
 
-    with ui.row():
-        with ui.column():
-            if not current_der.description:
-                ui.select(der_selection, label="DER", value=der_selection[0]).classes("w-64")
-            else:
-                ui.select(der_selection, label="DER", value=current_der.description).classes("w-64")
+    with ui.row(), ui.column():
+        if not current_der.description:
+            ui.select(der_selection, label="DER", value=der_selection[0]).classes("w-64")
+        else:
+            ui.select(der_selection, label="DER", value=current_der.description).classes("w-64")
 
-            if current_der.href:
-                ui.label(f"Href: {current_der.href}")
+        if current_der.href:
+            ui.label(f"Href: {current_der.href}")
 
 
 @ui.refreshable
@@ -44,13 +41,11 @@ def render_form():
         ui.input("description").classes("w-64").bind_value(current_der, "description")
     ui.separator()
 
-    with ui.row():
-        with ui.column():
-            pass
+    with ui.row(), ui.column():
+        pass
 
-    with ui.row():
-        with ui.column():
-            pass
+    with ui.row(), ui.column():
+        pass
 
 
 def revert_changes():

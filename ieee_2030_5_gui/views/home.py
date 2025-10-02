@@ -1,8 +1,6 @@
-import flet as ft
-
-from typing import Callable
-
 import logging
+
+import flet as ft
 
 _log = logging.getLogger(__name__)
 

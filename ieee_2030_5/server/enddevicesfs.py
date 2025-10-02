@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 import werkzeug.exceptions
 from flask import Response, request
@@ -8,10 +7,8 @@ import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.data.indexer import add_href, get_href
-from ieee_2030_5.models import Registration
 from ieee_2030_5.server.base_request import RequestOp
-from ieee_2030_5.types_ import Lfdi
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import xml_to_dataclass
 
 _log = logging.getLogger(__name__)
 
@@ -60,7 +57,7 @@ class EDevRequests(RequestOp):
             _log.error(f"Error in EDevRequests PUT {request.path}: {e}", exc_info=True)
             raise werkzeug.exceptions.InternalServerError(f"Internal server error: {str(e)}")
 
-    def post(self, path: Optional[str] = None) -> Response:
+    def post(self, path: str | None = None) -> Response:
         """
         Handle post request to /edev
 

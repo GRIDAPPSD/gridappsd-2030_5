@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import inspect
 import logging
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Literal, Tuple, TypeVar, Union, Generic
+from typing import Generic, Literal, TypeVar
 
 import yaml
 from dataclasses_json import dataclass_json
@@ -16,7 +15,7 @@ import json
 
 try:
     from gridappsd.field_interface import MessageBusDefinition
-except ImportError as ex:
+except ImportError:
     pass
 
 import ieee_2030_5.models as m
@@ -47,7 +46,7 @@ class InvalidConfigFile(Exception):
 @dataclass
 class FSAConfiguration:
     description: str
-    programs: List[ProgramConfiguration] = field(default_factory=list)
+    programs: list[ProgramConfiguration] = field(default_factory=list)
 
 
 @dataclass
@@ -64,8 +63,8 @@ class DeviceConfiguration:
     post_rate: int = 3
     pin: int | None = None
     poll_rate: int = 3
-    fsas: List[str] = field(default_factory=list)
-    ders: List[str] = field(default_factory=list)
+    fsas: list[str] = field(default_factory=list)
+    ders: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, env):
@@ -102,7 +101,7 @@ class ControlBaseConfiguration:
 @dataclass
 class ControlConfiguration:
     description: str | None = None
-    base: Dict = field(default_factory=dict)
+    base: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, env):
@@ -122,8 +121,8 @@ class ControlConfiguration:
 class ProgramConfiguration:
     description: str | None = None
     default_control: str | None = None
-    controls: List[str] = field(default_factory=list)
-    curves: List[str] = field(default_factory=list)
+    controls: list[str] = field(default_factory=list)
+    curves: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, env):
@@ -182,7 +181,7 @@ class GridappsdConfiguration:
 @dataclass
 class ProgramList:
     name: str
-    programs: List[m.DERProgram]
+    programs: list[m.DERProgram]
 
 
 @dataclass
@@ -222,21 +221,34 @@ class ServerConfiguration:
     poll_rate: int = 900  # Default poll rate for device capabilities (15 minutes)
     post_rate: int = 300  # Default post rate for mirror usage points (5 minutes)
 
+    # Individual resource poll rates (defaults match _poll_rate values)
+    device_capability: int = 900  # matches device_capability_poll_rate
+    end_device_list: int = 86400  # matches end_device_list_poll_rate
+    der_list: int = 900  # matches poll_rate
+    der_program_list: int = 900  # matches poll_rate
+    fsa_list: int = 900  # matches poll_rate
+    mirror_usage_point: int = 300  # matches mirror_usage_point_post_rate
+    usage_point: int = 900  # matches poll_rate
+    registration: int = 900  # matches poll_rate
+    log_event_list: int = 900  # matches log_event_list_poll_rate
+    reading_set: int = 900  # matches poll_rate
+    time: int = 900  # matches poll_rate
+
     generate_admin_cert: bool = False
     lfdi_client: str | None = None
     debug_client_traffic: bool = False  # Enable per-client request/response logging to files
 
-    fsas: List[FSAConfiguration] = field(default_factory=list)
-    programs: List[ProgramConfiguration] = field(default_factory=list)
-    devices: List[DeviceConfiguration] = field(default_factory=list)
-    ders: List[DERConfiguration] = field(default_factory=list)
-    curves: List[CurveConfiguration] = field(default_factory=list)
+    fsas: list[FSAConfiguration] = field(default_factory=list)
+    programs: list[ProgramConfiguration] = field(default_factory=list)
+    devices: list[DeviceConfiguration] = field(default_factory=list)
+    ders: list[DERConfiguration] = field(default_factory=list)
+    curves: list[CurveConfiguration] = field(default_factory=list)
 
-    server_mode: Union[Literal["enddevices_create_on_start"], Literal["enddevices_register_access_only"]] = (
+    server_mode: Literal["enddevices_create_on_start"] | Literal["enddevices_register_access_only"] = (
         "enddevices_register_access_only"
     )
 
-    lfdi_mode: Union[Literal["lfdi_mode_from_file"], Literal["lfdi_mode_from_cert_fingerprint"]] = (
+    lfdi_mode: Literal["lfdi_mode_from_file"] | Literal["lfdi_mode_from_cert_fingerprint"] = (
         "lfdi_mode_from_cert_fingerprint"
     )
 

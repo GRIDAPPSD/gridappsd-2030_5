@@ -1,9 +1,12 @@
+from collections.abc import Callable
+from typing import Optional
+
+import flet as ft
+from pydantic import BaseModel, ConfigDict
+
+from ieee_2030_5_gui.views.home import home_view
 from ieee_2030_5_gui.views.server_control import server_control_view
 from ieee_2030_5_gui.views.show_resource_tree import show_resource_tree_view
-from ieee_2030_5_gui.views.home import home_view
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, Callable
-import flet as ft
 
 
 class _2030_5View(BaseModel):

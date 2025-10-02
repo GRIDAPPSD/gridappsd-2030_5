@@ -3,26 +3,28 @@
 Thread-safe adapters for IEEE 2030.5 server.
 """
 
-import threading
 import logging
+import threading
 import time
 from pathlib import Path
-from typing import List
+
 import OpenSSL
-from flask import Response, request, g
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from blinker import Signal
+from flask import Response, g, request
+
 import ieee_2030_5.models as m
 from ieee_2030_5 import hrefs
+from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.config import DeviceConfiguration, ServerConfiguration
 from ieee_2030_5.persistance.points import atomic_operation, get_db
-from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
-from blinker import Signal
+from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+
 from .base import (
-    ThreadSafeListAdapter,
-    ThreadSafeEndDeviceAdapter,
-    initialize_adapters,
-    get_adapter_stats,
     AdapterResult,
+    ThreadSafeEndDeviceAdapter,
+    ThreadSafeListAdapter,
+    get_adapter_stats,
+    initialize_adapters,
 )
 
 
@@ -118,7 +120,8 @@ def get_global_poll_rate() -> int:
 def _update_global_adapters():
     """Update the global adapter references after initialization."""
     global ListAdapter, EndDeviceAdapter
-    from .base import ListAdapter as BaseListAdapter, EndDeviceAdapter as BaseEndDeviceAdapter
+    from .base import EndDeviceAdapter as BaseEndDeviceAdapter
+    from .base import ListAdapter as BaseListAdapter
 
     ListAdapter = BaseListAdapter
     EndDeviceAdapter = BaseEndDeviceAdapter
@@ -267,7 +270,7 @@ def _get_enddevice_from_cache(lfdi):
                         _log.error(f"Fallback FAILED: No EndDevice found for LFDI {normalized_lfdi}")
                         return None
                 else:
-                    _log.error(f"Fallback FAILED: EndDeviceAdapter not available")
+                    _log.error("Fallback FAILED: EndDeviceAdapter not available")
                     return None
             except Exception as e:
                 _log.error(f"Fallback ERROR: Dynamic lookup failed for LFDI {normalized_lfdi}: {e}")
@@ -599,7 +602,7 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint, client_lfdi: str = None) 
                             f"MUP CREATION DEBUG: Found existing MUP with same mRID={mup.mRID} but DIFFERENT client ({existing_client_lfdi} vs {normalized_client_lfdi}), continuing with new MUP creation"
                         )
         else:
-            _log.debug(f"MUP CREATION DEBUG: MUP has no mRID or no client_lfdi, will create new MUP")
+            _log.debug("MUP CREATION DEBUG: MUP has no mRID or no client_lfdi, will create new MUP")
 
         # Generate device-specific href - deviceLFDI is required for IEEE 2030.5 compliance
         _log.debug(
@@ -650,7 +653,7 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint, client_lfdi: str = None) 
                 if client_index:
                     # Use global lock ONLY for mirror_usage_point_index calculation to prevent conflicts
                     # while allowing concurrent MUP operations for different clients
-                    _log.debug(f"MUP CREATION DEBUG: About to get GLOBAL lock for mirror_usage_point_index calculation")
+                    _log.debug("MUP CREATION DEBUG: About to get GLOBAL lock for mirror_usage_point_index calculation")
                     global_index_lock = _get_href_generation_lock("__GLOBAL_MIRROR_USAGE_POINT_INDEX__")
 
                     # Then use per-client lock for the actual MUP creation (using authenticated client LFDI)
@@ -671,7 +674,7 @@ def create_mirror_usage_point(mup: m.MirrorUsagePoint, client_lfdi: str = None) 
 
                             with global_index_lock:
                                 _log.debug(
-                                    f"MUP CREATION DEBUG: Acquired GLOBAL lock for mirror_usage_point_index calculation"
+                                    "MUP CREATION DEBUG: Acquired GLOBAL lock for mirror_usage_point_index calculation"
                                 )
 
                                 # Re-read existing MUPs within the global lock to get latest state
@@ -1403,10 +1406,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 def get_mup_metadata(mup_href: str) -> dict | None:
     """Get metadata for a MirrorUsagePoint."""
     with _mup_metadata_lock:
-        return _mup_metadata.get(mup_href, None)
+        return _mup_metadata.get(mup_href)
 
 
-def get_mups_for_client(client_lfdi: str) -> List[m.MirrorUsagePoint]:
+def get_mups_for_client(client_lfdi: str) -> list[m.MirrorUsagePoint]:
     """Get all MirrorUsagePoints created by or belonging to a specific client."""
     normalized_client_lfdi = _normalize_lfdi_for_cache(client_lfdi)
     result = []

@@ -6,18 +6,17 @@ Supports both ZODB and SQLite backends, configurable via configuration.
 
 import logging
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional
 from contextlib import contextmanager
+from pathlib import Path
 
 from .base import PointStoreBase
-from .zodb_store import ZODBPointStore
 from .sqlite_store import SQLitePointStore
+from .zodb_store import ZODBPointStore
 
 _log = logging.getLogger(__name__)
 
 
-def create_point_store(backend: str = "zodb", db_path: Optional[Path] = None) -> PointStoreBase:
+def create_point_store(backend: str = "zodb", db_path: Path | None = None) -> PointStoreBase:
     """
     Factory function to create a point store based on backend type.
 
@@ -48,7 +47,7 @@ _backend_type = "zodb"  # Default backend
 _db_path = None
 
 
-def configure_point_store(backend: str = "zodb", db_path: Optional[Path] = None) -> None:
+def configure_point_store(backend: str = "zodb", db_path: Path | None = None) -> None:
     """
     Configure the global point store backend.
     Must be called before first use of get_db().
@@ -100,19 +99,19 @@ def set_point(key: str, value: bytes) -> None:
     get_db().set_point(key, value)
 
 
-def get_point(key: str) -> Optional[bytes]:
+def get_point(key: str) -> bytes | None:
     """
     Retrieve a point from the key/value store. If the key doesn't exist returns None.
     """
     return get_db().get_point(key)
 
 
-def get_hrefs() -> List[str]:
+def get_hrefs() -> list[str]:
     """Get all stored href keys."""
     return get_db().get_hrefs()
 
 
-def get_keys_matching(pattern: str) -> List[str]:
+def get_keys_matching(pattern: str) -> list[str]:
     """Get all keys matching a pattern."""
     return get_db().get_keys_matching(pattern)
 
@@ -137,12 +136,12 @@ def point_count() -> int:
     return get_db().count()
 
 
-def bulk_set_points(items: Dict[str, bytes]) -> None:
+def bulk_set_points(items: dict[str, bytes]) -> None:
     """Set multiple points in a single operation."""
     get_db().bulk_set(items)
 
 
-def bulk_get_points(keys: List[str]) -> Dict[str, bytes]:
+def bulk_get_points(keys: list[str]) -> dict[str, bytes]:
     """Get multiple points in a single operation."""
     return get_db().bulk_get(keys)
 

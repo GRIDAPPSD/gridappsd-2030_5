@@ -1,9 +1,10 @@
-from fastapi import Request
-from fastapi.middleware.wsgi import WSGIMiddleware
-import flet as ft
-from flet.fastapi import FastAPI
 import os
 from pathlib import Path
+
+import flet as ft
+from fastapi import Request
+from flet.fastapi import FastAPI
+
 # from ieee_2030_5.server
 # from asyncio import asynccontextmanager
 
@@ -72,8 +73,8 @@ app.mount(
 
 
 def _main():
-    from argparse import ArgumentParser
     import os
+    from argparse import ArgumentParser
 
     parser = ArgumentParser()
 
@@ -91,8 +92,8 @@ def _main():
 
 
 if __name__ == "__main__":
-    from argparse import ArgumentParser
     import os
+    from argparse import ArgumentParser
 
     parser = ArgumentParser()
 

@@ -31,6 +31,20 @@ device_capability_poll_rate: 60
 storage_path: data_store
 cleanse_storage: true
 
+# If set to true, all devices will get a default DER object with the default program
+include_default_der_on_all_devices: true
+
+# Default program for all devices (required if include_default_der_on_all_devices is true)
+default_program:
+  description: Default Program
+  primacy: 0
+  DefaultDERControl:
+    setESDelay: 30
+    setGradW: 1000
+    DERControlBase:
+      opModConnect: true
+      opModEnergize: true
+
 devices:
   - id: dev5
     pin: 111115
@@ -44,11 +58,11 @@ devices:
 
 fsas:
   - description: Function Set Assignments 1
-    programs: 
+    programs:
     - Program 1
 
   - description: Function Set Assignments 2
-    programs: 
+    programs:
     - Program 1
 
 programs:

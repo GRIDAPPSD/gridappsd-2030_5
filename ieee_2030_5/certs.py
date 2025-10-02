@@ -2,11 +2,10 @@ import argparse
 import hashlib
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-import shutil
-import yaml
+
 from cryptography import x509
 
 _log = logging.getLogger(__name__)
@@ -16,7 +15,6 @@ __all__ = ["TLSRepository"]
 
 from ieee_2030_5.types_ import Lfdi, PathStr
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper, TLSWrap
-from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
 
 _log = logging.getLogger(__name__)
 
@@ -92,10 +90,10 @@ class TLSRepository:
         if not serial.exists():
             serial.write_text("01")
 
-        self._current_pk: Dict[str, Path] = {}
-        self._current_certs: Dict[str, Path] = {}
+        self._current_pk: dict[str, Path] = {}
+        self._current_certs: dict[str, Path] = {}
         # device_name -> (lfdi, sfdi) for devices.
-        self._devices: Dict[str, Tuple[str, int]] = {}
+        self._devices: dict[str, tuple[str, int]] = {}
 
         new_contents = openssl_cnffile_template.read_text().replace("dir = REPLACE_WITH_REPO_PATH", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
@@ -281,20 +279,20 @@ class TLSRepository:
         cert = x509.load_pem_x509_certificate(pem_data, default_backend())
         return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
 
-    def get_file_pair(self, device_id: str) -> Tuple[str, str]:
+    def get_file_pair(self, device_id: str) -> tuple[str, str]:
         """Get cert, key from the repository based on passed device_id"""
         return (self.__get_cert_file__(device_id).as_posix(), self.__get_key_file__(device_id).as_posix())
 
     @property
-    def client_list(self) -> Dict[str, Dict[str, str | bool]]:
+    def client_list(self) -> dict[str, dict[str, str | bool]]:
         # TODO: Use precalculated specs rather than this each time.
-        specs: Dict[str, Dict[str, str | bool]] = {}
+        specs: dict[str, dict[str, str | bool]] = {}
         for d in self._private_dir.glob(GLOB_PRIVATE):
             paths = self.get_file_pair(d.stem)
 
             specs[d.stem] = {"common_name": d.stem, "path": ",".join(paths), "device": False}
 
-            if ":" not in d.stem or "admin" != d.stem:
+            if ":" not in d.stem or d.stem != "admin":
                 try:
                     specs[d.stem]["lFID"] = self.lfdi(d.stem)
                     specs[d.stem]["device"] = True
@@ -334,7 +332,7 @@ class TLSRepository:
     def server_cert_file(self) -> Path:
         return self.__get_cert_file__(self._serverhost)
 
-    def find_device_id_from_sfdi(self, sfdi: int) -> Optional[str]:
+    def find_device_id_from_sfdi(self, sfdi: int) -> str | None:
         """
         Searches the certificate paths for a device id that maps to the sfdi passed into the method.
         Args:
@@ -397,7 +395,7 @@ def _main():
         lfdi = lfdi_from_fingerprint(fingerprint)
         sfdi = sfdi_from_lfdi(lfdi)
         sys.stdout.write(f"certificate: {t}\n")
-        sys.stdout.write(f"-" * 60 + "\n")
+        sys.stdout.write("-" * 60 + "\n")
         sys.stdout.write(f"fingerprint: {fingerprint}\n")
         sys.stdout.write(f"lfdi: {lfdi.decode('ascii')}\n")
         sys.stdout.write(f"sfdi: {sfdi}\n\n")

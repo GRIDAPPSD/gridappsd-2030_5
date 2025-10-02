@@ -1,16 +1,13 @@
 import argparse
 import socket
 
-from marshmallow_dataclass import dataclass
-from pprint import pprint
-from typing import List
-
 import yaml
+from marshmallow_dataclass import dataclass
 
 from ieee_2030_5.models import DeviceCategoryType
 
 IEEE_9500_FINAL = "_EE71F6C9-56F0-4167-A14E-7F4C71F10EAA"
-#IEEE_9500_FINAL = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"
+# IEEE_9500_FINAL = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"
 IEEE_13CK_NODE = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"
 
 
@@ -50,15 +47,14 @@ def build_config(output_file: str, modelid: str):
     """
     # Use query from gridappsd to get information that
     # we want for the system.
-    from Queries import QueryAllDERGroups, QueryBattery, QuerySolar, QuerySynchronousMachine, QueryInverter
+    from Queries import QueryBattery, QueryInverter, QuerySolar, QuerySynchronousMachine
 
     a = QueryBattery(modelid)
     b = QuerySynchronousMachine(modelid)
     c = QuerySolar(modelid)
     d = QueryInverter(modelid)
     all_devices = set()
-    set_to_check = set(
-        ['_7CBFA8C8-F70E-4921-923C-E125555FDE99', '_A2B5CBC5-BFD5-495A-AB05-9CCBE2DE369B'])
+    set_to_check = set(["_7CBFA8C8-F70E-4921-923C-E125555FDE99", "_A2B5CBC5-BFD5-495A-AB05-9CCBE2DE369B"])
     batteries = set()
     machines = set()
     solar = set()
@@ -73,7 +69,7 @@ def build_config(output_file: str, modelid: str):
 
             if data["id"]["value"] in set_to_check:
                 print(f"{data['id']['value']} is a storage unit")
-            all_devices.add(data['id']['value'])
+            all_devices.add(data["id"]["value"])
             der = dict(
                 name=data["name"]["value"],
                 bus=data["bus"]["value"],
@@ -87,8 +83,9 @@ def build_config(output_file: str, modelid: str):
                 ratedS=float(data["ratedS"]["value"]),
                 ratedU=float(data["ratedU"]["value"]),
                 phases=data["phases"]["value"],
-                ipu=data["ipu"]["value"])
-            batteries.add(data['id']['value'])
+                ipu=data["ipu"]["value"],
+            )
+            batteries.add(data["id"]["value"])
             results.append(der)
 
         for data in b["data"]["results"]["bindings"]:
@@ -97,7 +94,7 @@ def build_config(output_file: str, modelid: str):
 
             if data["id"]["value"] in set_to_check:
                 print(f"{data['id']['value']} is a generator ")
-            all_devices.add(data['id']['value'])
+            all_devices.add(data["id"]["value"])
             der = dict(
                 name=data["name"]["value"],
                 bus=data["bus"]["value"],
@@ -109,7 +106,7 @@ def build_config(output_file: str, modelid: str):
                 ratedU=float(data["ratedU"]["value"]),
                 phases=data["phases"]["value"],
             )
-            machines.add(data['id']['value'])
+            machines.add(data["id"]["value"])
             results.append(der)
 
         for data in c["data"]["results"]["bindings"]:
@@ -117,44 +114,44 @@ def build_config(output_file: str, modelid: str):
                 print(f"{data['id']['value']} found {data['name']['value']} generator solar")
             if data["id"]["value"] in set_to_check:
                 print(f"{data['id']['value']} is a solar gen")
-            all_devices.add(data['id']['value'])
-            der = dict(name=data["name"]["value"],
-                       bus=data["bus"]["value"],
-                       device_category_type=DeviceCategoryType.GENERATION_SYSTEMS.name,
-                       p=float(data["p"]["value"]),
-                       q=float(data["q"]["value"]),
-                       id=data["id"]["value"],
-                       ratedS=float(data["ratedS"]["value"]),
-                       ratedU=float(data["ratedU"]["value"]),
-                       phases=data["phases"]["value"],
-                       ipu=data["ipu"]["value"])
-            solar.add(data['id']['value'])
+            all_devices.add(data["id"]["value"])
+            der = dict(
+                name=data["name"]["value"],
+                bus=data["bus"]["value"],
+                device_category_type=DeviceCategoryType.GENERATION_SYSTEMS.name,
+                p=float(data["p"]["value"]),
+                q=float(data["q"]["value"]),
+                id=data["id"]["value"],
+                ratedS=float(data["ratedS"]["value"]),
+                ratedU=float(data["ratedU"]["value"]),
+                phases=data["phases"]["value"],
+                ipu=data["ipu"]["value"],
+            )
+            solar.add(data["id"]["value"])
             results.append(der)
 
         for data in d["data"]["results"]["bindings"]:
-
             der = dict(
                 name=data["name"]["value"],
                 bus=data["bus"]["value"],
                 device_category_type=DeviceCategoryType.SMART_INVERTER.name,
                 p=float(data["p"]["value"]),
                 q=float(data["q"]["value"]),
-            # inverter mRID is pecid (PowerElectronicsConnection)
+                # inverter mRID is pecid (PowerElectronicsConnection)
                 id=data["pecid"]["value"],
                 resource_id=data["id"]["value"],
-            #pecid=data["pecid"]["value"],
+                # pecid=data["pecid"]["value"],
                 ratedS=float(data["ratedS"]["value"]),
                 ratedU=float(data["ratedU"]["value"]),
                 phases=data["phases"]["value"],
-                ipu=data["ipu"]["value"])
+                ipu=data["ipu"]["value"],
+            )
             resource_id = data["id"]["value"]
             inverter_id = data["pecid"]["value"]
             if resource_id in solar:
                 print(f"inverter: {inverter_id} contains solar resource_id {resource_id}")
             elif resource_id in machines:
-                print(
-                    f"inverter: {inverter_id} contains synchronous machine resource_id {resource_id}"
-                )
+                print(f"inverter: {inverter_id} contains synchronous machine resource_id {resource_id}")
             elif resource_id in batteries:
                 print(f"inverter: {inverter_id} contains battery resource_id {resource_id}")
             else:
@@ -167,7 +164,7 @@ def build_config(output_file: str, modelid: str):
         count = 2
         iproot = "127.0.0."
         for r in results:
-            dev = {'hostname': r["id"], "ip": f"{iproot}{count}"}
+            dev = {"hostname": r["id"], "ip": f"{iproot}{count}"}
             dev.update(r)
             devices.append(dev)
 
@@ -176,7 +173,7 @@ def build_config(output_file: str, modelid: str):
             "tls_repository": "~/tls",
             "server_hostname": socket.gethostname(),
             "server_mode": "enddevices_create_on_start",
-            "openssl_cnf": "openssl.cnf"
+            "openssl_cnf": "openssl.cnf",
         }
         yaml.dump(output, fp, indent=2)
         # print([x for x in results])
@@ -220,7 +217,7 @@ def build_config(output_file: str, modelid: str):
     #     print([x for x in results])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("output_file")
     parser.add_argument("--modelid", default=IEEE_13CK_NODE)

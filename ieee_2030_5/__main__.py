@@ -38,33 +38,29 @@
 # UNITED STATES DEPARTMENT OF ENERGY under Contract DE-AC05-76RL01830
 # -------------------------------------------------------------------------------
 import contextlib
-from dataclasses import asdict
 import logging
 import logging.config
 import os
 import shutil
-import socket
 import sys
 import threading
 import time
 from argparse import ArgumentParser
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Process
+from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
-import yaml
 from werkzeug.serving import BaseWSGIServer
 
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import InvalidConfigFile, ServerConfiguration
 from ieee_2030_5.data.indexer import add_href
+
 # Import GridAPPSDAdapter lazily to avoid early database initialization
 
 # Configure metrics if available (optional)
 try:
-    from prometheus_client import start_http_server, Counter, Summary
+    from prometheus_client import Counter, Summary, start_http_server
 
     METRICS_AVAILABLE = True
     REQUEST_COUNT = Counter("ieee_2030_5_request_count", "Count of IEEE 2030.5 requests")
@@ -167,7 +163,7 @@ def remove_stop_file():
         os.remove(pth)
 
 
-def get_default_logger_config(log_level: Union[str, int] = "INFO", log_file: str = "ieee_2030_5_server.log") -> Dict:
+def get_default_logger_config(log_level: str | int = "INFO", log_file: str = "ieee_2030_5_server.log") -> dict:
     """Get a default logger configuration."""
     if isinstance(log_level, int):
         log_level = logging.getLevelName(log_level)
@@ -236,7 +232,7 @@ def get_default_logger_config(log_level: Union[str, int] = "INFO", log_file: str
     }
 
 
-def clear_all_data(config: Optional[ServerConfiguration] = None):
+def clear_all_data(config: ServerConfiguration | None = None):
     """Clear all data, databases, and logs for a fresh start."""
     _log.info("=" * 60)
     _log.info("CLEARING ALL DATA FOR FRESH START")
@@ -415,7 +411,7 @@ def _main():
         import yaml
 
         try:
-            with open(logging_config_path, "r") as f:
+            with open(logging_config_path) as f:
                 log_config = yaml.safe_load(f)
             _log_early = logging.getLogger("ieee_2030_5")
             _log_early.info(f"Using external logging configuration from {logging_config_path}")
@@ -532,8 +528,8 @@ def _main():
             _log.info(f"Connecting to GridAPPSD at {config.gridappsd.address}:{config.gridappsd.port}")
 
             try:
-                import ieee_2030_5.adapters as adpt
                 from gridappsd import GridAPPSD
+
                 from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
 
                 gapps = GridAPPSD(
@@ -573,10 +569,9 @@ def _main():
         setup_storage(config)
 
         # Initialize the IEEE 2030.5 server
-        from ieee_2030_5.server.server_constructs import initialize_2030_5
-
         # Initialize adapters before server initialization
         from ieee_2030_5.adapters.base import initialize_adapters
+        from ieee_2030_5.server.server_constructs import initialize_2030_5
 
         initialize_adapters()
         _log.info("Adapters initialized for server startup")
@@ -591,7 +586,7 @@ def _main():
 
             # Enable message bus monitoring
             try:
-                from ieee_2030_5.monitoring import patch_gridappsd_adapter, get_message_monitor
+                from ieee_2030_5.monitoring import get_message_monitor, patch_gridappsd_adapter
 
                 patch_gridappsd_adapter()
                 monitor = get_message_monitor()
@@ -601,7 +596,7 @@ def _main():
                 _log.warning(f"Could not enable message bus monitoring: {e}")
 
         # Run the server
-        from ieee_2030_5.flask_server import run_server, run_dual_server, build_server
+        from ieee_2030_5.flask_server import build_server, run_dual_server, run_server
 
         if opts.production:
             _log.info(f"Running in production mode with {opts.num_threads} threads")

@@ -1,12 +1,8 @@
+import shlex
 from ast import Dict
 from pathlib import Path
-import readline
-import shlex
-from typing import List
 
 import yaml
-
-import ieee_2030_5.models as m
 
 data = {}
 
@@ -55,7 +51,7 @@ def store_config(filename, data):
     print(f"Stored {filename}")
 
 
-def print_list(heading, items: List):
+def print_list(heading, items: list):
     print(heading)
     print("-" * 30)
     for item in items:

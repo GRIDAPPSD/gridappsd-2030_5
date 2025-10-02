@@ -1,18 +1,15 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
-import flask
-from blinker import Signal
 from flask import Flask, Response, g, render_template, request
 
 import ieee_2030_5.adapters as adpt
-from ieee_2030_5.data.indexer import add_href, get_href
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
+from ieee_2030_5.data.indexer import add_href, get_href
 from ieee_2030_5.server.server_constructs import create_device_capability
 from ieee_2030_5.utils import dataclass_to_xml, get_lfdi_from_cert, get_sfdi_from_lfdi, xml_to_dataclass
 
@@ -117,7 +114,7 @@ class AdminEndpoints:
 
             elif request.method == "PUT":
                 if not item.href:
-                    _log.error(f"PUT method without an existing object.")
+                    _log.error("PUT method without an existing object.")
                     return Response(400)
 
                 index = int(item.href.rsplit(hrefs.SEP)[-1])
@@ -160,7 +157,7 @@ class AdminEndpoints:
 
             elif request.method == "PUT":
                 if not item.href:
-                    _log.error(f"PUT method without an existing object.")
+                    _log.error("PUT method without an existing object.")
                     return Response(400)
 
                 index = int(item.href.rsplit(hrefs.SEP)[-1])
@@ -211,7 +208,7 @@ class AdminEndpoints:
 
             elif request.method == "PUT":
                 if not item.href:
-                    _log.error(f"PUT method without an existing object.")
+                    _log.error("PUT method without an existing object.")
                     return Response(400)
 
                 index = int(item.href.rsplit(hrefs.SEP)[-1])
@@ -277,7 +274,7 @@ class AdminEndpoints:
 
             elif request.method == "PUT":
                 if not item.href:
-                    _log.error(f"PUT method without an existing object.")
+                    _log.error("PUT method without an existing object.")
                     return Response(400)
 
                 index = int(item.href.rsplit(hrefs.SEP)[-1])
@@ -324,7 +321,7 @@ class AdminEndpoints:
 
             elif request.method == "PUT":
                 if not control.href:
-                    _log.error(f"PUT method without an existing object.")
+                    _log.error("PUT method without an existing object.")
                     return Response(400)
 
                 index = int(control.href.rsplit(hrefs.SEP)[-1])
@@ -370,7 +367,7 @@ class AdminEndpoints:
 
             elif request.method == "PUT":
                 if not curve.href:
-                    _log.error(f"PUT method without an existing object.")
+                    _log.error("PUT method without an existing object.")
                     return Response(400)
 
                 index = int(curve.href.rsplit(hrefs.SEP)[-1])
@@ -487,7 +484,7 @@ class AdminEndpoints:
             return Response(dataclass_to_xml(retval))
 
         if request.method == "POST":
-            raise NotImplemented("POST not implemented")
+            raise NotImplementedError("POST not implemented")
             # xml = request.data.decode('utf-8')
             # data = xml_to_dataclass(request.data.decode('utf-8'))
 

@@ -4,14 +4,13 @@ Provides consistent URL generation and parsing for all server resources.
 """
 
 from __future__ import annotations
-import dataclasses
-import enum
+
 import functools
 import threading
-import typing
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union, TypeVar, Generic, Any, cast
+from typing import Any, NamedTuple
+
 import ieee_2030_5.models as m
 
 # Thread-safe caching
@@ -195,7 +194,7 @@ class HrefParser:
         """Check if the href starts with a specific value."""
         return self.href.startswith(value)
 
-    def at(self, index: int) -> Union[str, int, None]:
+    def at(self, index: int) -> str | int | None:
         """Get the component at the specified index."""
         try:
             if index >= len(self._split):
@@ -237,7 +236,7 @@ class URLRegistry:
     _lock = threading.RLock()
 
     @classmethod
-    def get_instance(cls) -> "URLRegistry":
+    def get_instance(cls) -> URLRegistry:
         """Get the singleton instance of the URL registry."""
         with cls._lock:
             if cls._instance is None:
@@ -246,7 +245,7 @@ class URLRegistry:
 
     def __init__(self):
         """Initialize the registry."""
-        self._urls: Dict[str, str] = {}
+        self._urls: dict[str, str] = {}
         self._lock = threading.RLock()
 
     def register(self, key: str, url: str) -> None:
@@ -254,7 +253,7 @@ class URLRegistry:
         with self._lock:
             self._urls[key] = url
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         """Get a URL by key."""
         with self._lock:
             return self._urls.get(key)
@@ -273,7 +272,7 @@ class URLBuilder:
     _lock = threading.RLock()
 
     @classmethod
-    def get_instance(cls) -> "URLBuilder":
+    def get_instance(cls) -> URLBuilder:
         """Get the singleton instance of the URL builder."""
         with cls._lock:
             if cls._instance is None:
@@ -521,7 +520,7 @@ class URLBuilder:
             else:
                 return f"{RootURLs.DEFAULT_DERP_ROOT}{SEP}{index}"
 
-    def build_link(self, base_url: str, *suffix: Optional[str]) -> str:
+    def build_link(self, base_url: str, *suffix: str | None) -> str:
         """Build a URL from a base and optional suffixes."""
         result = base_url
         if result.endswith("/"):
@@ -538,7 +537,7 @@ class URLBuilder:
                         result += f"/{p}"
         return result
 
-    def extend_url(self, base_url: str, index: Optional[int] = None, suffix: Optional[str] = None) -> str:
+    def extend_url(self, base_url: str, index: int | None = None, suffix: str | None = None) -> str:
         """Extend a URL with optional index and suffix."""
         result = base_url
         if index is not None:
@@ -837,7 +836,7 @@ class ParsedUsagePointHref:
     """Parser for usage point hrefs."""
 
     _href: str
-    _split: List[str]
+    _split: list[str]
 
     def __init__(self, href: str):
         """Initialize with an href string."""
@@ -899,7 +898,7 @@ class ParsedUsagePointHref:
             return False
 
     @property
-    def client_index(self) -> Optional[int]:
+    def client_index(self) -> int | None:
         """Get the client index from format: /mup_{client}_{pointindex}."""
         try:
             # New format: /mup_{client_index}_{usage_point_index}
@@ -909,7 +908,7 @@ class ParsedUsagePointHref:
             return None
 
     @property
-    def usage_point_index(self) -> Optional[int]:
+    def usage_point_index(self) -> int | None:
         """Get the usage point index from format: /mup_{client}_{pointindex}."""
         try:
             # New format: /mup_{client_index}_{usage_point_index}
@@ -919,7 +918,7 @@ class ParsedUsagePointHref:
             return None
 
     @property
-    def meter_reading_index(self) -> Optional[int]:
+    def meter_reading_index(self) -> int | None:
         """Get the meter reading index."""
         try:
             return int(self._split[3])
@@ -927,7 +926,7 @@ class ParsedUsagePointHref:
             return None
 
     @property
-    def reading_set_index(self) -> Optional[int]:
+    def reading_set_index(self) -> int | None:
         """Get the reading set index."""
         try:
             if self._split[4] == "rs":
@@ -937,7 +936,7 @@ class ParsedUsagePointHref:
         return None
 
     @property
-    def reading_set_reading_index(self) -> Optional[int]:
+    def reading_set_reading_index(self) -> int | None:
         """Get the reading set reading index."""
         try:
             if self._split[6] == "r":
@@ -947,7 +946,7 @@ class ParsedUsagePointHref:
         return None
 
     @property
-    def reading_index(self) -> Optional[int]:
+    def reading_index(self) -> int | None:
         """Get the reading index."""
         try:
             if self._split[4] == "r":
@@ -1030,7 +1029,7 @@ class MirrorUsagePointHref:
     reading_index: int = NO_INDEX
 
     @staticmethod
-    def parse(href: str) -> "MirrorUsagePointHref":
+    def parse(href: str) -> MirrorUsagePointHref:
         """Parse an href into a MirrorUsagePointHref."""
         items = href.split(SEP)
         if len(items) == 1:
@@ -1063,7 +1062,7 @@ class EdevHref:
         return value
 
     @staticmethod
-    def parse(path: str) -> "EdevHref":
+    def parse(path: str) -> EdevHref:
         """Parse a path into an EdevHref."""
         split_pth = path.split(SEP)
         if split_pth[0] != PathComponent.EDEV and split_pth[0][1:] != PathComponent.EDEV:
@@ -1129,7 +1128,7 @@ class DERProgramHrefOld(NamedTuple):
     derp_subtype_index: int = NO_INDEX
 
     @staticmethod
-    def parse(href: str) -> "DERProgramHrefOld":
+    def parse(href: str) -> DERProgramHrefOld:
         """Parse an href into a DERProgramHrefOld."""
         parsed = href.split(SEP)
         if len(parsed) == 1:
@@ -1403,12 +1402,12 @@ def get_program_href(index: int = NO_INDEX, subref: str = None) -> str:
     return url_builder.get_program_href(index, subref)
 
 
-def build_link(base_url: str, *suffix: Optional[str]) -> str:
+def build_link(base_url: str, *suffix: str | None) -> str:
     """Build a URL from a base and optional suffixes."""
     return url_builder.build_link(base_url, *suffix)
 
 
-def extend_url(base_url: str, index: Optional[int] = None, suffix: Optional[str] = None) -> str:
+def extend_url(base_url: str, index: int | None = None, suffix: str | None = None) -> str:
     """Extend a URL with optional index and suffix."""
     return url_builder.extend_url(base_url, index, suffix)
 

@@ -1,7 +1,6 @@
 from dataclasses import fields
 
 from nicegui import ui
-from session import backend_session, endpoint
 
 import ieee_2030_5.models as m
 
@@ -31,12 +30,10 @@ def show_list(enddevices: m.EndDeviceList):
                     elif value and fld.type in ("int"):
                         ui.label(f"{fld.name} -> {value}")
                     elif value:
-                        if isinstance(value, bytes):
+                        if isinstance(value, bytes) or isinstance(value, int):
                             ui.label(f"{fld.name} -> {value}")
-                        elif isinstance(value, int):
-                            ui.label(f"{fld.name} -> {value}")
-                        elif getattr(value, "href"):
-                            ui.label(f"{fld.name} -> {getattr(value, 'href')}")
+                        elif value.href:
+                            ui.label(f"{fld.name} -> {value.href}")
                         else:
                             ui.label(f"Type is: {fld.type}")
                     # value = getattr(ed, fld.name)

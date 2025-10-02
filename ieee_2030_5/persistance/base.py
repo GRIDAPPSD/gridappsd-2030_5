@@ -3,7 +3,6 @@ Abstract base class for point store implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 
 
@@ -22,7 +21,7 @@ class PointStoreBase(ABC):
         pass
 
     @abstractmethod
-    def get_point(self, key: str) -> Optional[bytes]:
+    def get_point(self, key: str) -> bytes | None:
         """
         Retrieve a point from the key/value store.
 
@@ -48,7 +47,7 @@ class PointStoreBase(ABC):
         pass
 
     @abstractmethod
-    def get_hrefs(self) -> List[str]:
+    def get_hrefs(self) -> list[str]:
         """
         Get all stored href keys.
 
@@ -58,7 +57,7 @@ class PointStoreBase(ABC):
         pass
 
     @abstractmethod
-    def get_keys_matching(self, pattern: str) -> List[str]:
+    def get_keys_matching(self, pattern: str) -> list[str]:
         """
         Get all keys that match a pattern.
 
@@ -86,7 +85,7 @@ class PointStoreBase(ABC):
         pass
 
     @abstractmethod
-    def bulk_set(self, items: Dict[str, bytes]) -> None:
+    def bulk_set(self, items: dict[str, bytes]) -> None:
         """
         Set multiple points in a single operation.
 
@@ -96,7 +95,7 @@ class PointStoreBase(ABC):
         pass
 
     @abstractmethod
-    def bulk_get(self, keys: List[str]) -> Dict[str, bytes]:
+    def bulk_get(self, keys: list[str]) -> dict[str, bytes]:
         """
         Get multiple points in a single operation.
 

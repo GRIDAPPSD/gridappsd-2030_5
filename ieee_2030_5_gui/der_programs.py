@@ -1,5 +1,3 @@
-import random
-import uuid
 from datetime import datetime, timedelta
 
 from nicegui import app, ui
@@ -56,22 +54,21 @@ def programs_list():
 
     for index, derp in enumerate(derps.DERProgram):
         router.add_route(f"/derp/{index}/derc/add", lambda: add_control_event(index))
-        with ui.row():
-            with ui.column():
-                ui.label(f"Description: {derp.description}")
-                ui.label(f"mRID: {derp.mRID}")
-                ui.label(f"primacy: {derp.primacy}")
+        with ui.row(), ui.column():
+            ui.label(f"Description: {derp.description}")
+            ui.label(f"mRID: {derp.mRID}")
+            ui.label(f"primacy: {derp.primacy}")
 
-                if derp.ActiveDERControlListLink:
-                    ui.label(derp.ActiveDERControlListLink.href)
-                if derp.DefaultDERControlLink:
-                    ui.label(derp.DefaultDERControlLink.href)
-                if derp.DERControlListLink:
-                    ui.label(derp.DERControlListLink.href)
+            if derp.ActiveDERControlListLink:
+                ui.label(derp.ActiveDERControlListLink.href)
+            if derp.DefaultDERControlLink:
+                ui.label(derp.DefaultDERControlLink.href)
+            if derp.DERControlListLink:
+                ui.label(derp.DERControlListLink.href)
 
-                ui.button("Control Event", on_click=lambda: router.open(f"/derp/{index}/derc/add"))
+            ui.button("Control Event", on_click=lambda: router.open(f"/derp/{index}/derc/add"))
 
-    ui.button("Create New Program", on_click=lambda: router.open(f"/derp/add"))
+    ui.button("Create New Program", on_click=lambda: router.open("/derp/add"))
 
 
 @app.get("/derp/{max}")
