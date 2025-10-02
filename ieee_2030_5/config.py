@@ -52,7 +52,7 @@ class FSAConfiguration:
 
 @dataclass
 class DERConfiguration:
-    #capabilities:
+    # capabilities:
     modesSupported: str
     type: int
 
@@ -109,9 +109,10 @@ class ControlConfiguration:
         return cls(
             **{
                 k: v
-                for k, v in env.items() if k in inspect.signature(m.DERControl).parameters
-                or k in inspect.signature(cls).parameters
-            })
+                for k, v in env.items()
+                if k in inspect.signature(m.DERControl).parameters or k in inspect.signature(cls).parameters
+            }
+        )
 
     def __hash__(self):
         return self.description.__hash__() if self.description else 0
@@ -141,10 +142,10 @@ class GridappsdConfiguration:
     house_named_inverters_regex: str | None = None
     utility_named_inverters_regex: str | None = None
     model_dict_file: str | None = None
-    address: str = 'localhost'
+    address: str = "localhost"
     port: int = 61613
-    username: str = 'system'
-    password: str = 'manager'
+    username: str = "system"
+    password: str = "manager"
     field_bus_def: MessageBusDefinition | str | None = None
     feeder_id_file: str | None = None
     feeder_id: str | None = None
@@ -161,21 +162,19 @@ class GridappsdConfiguration:
             else:
                 fb = self.field_bus_def
 
-            if is_ot_bus := fb.get('is_ot_bus', True):
-                fb['connection_type'] = 'CONNECTION_TYPE_GRIDAPPSD'
-                fb['connection_args'] = dict(
-                    GRIDAPPSD_ADDRESS=self.full_address,
-                    GRIDAPPSD_USER=self.username,
-                    GRIDAPPSD_PASSWORD=self.password
+            if is_ot_bus := fb.get("is_ot_bus", True):
+                fb["connection_type"] = "CONNECTION_TYPE_GRIDAPPSD"
+                fb["connection_args"] = dict(
+                    GRIDAPPSD_ADDRESS=self.full_address, GRIDAPPSD_USER=self.username, GRIDAPPSD_PASSWORD=self.password
                 )
 
             else:
-                assert fb['connection_args']
-                assert fb['connection_type']
+                assert fb["connection_args"]
+                assert fb["connection_type"]
 
             # TODO: Error in gridappsd-python library the spelling is definately incorrect.
-            fb['conneciton_args'] = fb.pop('connection_args')
-            assert fb['id']
+            fb["conneciton_args"] = fb.pop("connection_args")
+            assert fb["id"]
 
             self.field_bus_def = MessageBusDefinition(**fb)
 
@@ -217,8 +216,8 @@ class ServerConfiguration:
     log_event_list_poll_rate: int = 900
     device_capability_poll_rate: int = 900
     mirror_usage_point_post_rate: int = 300
-    end_device_list_poll_rate: int = 86400    # daily check-in
-    
+    end_device_list_poll_rate: int = 86400  # daily check-in
+
     # General poll and post rates from config
     poll_rate: int = 900  # Default poll rate for device capabilities (15 minutes)
     post_rate: int = 300  # Default post rate for mirror usage points (5 minutes)
@@ -233,13 +232,13 @@ class ServerConfiguration:
     ders: List[DERConfiguration] = field(default_factory=list)
     curves: List[CurveConfiguration] = field(default_factory=list)
 
-    server_mode: Union[
-        Literal["enddevices_create_on_start"],
-        Literal["enddevices_register_access_only"]] = "enddevices_register_access_only"
+    server_mode: Union[Literal["enddevices_create_on_start"], Literal["enddevices_register_access_only"]] = (
+        "enddevices_register_access_only"
+    )
 
-    lfdi_mode: Union[
-        Literal["lfdi_mode_from_file"],
-        Literal["lfdi_mode_from_cert_fingerprint"]] = "lfdi_mode_from_cert_fingerprint"
+    lfdi_mode: Union[Literal["lfdi_mode_from_file"], Literal["lfdi_mode_from_cert_fingerprint"]] = (
+        "lfdi_mode_from_cert_fingerprint"
+    )
 
     # programs: List[DERProgramConfiguration] = field(default_factory=list)
     # controls: List[DERControlConfiguration] = field(default_factory=list)
@@ -268,13 +267,12 @@ class ServerConfiguration:
     # Database backend configuration
     database_backend: str = "zodb"  # Options: "zodb" or "sqlite"
     database_path: Path | None = None  # Optional custom path for database file
-    
+
     # ZODB configuration (used when database_backend = "zodb")
     zodb_path: Path | None = None
     zodb_pool_size: int = 7
     zodb_cache_size: int = 10000
     zodb_pack_interval_hours: int = 24
-
 
     @property
     def server_hostname(self) -> str:
@@ -308,19 +306,25 @@ class ServerConfiguration:
 
         if self.default_program:
             # Get DefaultDERControl off of the default program and bulid the base.
-            if 'DefaultDERControl' in self.default_program:
+            if "DefaultDERControl" in self.default_program:
                 self.default_der_control = m.DefaultDERControl(
-                    **{k: v for k, v in self.default_program.items() if k in inspect.signature(m.DefaultDERControl).parameters})
+                    **{
+                        k: v
+                        for k, v in self.default_program.items()
+                        if k in inspect.signature(m.DefaultDERControl).parameters
+                    }
+                )
 
-                if 'DERControlBase' in self.default_program['DefaultDERControl']:
-                    cb = self.default_program['DefaultDERControl']['DERControlBase']
-                    self.default_der_control.DERControlBase = m.DERControlBase(**{k: v for k, v in cb.items() if k in inspect.signature(m.DERControlBase).parameters})
-
+                if "DERControlBase" in self.default_program["DefaultDERControl"]:
+                    cb = self.default_program["DefaultDERControl"]["DERControlBase"]
+                    self.default_der_control.DERControlBase = m.DERControlBase(
+                        **{k: v for k, v in cb.items() if k in inspect.signature(m.DERControlBase).parameters}
+                    )
 
             # Populate from the default_program dictionary the keys of the configuration file.
             self.default_program = m.DERProgram(
-                **{k: v
-                   for k, v in self.default_program.items() if k in inspect.signature(m.DERProgram).parameters})
+                **{k: v for k, v in self.default_program.items() if k in inspect.signature(m.DERProgram).parameters}
+            )
 
         if self.gridappsd:
             self.gridappsd = GridappsdConfiguration.from_dict(self.gridappsd)

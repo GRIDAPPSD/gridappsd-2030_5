@@ -10,7 +10,6 @@ _log = logging.getLogger(__name__)
 
 
 class DcapRequest(RequestOp):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -29,7 +28,7 @@ class DcapRequest(RequestOp):
                 _log.warning(f"No device found for LFDI: {self.lfdi}")
                 raise werkzeug.exceptions.NotFound(f"No device found for LFDI {self.lfdi}")
 
-            device_index = lfdi_metadata['device_index']
+            device_index = lfdi_metadata["device_index"]
             _log.debug(f"Found device via fast LFDI lookup - Index: {device_index}, mRID: {lfdi_metadata.get('mRID')}")
 
             # Construct dcap_href using the proper URL builder from hrefs
@@ -38,7 +37,7 @@ class DcapRequest(RequestOp):
 
             # Ensure specialized adapters are initialized
             adpt.ensure_specialized_adapters_initialized()
-            
+
             # Get the DeviceCapability
             cap = adpt.DeviceCapabilityAdapter.get_single(dcap_href)
             if not cap:
@@ -48,7 +47,7 @@ class DcapRequest(RequestOp):
                     dcap_href_helper = hrefs.DeviceCapabilityHref(device_index)
                     cap = dcap_href_helper.fill_hrefs(m.DeviceCapability())
                     # Set the poll rate for device capability
-                    cap.pollRate = adpt.get_poll_rate('device_capability')
+                    cap.pollRate = adpt.get_poll_rate("device_capability")
                     # Store it for future requests
                     result = adpt.DeviceCapabilityAdapter.set_single(dcap_href, cap)
                     if not result.success:
@@ -56,12 +55,12 @@ class DcapRequest(RequestOp):
                 except Exception as e:
                     _log.error(f"Failed to create device capability: {e}")
                     raise werkzeug.exceptions.InternalServerError(
-                        f"Failed to create device capability for index {device_index}")
+                        f"Failed to create device capability for index {device_index}"
+                    )
 
             if not cap:
                 _log.error(f"No device capability found or created for index {device_index}")
-                raise werkzeug.exceptions.NotFound(
-                    f"No device capability found for index {device_index}")
+                raise werkzeug.exceptions.NotFound(f"No device capability found for index {device_index}")
 
             # Always return the canonical /dcap href regardless of device index
             # This is required by IEEE 2030.5 standard

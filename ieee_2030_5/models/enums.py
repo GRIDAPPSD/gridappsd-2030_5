@@ -8,11 +8,11 @@ class PrimacyType(IntEnum):
     # 2: Non-contractual service provider
     # 3 - 64: Reserved
     # 65 - 191: User-defined
-    #192 - 255: Reserved
+    # 192 - 255: Reserved
     InHomeManagementSystem = 0
     ContractedPremisesServiceProvider = 1
     NonContractualServiceProvider = 2
-        
+
 
 class DERUnitRefType(IntEnum):
     # 0 - N/A
@@ -31,6 +31,7 @@ class DERUnitRefType(IntEnum):
     setMaxChargeRateW = 5
     setMaxDischargeRateW = 6
     statWAvail = 7
+
 
 class CurveType(IntEnum):
     # 0 - opModFreqWatt (Frequency-Watt Curve Mode)
@@ -72,6 +73,7 @@ class DeviceCategoryType(IntEnum):
     DeviceCategoryType defined from 20305-2018_IIEStandardforSmartEnergyProfileApplicationsProtocol.pdf Appendix
     B.2.3.4 Types package
     """
+
     # The Device category types defined.
     # Bit positions SHALL be defined as follows:
     PROGRAMMABLE_COMMUNICATING_THERMOSTAT = 0
@@ -84,7 +86,7 @@ class DeviceCategoryType(IntEnum):
     SMART_APPLIANCE = 7
     IRRIGATION_PUMP = 8
     MANAGED_COMMERCIAL_AND_INDUSTRIAL_LOADS = 9
-    SIMPLE_RESIDENTIAL_LOADS = 10    # On/Off loads
+    SIMPLE_RESIDENTIAL_LOADS = 10  # On/Off loads
     EXTERIOR_LIGHTING = 11
     INTERIOR_LIGHTING = 12
     LOAD_CONTROL_SWITCH = 13
@@ -93,9 +95,9 @@ class DeviceCategoryType(IntEnum):
     ELECTRIC_VEHICLE = 16
     ELECTRIC_VEHICLE_SUPPLY_EQUIPMENT = 17
     VIRTUAL_OR_MIXED_DER = 18
-    RECIPROCATING_ENGINE = 19    # Synchronous Machine
-    FUEL_CELL = 20    # Battery
-    PHOTOVOLTAIC_SYSTEM = 21    # Solar
+    RECIPROCATING_ENGINE = 19  # Synchronous Machine
+    FUEL_CELL = 20  # Battery
+    PHOTOVOLTAIC_SYSTEM = 21  # Solar
     COMBINED_HEAT_AND_POWER = 22
     COMBINED_PV_AND_STORAGE = 23
     OTHER_GENERATION_SYSTEMS = 24

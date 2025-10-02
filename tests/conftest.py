@@ -7,6 +7,7 @@ from tempfile import mkdtemp
 from typing import Tuple
 
 import pytest
+
 # should now be at root
 import yaml
 
@@ -44,7 +45,7 @@ class ClientData:
 
 @pytest.fixture
 def ignore_adapter_load():
-    os.environ['IEEE_ADAPTER_IGNORE_INITIAL_LOAD'] = '1'
+    os.environ["IEEE_ADAPTER_IGNORE_INITIAL_LOAD"] = "1"
 
 
 @pytest.fixture(scope="function")
@@ -147,11 +148,13 @@ def first_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
 
     host, port = servercfg.server_hostname.split(":")
     certfile, keyfile = repo.get_file_pair(servercfg.devices[0].id)
-    client = IEEE2030_5_Client(server_hostname=host,
-                               server_ssl_port=int(port),
-                               cafile=repo.ca_cert_file,
-                               keyfile=Path(keyfile),
-                               certfile=Path(certfile))
+    client = IEEE2030_5_Client(
+        server_hostname=host,
+        server_ssl_port=int(port),
+        cafile=repo.ca_cert_file,
+        keyfile=Path(keyfile),
+        certfile=Path(certfile),
+    )
 
     yield client
 
@@ -176,11 +179,13 @@ def admin_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
 
     host, port = servercfg.server_hostname.split(":")
     certfile, keyfile = repo.get_file_pair("admin")
-    client = IEEE2030_5_Client(server_hostname=host,
-                               server_ssl_port=port,
-                               cafile=repo.ca_cert_file,
-                               keyfile=Path(keyfile),
-                               certfile=Path(certfile))
+    client = IEEE2030_5_Client(
+        server_hostname=host,
+        server_ssl_port=port,
+        cafile=repo.ca_cert_file,
+        keyfile=Path(keyfile),
+        certfile=Path(certfile),
+    )
 
     yield client
 
@@ -208,7 +213,8 @@ def new_tls_repository() -> TLSRepository:
         tls = TLSRepository(
             repo_dir=tmp,
             openssl_cnffile_template=Path(__file__).parent.parent.joinpath("openssl.cnf"),
-            serverhost="serverhostname")
+            serverhost="serverhostname",
+        )
 
         yield tls
     except Exception as e:

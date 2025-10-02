@@ -2,6 +2,7 @@
 ZODB implementation of the point store interface.
 Refactored from the original points.py implementation.
 """
+
 import atexit
 import logging
 import threading
@@ -37,7 +38,7 @@ class ZODBPointStore(PointStoreBase):
 
         # Initialize root object if needed
         with self._get_connection() as conn:
-            if not hasattr(conn.root(), 'points'):
+            if not hasattr(conn.root(), "points"):
                 conn.root.points = PersistentMapping()
                 transaction.commit()
 
@@ -47,7 +48,7 @@ class ZODBPointStore(PointStoreBase):
     @contextmanager
     def _get_connection(self) -> Connection:
         """Get a thread-local connection to the database."""
-        if not hasattr(self._local, 'connection'):
+        if not hasattr(self._local, "connection"):
             self._local.connection = self._db.open()
 
         conn = self._local.connection
@@ -59,13 +60,13 @@ class ZODBPointStore(PointStoreBase):
 
     def set_point(self, key: str, value: bytes, synchronous: bool = False) -> None:
         """Set a point into the key/value store.
-        
+
         Args:
             key: The key to store the value under
             value: The bytes value to store
             synchronous: Ignored for ZODB (always synchronous), kept for compatibility
         """
-        normalized_key = key.replace('/', '^^^^')
+        normalized_key = key.replace("/", "^^^^")
 
         try:
             with self._get_connection() as conn:
@@ -79,7 +80,7 @@ class ZODBPointStore(PointStoreBase):
 
     def get_point(self, key: str) -> Optional[bytes]:
         """Retrieve a point from the key/value store."""
-        normalized_key = key.replace('/', '^^^^')
+        normalized_key = key.replace("/", "^^^^")
 
         try:
             with self._get_connection() as conn:
@@ -92,7 +93,7 @@ class ZODBPointStore(PointStoreBase):
 
     def delete_point(self, key: str) -> bool:
         """Delete a point from the store."""
-        normalized_key = key.replace('/', '^^^^')
+        normalized_key = key.replace("/", "^^^^")
 
         try:
             with self._get_connection() as conn:
@@ -113,7 +114,7 @@ class ZODBPointStore(PointStoreBase):
         """Get all stored href keys."""
         try:
             with self._get_connection() as conn:
-                keys = [key.replace('^^^^', '/') for key in conn.root.points.keys()]
+                keys = [key.replace("^^^^", "/") for key in conn.root.points.keys()]
                 _log.debug(f"Retrieved {len(keys)} hrefs")
                 return keys
         except Exception as e:
@@ -125,19 +126,19 @@ class ZODBPointStore(PointStoreBase):
         try:
             with self._get_connection() as conn:
                 all_keys = list(conn.root.points.keys())
-                
+
                 # Normalize the pattern for matching against stored keys
-                normalized_pattern = pattern.replace('/', '^^^^')
-                
+                normalized_pattern = pattern.replace("/", "^^^^")
+
                 # Simple pattern matching for "prefix*" patterns
-                if normalized_pattern.endswith('*'):
+                if normalized_pattern.endswith("*"):
                     prefix = normalized_pattern[:-1]
                     matching_keys = [key for key in all_keys if key.startswith(prefix)]
                 else:
                     matching_keys = [key for key in all_keys if key == normalized_pattern]
-                
+
                 # Convert back from normalized format
-                result_keys = [key.replace('^^^^', '/') for key in matching_keys]
+                result_keys = [key.replace("^^^^", "/") for key in matching_keys]
                 _log.debug(f"Pattern '{pattern}' matched {len(result_keys)} keys")
                 return result_keys
         except Exception as e:
@@ -169,8 +170,8 @@ class ZODBPointStore(PointStoreBase):
 
     def exists(self, key: str) -> bool:
         """Check if a key exists in the store."""
-        normalized_key = key.replace('/', '^^^^')
-        
+        normalized_key = key.replace("/", "^^^^")
+
         try:
             with self._get_connection() as conn:
                 exists = normalized_key in conn.root.points
@@ -185,7 +186,7 @@ class ZODBPointStore(PointStoreBase):
         try:
             with self._get_connection() as conn:
                 for key, value in items.items():
-                    normalized_key = key.replace('/', '^^^^')
+                    normalized_key = key.replace("/", "^^^^")
                     conn.root.points[normalized_key] = value
                 transaction.commit()
                 _log.debug(f"Bulk set {len(items)} points")
@@ -200,7 +201,7 @@ class ZODBPointStore(PointStoreBase):
             with self._get_connection() as conn:
                 result = {}
                 for key in keys:
-                    normalized_key = key.replace('/', '^^^^')
+                    normalized_key = key.replace("/", "^^^^")
                     if normalized_key in conn.root.points:
                         result[key] = conn.root.points[normalized_key]
                 _log.debug(f"Bulk get {len(result)}/{len(keys)} points")
@@ -224,7 +225,7 @@ class ZODBPointStore(PointStoreBase):
         """Close the database connection and storage."""
         try:
             # Close thread-local connections
-            if hasattr(self._local, 'connection'):
+            if hasattr(self._local, "connection"):
                 self._local.connection.close()
 
             self._db.close()

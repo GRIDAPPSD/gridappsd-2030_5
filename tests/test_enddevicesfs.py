@@ -10,7 +10,7 @@ def test_request_enddevice(first_client: IEEE2030_5_Client):
     assert ed.RegistrationLink
     assert ed.changedTime
     # TODO Add the device category back into the end device.
-    #assert ed.deviceCategory
+    # assert ed.deviceCategory
     assert ed.DeviceInformationLink
     assert ed.DeviceStatusLink
     assert ed.href
@@ -33,7 +33,6 @@ def test_can_get_registration_link(first_client: IEEE2030_5_Client):
 
 
 def test_can_get_fsa_link(first_client: IEEE2030_5_Client):
-
     fsa = first_client.function_set_assignment_list()
 
     assert fsa.FunctionSetAssignments
@@ -42,7 +41,6 @@ def test_can_get_fsa_link(first_client: IEEE2030_5_Client):
 
 
 def test_can_get_der_link(first_client: IEEE2030_5_Client):
-
     der_list = first_client.der_list()
 
     assert 1 == der_list.all

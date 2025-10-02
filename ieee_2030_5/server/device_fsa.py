@@ -2,6 +2,7 @@
 Create device-specific Function Set Assignments (FSA).
 Each device gets its own FSA with its own DERProgram and DERControlList.
 """
+
 import logging
 from typing import Optional
 import copy
@@ -16,8 +17,7 @@ from ieee_2030_5.persistance.points import atomic_operation
 _log = logging.getLogger(__name__)
 
 
-def create_device_fsa_with_program(device_href: str,
-                                   config: ServerConfiguration) -> Optional[m.FunctionSetAssignments]:
+def create_device_fsa_with_program(device_href: str, config: ServerConfiguration) -> Optional[m.FunctionSetAssignments]:
     """
     Create a device-specific FSA with its own DERProgram and DERControlList.
 
@@ -49,7 +49,7 @@ def create_device_fsa_with_program(device_href: str,
             href=fsa_href,
             mRID=adpt.get_global_mrids().new_mrid(),
             description="device_fsa",
-            subscribable=1
+            subscribable=1,
         )
 
         # Create DER program list for this device's FSA
@@ -68,7 +68,7 @@ def create_device_fsa_with_program(device_href: str,
         # Set the control list link (starts empty)
         device_program.DERControlListLink = m.DERControlListLink(
             href=derc_list_href,
-            all=0  # Empty initially
+            all=0,  # Empty initially
         )
 
         # Set up DefaultDERControl for this device if configured
@@ -87,7 +87,11 @@ def create_device_fsa_with_program(device_href: str,
                 # Note: set_single() already registers the mRID automatically, no need to call add_item_with_mrid()
                 _log.info("Created DefaultDERControl at %s for device %s", dderc_href, device_href)
             else:
-                _log.error("Failed to create DefaultDERControl for device %s: %s", device_href, result.error)
+                _log.error(
+                    "Failed to create DefaultDERControl for device %s: %s",
+                    device_href,
+                    result.error,
+                )
 
         # Add the program to the device's FSA program list
         result = adpt.ListAdapter.append(derp_list_href, device_program)
@@ -97,7 +101,7 @@ def create_device_fsa_with_program(device_href: str,
         # Set the DER program list link on the FSA
         fsa.DERProgramListLink = m.DERProgramListLink(
             href=derp_list_href,
-            all=1  # One program
+            all=1,  # One program
         )
 
         # Add the FSA to the device's FSA list
@@ -111,7 +115,11 @@ def create_device_fsa_with_program(device_href: str,
         add_href(device_program.href, device_program)
         adpt.get_global_mrids().add_item_with_mrid(device_program.href, device_program)
 
-        _log.info("Created device-specific FSA at %s with program at %s and control list at %s",
-                 fsa.href, device_program.href, derc_list_href)
+        _log.info(
+            "Created device-specific FSA at %s with program at %s and control list at %s",
+            fsa.href,
+            device_program.href,
+            derc_list_href,
+        )
 
         return fsa

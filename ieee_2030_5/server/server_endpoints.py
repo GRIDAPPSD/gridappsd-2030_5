@@ -19,9 +19,10 @@ from ieee_2030_5.data.indexer import get_href, get_href_filtered
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.dcapfs import DcapRequest
 from ieee_2030_5.server.derfs import DERProgramRequests, DERRequests
-from ieee_2030_5.server.enddevicesfs import (EDevRequests, FSARequests, SDevRequests)
+from ieee_2030_5.server.enddevicesfs import EDevRequests, FSARequests, SDevRequests
+
 # module level instance of hrefs class.
-from ieee_2030_5.server.meteringfs import (MirrorUsagePointRequest, UsagePointRequest)
+from ieee_2030_5.server.meteringfs import MirrorUsagePointRequest, UsagePointRequest
 from ieee_2030_5.server.timefs import TimeRequest
 from ieee_2030_5.server.uuid_handler import UUIDHandler
 from ieee_2030_5.types_ import TimeOffsetType, format_time
@@ -35,7 +36,7 @@ EDEV = "edev"
 DER_PROGRAM = "derp"
 DER = "der"
 MUP = "mup"
-UTP = "upt"    # Note: UTP and UPT are used interchangeably in the codebase
+UTP = "upt"  # Note: UTP and UPT are used interchangeably in the codebase
 UPT = "upt"
 CURVE = "dc"
 FSA = "fsa"
@@ -43,7 +44,6 @@ LOG = "log"
 
 
 class Admin(RequestOp):
-
     def get(self):
         if not self.is_admin_client:
             raise Forbidden()
@@ -52,18 +52,17 @@ class Admin(RequestOp):
     def post(self):
         if not self.is_admin_client:
             raise Forbidden()
-        return Response(json.dumps({'abc': 'def'}), headers={'Content-Type': 'application/json'})
+        return Response(json.dumps({"abc": "def"}), headers={"Content-Type": "application/json"})
 
 
 class ServerList(RequestOp):
-
     def __init__(self, list_type: str, **kwargs):
         super().__init__(**kwargs)
         self._list_type = list_type
 
     def get(self) -> Response:
         response = None
-        if self._list_type == 'EndDevice':
+        if self._list_type == "EndDevice":
             response = self._end_devices.get_end_device_list(self.lfdi)
         if response:
             response = dataclass_to_xml(response)
@@ -71,7 +70,6 @@ class ServerList(RequestOp):
 
 
 class RegexConverter(BaseConverter):
-
     def __init__(self, url_map, *items):
         super(RegexConverter, self).__init__(url_map)
         self.regex = items[0]
@@ -79,13 +77,12 @@ class RegexConverter(BaseConverter):
 
 
 class ServerEndpoints:
-
     def __init__(self, app: Flask, tls_repo: TLSRepository, config: ServerConfiguration):
         self.config = config
         self.tls_repo = tls_repo
         self.mimetype = "text/xml"
         self.app: Flask = app
-        self.app.url_map.converters['regex'] = RegexConverter
+        self.app.url_map.converters["regex"] = RegexConverter
 
         _log.debug(f"Adding rule: {hrefs.uuid_gen} methods: {['GET']}")
         app.add_url_rule(hrefs.uuid_gen, view_func=self._generate_uuid)
@@ -100,38 +97,22 @@ class ServerEndpoints:
         app.add_url_rule(hrefs.sdev, view_func=self._sdev)
 
         # All the energy devices
-        app.add_url_rule(f"/<regex('{EDEV}{MATCH_REG}'):path>",
-                         view_func=self._edev,
-                         methods=["GET", "PUT", "POST"])
+        app.add_url_rule(f"/<regex('{EDEV}{MATCH_REG}'):path>", view_func=self._edev, methods=["GET", "PUT", "POST"])
 
         # This rule must be before der
-        app.add_url_rule(f"/<regex('{DER_PROGRAM}{MATCH_REG}'):path>",
-                         view_func=self._derp,
-                         methods=["GET"])
+        app.add_url_rule(f"/<regex('{DER_PROGRAM}{MATCH_REG}'):path>", view_func=self._derp, methods=["GET"])
 
-        app.add_url_rule(f"/<regex('{DER}{MATCH_REG}'):path>",
-                         view_func=self._der,
-                         methods=["GET", "PUT"])
+        app.add_url_rule(f"/<regex('{DER}{MATCH_REG}'):path>", view_func=self._der, methods=["GET", "PUT"])
 
-        app.add_url_rule(f"/<regex('{MUP}{MATCH_REG}'):path>",
-                         view_func=self._mup,
-                         methods=["GET", "POST"])
+        app.add_url_rule(f"/<regex('{MUP}{MATCH_REG}'):path>", view_func=self._mup, methods=["GET", "POST"])
 
-        app.add_url_rule(f"/<regex('{UTP}{MATCH_REG}'):path>",
-                         view_func=self._upt,
-                         methods=["GET", "POST"])
+        app.add_url_rule(f"/<regex('{UTP}{MATCH_REG}'):path>", view_func=self._upt, methods=["GET", "POST"])
 
-        app.add_url_rule(f"/<regex('{CURVE}{MATCH_REG}'):path>",
-                         view_func=self._curves,
-                         methods=["GET"])
+        app.add_url_rule(f"/<regex('{CURVE}{MATCH_REG}'):path>", view_func=self._curves, methods=["GET"])
 
-        app.add_url_rule(f"/<regex('{FSA}{MATCH_REG}'):path>",
-                         view_func=self._fsa,
-                         methods=["GET"])
+        app.add_url_rule(f"/<regex('{FSA}{MATCH_REG}'):path>", view_func=self._fsa, methods=["GET"])
 
-        app.add_url_rule(f"/<regex('{LOG}{MATCH_REG}'):path>",
-                         view_func=self._log,
-                         methods=["GET", "POST"])
+        app.add_url_rule(f"/<regex('{LOG}{MATCH_REG}'):path>", view_func=self._log, methods=["GET", "POST"])
 
     def _log(self, path):
         return

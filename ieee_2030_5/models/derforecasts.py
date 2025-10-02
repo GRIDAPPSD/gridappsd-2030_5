@@ -21,6 +21,7 @@ class ForecastNumericType:
     :ivar value: Value expressed as integer
     :ivar multiplier: Multiplier for value. Multiply value by 10^this.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -29,14 +30,14 @@ class ForecastNumericType:
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
     multiplier: Optional[int] = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
 
 
@@ -45,6 +46,7 @@ class DERForecastLink(Link):
     """
     SHALL contain a Link to an instance of DERForecast.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -52,7 +54,7 @@ class DERForecastLink(Link):
         default=900,
         metadata={
             "type": "Attribute",
-        }
+        },
     )
 
 
@@ -65,6 +67,7 @@ class ForecastParameter:
     :ivar forecast: Forecast for the parameter named.
     :ivar sigma: Standard deviation for the parameter named.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -73,20 +76,20 @@ class ForecastParameter:
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
     forecast: Optional[ForecastNumericType] = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
     sigma: Optional[ForecastNumericType] = field(
         default=None,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -95,6 +98,7 @@ class DERFlexibility(DER):
     """
     Extends sep DER to include DERForecastLink.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -102,7 +106,7 @@ class DERFlexibility(DER):
         default=None,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -111,6 +115,7 @@ class ForecastParameterSet(Resource):
     """
     A set of forecasts.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -118,7 +123,7 @@ class ForecastParameterSet(Resource):
         default_factory=list,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -127,6 +132,7 @@ class ForecastParameterSetList(SubscribableList):
     """
     A List element to hold ForecastParameterSet  objects.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -134,7 +140,7 @@ class ForecastParameterSetList(SubscribableList):
         default_factory=list,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -148,6 +154,7 @@ class DERForecast(IdentifiedObject):
         ForecastParameterSetList, in seconds.
     :ivar ForecastParameterSetList:
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -156,18 +163,18 @@ class DERForecast(IdentifiedObject):
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
     interval: Optional[int] = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
     ForecastParameterSetList: Optional[ForecastParameterSetList] = field(
         default=None,
         metadata={
             "type": "Element",
-        }
+        },
     )

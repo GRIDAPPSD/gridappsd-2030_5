@@ -12,7 +12,7 @@ from cryptography import x509
 _log = logging.getLogger(__name__)
 from cryptography.hazmat.backends import default_backend
 
-__all__ = ['TLSRepository']
+__all__ = ["TLSRepository"]
 
 from ieee_2030_5.types_ import Lfdi, PathStr
 from ieee_2030_5.utils.tls_wrapper import OpensslWrapper, TLSWrap
@@ -20,14 +20,15 @@ from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
 
 _log = logging.getLogger(__name__)
 
-PRIVATE_EXTENTION = 'pem'
-CERTIFICATE_EXTENSION = 'crt'
+PRIVATE_EXTENTION = "pem"
+CERTIFICATE_EXTENSION = "crt"
 
-PRIVATE_EXTENTION = os.environ.get('2030_5_PRIVATE_EXTENSION', PRIVATE_EXTENTION)
-CERTIFICATE_EXTENSION = os.environ.get('2030_5_PUBLIC_EXTENSION', CERTIFICATE_EXTENSION)
+PRIVATE_EXTENTION = os.environ.get("2030_5_PRIVATE_EXTENSION", PRIVATE_EXTENTION)
+CERTIFICATE_EXTENSION = os.environ.get("2030_5_PUBLIC_EXTENSION", CERTIFICATE_EXTENSION)
 
-GLOB_PRIVATE = f'*.{PRIVATE_EXTENTION}'
-GLOB_CERT = f'*.{CERTIFICATE_EXTENSION}'
+GLOB_PRIVATE = f"*.{PRIVATE_EXTENTION}"
+GLOB_CERT = f"*.{CERTIFICATE_EXTENSION}"
+
 
 def lfdi_from_fingerprint(fingerprint: str) -> Lfdi:
     fp = fingerprint.replace(":", "").lower()
@@ -45,14 +46,15 @@ def sfdi_from_lfdi(lfdi: Lfdi) -> int:
 
 
 class TLSRepository:
-
-    def __init__(self,
-                 repo_dir: PathStr,
-                 openssl_cnffile_template: PathStr,
-                 serverhost: str,
-                 proxyhost: str | None = None,
-                 clear=False,
-                 **kwargs):
+    def __init__(
+        self,
+        repo_dir: PathStr,
+        openssl_cnffile_template: PathStr,
+        serverhost: str,
+        proxyhost: str | None = None,
+        clear=False,
+        **kwargs,
+    ):
         if isinstance(repo_dir, str):
             repo_dir = Path(repo_dir).expanduser().resolve()
         if isinstance(openssl_cnffile_template, str):
@@ -72,8 +74,12 @@ class TLSRepository:
         if clear and self._repo_dir.exists():
             shutil.rmtree(self._repo_dir)
 
-        if not self._repo_dir.exists() or not self._certs_dir.exists() or \
-                not self._private_dir.exists() or not self._combined_dir.exists():
+        if (
+            not self._repo_dir.exists()
+            or not self._certs_dir.exists()
+            or not self._private_dir.exists()
+            or not self._combined_dir.exists()
+        ):
             self._certs_dir.mkdir(parents=True)
             self._private_dir.mkdir(parents=True)
             self._combined_dir.mkdir(parents=True)
@@ -91,8 +97,7 @@ class TLSRepository:
         # device_name -> (lfdi, sfdi) for devices.
         self._devices: Dict[str, Tuple[str, int]] = {}
 
-        new_contents = openssl_cnffile_template.read_text().replace(
-            "dir = REPLACE_WITH_REPO_PATH", f"dir = {repo_dir}")
+        new_contents = openssl_cnffile_template.read_text().replace("dir = REPLACE_WITH_REPO_PATH", f"dir = {repo_dir}")
         self._openssl_cnf_file.write_text(new_contents)
         self._ca_key = self._private_dir / f"ca.{PRIVATE_EXTENTION}"
         self._ca_cert = self._certs_dir / f"ca.{CERTIFICATE_EXTENSION}"
@@ -103,7 +108,6 @@ class TLSRepository:
         # self._cert_paths: List[Path] = []
         # self._certificate_specs: Dict[str, Dict[str, str]] = {}
         if not clear:
-
             # creating certs has something screwy so we are going
             # to create the cert_paths based upon the private key
             # files.
@@ -123,22 +127,31 @@ class TLSRepository:
 
         if not self.server_cert_file.exists() or not self.server_key_file.exists():
             self._tls.tls_create_private_key(self.server_key_file)
-            self._tls.tls_create_signed_certificate(serverhost, self.ca_key_file, self.ca_cert_file,
-                                                    self.server_key_file, self.server_cert_file,
-                                                    as_server=True)
+            self._tls.tls_create_signed_certificate(
+                serverhost,
+                self.ca_key_file,
+                self.ca_cert_file,
+                self.server_key_file,
+                self.server_cert_file,
+                as_server=True,
+            )
             self._current_pk[serverhost] = self.server_key_file
             self._current_certs[serverhost] = self.server_cert_file
 
-        if proxyhost is not None and (not self.proxy_cert_file.exists() or \
-            not self.proxy_key_file.exists()):
+        if proxyhost is not None and (not self.proxy_cert_file.exists() or not self.proxy_key_file.exists()):
             self._tls.tls_create_private_key(self.proxy_key_file)
-            self._tls.tls_create_signed_certificate(proxyhost, self.ca_key_file, self.ca_cert_file,
-                                                    self.proxy_key_file, self.proxy_cert_file,
-                                                    as_server=True)
+            self._tls.tls_create_signed_certificate(
+                proxyhost,
+                self.ca_key_file,
+                self.ca_cert_file,
+                self.proxy_key_file,
+                self.proxy_cert_file,
+                as_server=True,
+            )
             self._current_pk[proxyhost] = self.proxy_key_file
             self._current_certs[proxyhost] = self.proxy_cert_file
 
-        generate_admin_cert = kwargs.pop('generate_admin_cert', False)
+        generate_admin_cert = kwargs.pop("generate_admin_cert", False)
 
         if generate_admin_cert:
             admin_key = self._private_dir / f"admin.{PRIVATE_EXTENTION}"
@@ -148,8 +161,6 @@ class TLSRepository:
                 self.create_cert(admin_cert.stem)
                 self._current_pk["admin"] = admin_key
                 self._current_certs["admin"] = admin_cert
-
-
 
         for crt in self._current_certs:
             if crt not in (serverhost, proxyhost, "ca", "admin"):
@@ -163,8 +174,7 @@ class TLSRepository:
     def __create_ca__(self):
         self._tls.tls_create_private_key(self._ca_key)
         self._tls.tls_create_ca_certificate("ca", self._ca_key, self._ca_cert)
-        self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert,
-                                                 self.__get_combined_file__("ca"))
+        self._tls.tls_create_pkcs23_pem_and_cert(self._ca_key, self._ca_cert, self.__get_combined_file__("ca"))
         self._current_certs["ca"] = self.ca_cert_file
         self._current_pk["ca"] = self.ca_key_file
 
@@ -172,19 +182,25 @@ class TLSRepository:
         return common_name in self._devices
 
     def create_cert(self, common_name: str, as_server: bool = False):
-
         if not self.__get_key_file__(common_name).exists():
             self._tls.tls_create_private_key(self.__get_key_file__(common_name))
             self._current_pk[common_name] = self.__get_key_file__(common_name)
 
-        self._tls.tls_create_signed_certificate(common_name, self._ca_key, self._ca_cert,
-                                                self.__get_key_file__(common_name),
-                                                self.__get_cert_file__(common_name), as_server)
+        self._tls.tls_create_signed_certificate(
+            common_name,
+            self._ca_key,
+            self._ca_cert,
+            self.__get_key_file__(common_name),
+            self.__get_cert_file__(common_name),
+            as_server,
+        )
         self._current_certs[common_name] = self.__get_cert_file__(common_name)
 
-        self._tls.tls_create_pkcs23_pem_and_cert(self.__get_key_file__(common_name),
-                                                 self.__get_cert_file__(common_name),
-                                                 self.__get_combined_file__(common_name))
+        self._tls.tls_create_pkcs23_pem_and_cert(
+            self.__get_key_file__(common_name),
+            self.__get_cert_file__(common_name),
+            self.__get_combined_file__(common_name),
+        )
 
         # self._common_names[common_name] = common_name
         # self._cert_paths.append(self.__get_cert_file__(common_name=common_name))
@@ -197,32 +213,32 @@ class TLSRepository:
         Copy certificate files from source to target device.
         This copies both the regular certificate file and the combined PEM file.
         Used for ensuring LFDI matching between related devices (e.g., conducting equipment and energy consumers).
-        
+
         Args:
             source_common_name: The source device ID/common name whose certificate to copy
             target_common_name: The target device ID/common name to copy certificate to
         """
         import shutil
-        
+
         source_cert = self.__get_cert_file__(source_common_name)
         target_cert = self.__get_cert_file__(target_common_name)
         source_key = self.__get_key_file__(source_common_name)
         target_key = self.__get_key_file__(target_common_name)
         source_combined = self.__get_combined_file__(source_common_name)
         target_combined = self.__get_combined_file__(target_common_name)
-        
+
         if not source_cert.exists():
             raise FileNotFoundError(f"Source certificate not found: {source_cert}")
-        
+
         # Copy certificate file
         shutil.copy2(source_cert, target_cert)
         self._current_certs[target_common_name] = target_cert
-        
+
         # Copy private key file
         if source_key.exists():
             shutil.copy2(source_key, target_key)
             self._current_pk[target_common_name] = target_key
-        
+
         # Copy combined file
         if source_combined.exists():
             shutil.copy2(source_combined, target_combined)
@@ -246,10 +262,10 @@ class TLSRepository:
         return sfdi_from_lfdi(lfdi_)
 
     def fingerprint(self, device_id: str, without_colan: bool = True) -> str:
-        if os.environ.get('IEEE_2030_5_CERT_FROM_COMBINED_FILE'):
+        if os.environ.get("IEEE_2030_5_CERT_FROM_COMBINED_FILE"):
             # _log.debug("Using hash from combined file.")
             value = Path(self.__get_combined_file__(device_id)).read_text()
-            value = hashlib.sha256(value.encode('utf-8')).hexdigest().lower()
+            value = hashlib.sha256(value.encode("utf-8")).hexdigest().lower()
         else:
             value = self._tls.tls_get_fingerprint_from_cert(self.__get_cert_file__(device_id))
             value = value.lower()
@@ -266,31 +282,27 @@ class TLSRepository:
         return cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
 
     def get_file_pair(self, device_id: str) -> Tuple[str, str]:
-        """ Get cert, key from the repository based on passed device_id"""
-        return (self.__get_cert_file__(device_id).as_posix(),
-                self.__get_key_file__(device_id).as_posix())
+        """Get cert, key from the repository based on passed device_id"""
+        return (self.__get_cert_file__(device_id).as_posix(), self.__get_key_file__(device_id).as_posix())
 
     @property
     def client_list(self) -> Dict[str, Dict[str, str | bool]]:
         # TODO: Use precalculated specs rather than this each time.
         specs: Dict[str, Dict[str, str | bool]] = {}
         for d in self._private_dir.glob(GLOB_PRIVATE):
-
             paths = self.get_file_pair(d.stem)
 
-            specs[d.stem] = {'common_name': d.stem,
-                             'path': ','.join(paths),
-                             'device': False}
+            specs[d.stem] = {"common_name": d.stem, "path": ",".join(paths), "device": False}
 
-            if ':' not in d.stem or 'admin' != d.stem:
+            if ":" not in d.stem or "admin" != d.stem:
                 try:
-                    specs[d.stem]['lFID'] = self.lfdi(d.stem)
-                    specs[d.stem]['device'] = True
+                    specs[d.stem]["lFID"] = self.lfdi(d.stem)
+                    specs[d.stem]["device"] = True
                 except Exception as e:
                     # Skip clients that don't have proper certificate files
                     _log.debug(f"Could not get LFDI for {d.stem}: {e}")
-                    specs[d.stem]['lFID'] = 'N/A'
-                    specs[d.stem]['device'] = False
+                    specs[d.stem]["lFID"] = "N/A"
+                    specs[d.stem]["device"] = False
 
         return specs
 
@@ -391,8 +403,7 @@ def _main():
         sys.stdout.write(f"sfdi: {sfdi}\n\n")
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
     # fingerprint = "3E4F-45AB-31ED-FE5B-67E3-43E5-E456-2E31-984E-23E5-349E-2AD7-4567-2ED1-45EE-213A".replace(

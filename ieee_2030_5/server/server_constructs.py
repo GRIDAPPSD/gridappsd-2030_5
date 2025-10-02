@@ -25,29 +25,29 @@ import ieee_2030_5.models as m
 # Define ConfigurationError here since it's not in ieee_2030_5.config
 class ConfigurationError(Exception):
     """Exception raised for configuration errors."""
+
     pass
 
 
-def create_device_capability(end_device_index: int,
-                             device_cfg: DeviceConfiguration,
-                             config: ServerConfiguration = None) -> m.DeviceCapability:
+def create_device_capability(
+    end_device_index: int, device_cfg: DeviceConfiguration, config: ServerConfiguration = None
+) -> m.DeviceCapability:
     """Create a device capability object for the passed device index
     This function does not verify that there is a device at the passed index.
     """
     dcap_href = hrefs.DeviceCapabilityHref(end_device_index)
     device_capability = m.DeviceCapability()
     device_capability = dcap_href.fill_hrefs(device_capability)
-    
+
     # Set the poll rate for device capability
     if config:
-        device_capability.pollRate = adpt.get_poll_rate('device_capability')
-    device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(
-        href=hrefs.DEFAULT_MUP_ROOT, all=0)
+        device_capability.pollRate = adpt.get_poll_rate("device_capability")
+    device_capability.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.DEFAULT_MUP_ROOT, all=0)
     device_capability.TimeLink = m.TimeLink(href=hrefs.DEFAULT_TIME_ROOT)
     device_capability.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
 
     # Use thread-safe append instead of add
-    device_capability_adapter = adpt._get_or_create_adapter('DeviceCapability', m.DeviceCapability)
+    device_capability_adapter = adpt._get_or_create_adapter("DeviceCapability", m.DeviceCapability)
     result = device_capability_adapter.append(hrefs.DEFAULT_DCAP_ROOT, device_capability)
     if not result.success:
         raise Exception(f"Failed to add device capability: {result.error}")
@@ -83,10 +83,11 @@ def add_enddevice(device: m.EndDevice, device_id: str = None) -> m.EndDevice:
     ed_href.fill_hrefs(device)
 
     # Update the stored EndDevice with the filled hrefs
-    device_index = int(device.href.split('_')[1]) if '_' in device.href else None
+    device_index = int(device.href.split("_")[1]) if "_" in device.href else None
     if device_index is not None:
         device_key = f"enddevice:{device_index}"
         import pickle
+
         with atomic_operation():
             adpt.EndDeviceAdapter._db.set_point(device_key, pickle.dumps(device))
         _log.debug(f"Updated stored EndDevice with filled links: {device.href}")
@@ -114,8 +115,7 @@ def add_enddevice(device: m.EndDevice, device_id: str = None) -> m.EndDevice:
         add_href(ed_href.power_status, power_status)
 
     # Add links to the device
-    device.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.DEFAULT_MUP_ROOT,
-                                                                 all=0)
+    device.MirrorUsagePointListLink = m.MirrorUsagePointListLink(href=hrefs.DEFAULT_MUP_ROOT, all=0)
     device.UsagePointListLink = m.UsagePointListLink(href=hrefs.DEFAULT_UPT_ROOT, all=0)
 
     # Initialize list URIs
@@ -153,10 +153,12 @@ def update_active_der_event_ended(event: m.Event):
 # Event handlers will be connected during initialization
 
 
-def create_der_program_and_control(default_der_program: m.DERProgram,
-                             default_der_control: m.DefaultDERControl,
-                             derp_index: int,
-                             name: str = None) -> tuple[m.DERProgram, m.DefaultDERControl]:
+def create_der_program_and_control(
+    default_der_program: m.DERProgram,
+    default_der_control: m.DefaultDERControl,
+    derp_index: int,
+    name: str = None,
+) -> tuple[m.DERProgram, m.DefaultDERControl]:
     """Create DER program and control with proper mRIDs.
 
     Args:
@@ -179,11 +181,17 @@ def create_der_program_and_control(default_der_program: m.DERProgram,
     # Ensure mRIDs are assigned
     if not derp.mRID:
         derp.mRID = adpt.get_global_mrids().new_mrid()
-        _log.debug("Generated new mRID for DERProgram: %s", derp.mRID.hex() if isinstance(derp.mRID, bytes) else derp.mRID)
+        _log.debug(
+            "Generated new mRID for DERProgram: %s",
+            derp.mRID.hex() if isinstance(derp.mRID, bytes) else derp.mRID,
+        )
 
     if not dderc.mRID:
         dderc.mRID = adpt.get_global_mrids().new_mrid()
-        _log.debug("Generated new mRID for DefaultDERControl: %s", dderc.mRID.hex() if isinstance(dderc.mRID, bytes) else dderc.mRID)
+        _log.debug(
+            "Generated new mRID for DefaultDERControl: %s",
+            dderc.mRID.hex() if isinstance(dderc.mRID, bytes) else dderc.mRID,
+        )
 
     # Set up program hrefs
     program_hrefs = hrefs.DERProgramHref(derp_index)
@@ -234,7 +242,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
     _log.debug("Initializing 2030.5 with thread safety")
     _log.debug("Adding server level urls to cache")
-    
+
     # Configure all poll rates from config
     adpt.configure_poll_rates(config)
 
@@ -247,7 +255,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
     # Initialize DER program list
     adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
-    
+
     # Create default FSA with default program if configured
     # Note: Device-specific FSAs are now created per-device in add_enddevice()
     # No longer creating a shared global FSA
@@ -256,6 +264,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     # Note: This is a utility-wide shared program list; devices now have their own device-specific programs in FSAs
     if config.default_program:
         import copy
+
         with atomic_operation():
             index = adpt.ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT)
             # IMPORTANT: Make a copy to avoid reusing the same mRID
@@ -271,10 +280,8 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
             program_hrefs = hrefs.DERProgramHref(index)
             derp.href = program_hrefs._root
-            derp.ActiveDERControlListLink = m.ActiveDERControlListLink(
-                program_hrefs.active_control_href)
-            derp.DefaultDERControlLink = m.DefaultDERControlLink(
-                program_hrefs.default_control_href)
+            derp.ActiveDERControlListLink = m.ActiveDERControlListLink(program_hrefs.active_control_href)
+            derp.DefaultDERControlLink = m.DefaultDERControlLink(program_hrefs.default_control_href)
             derp.DERControlListLink = m.DERControlListLink(program_hrefs.der_control_list_href)
 
             # Add default DER control if configured
@@ -291,8 +298,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     # Add configured programs
     for index, program_cfg in enumerate(config.programs):
         with atomic_operation():
-            program_hrefs = hrefs.DERProgramHref(
-                adpt.ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT))
+            program_hrefs = hrefs.DERProgramHref(adpt.ListAdapter.get_list_size(hrefs.DEFAULT_DERP_ROOT))
 
             # Pop off default_der_control if specified
             default_der_control = program_cfg.pop("DefaultDERControl", None)
@@ -309,16 +315,19 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
             # Either set up default control or use the one passed in
             if not default_der_control:
-                default_der_control = m.DefaultDERControl(href=program_hrefs.default_control_href,
-                                                          mRID=adpt.get_global_mrids().new_mrid(),
-                                                          DERControlBase=m.DERControlBase())
+                default_der_control = m.DefaultDERControl(
+                    href=program_hrefs.default_control_href,
+                    mRID=adpt.get_global_mrids().new_mrid(),
+                    DERControlBase=m.DERControlBase(),
+                )
             elif default_der_control:
                 der_control_base = None
                 if "DERControlBase" in default_der_control:
                     der_control_base = default_der_control.pop("DERControlBase")
 
-                default_der_control = m.DefaultDERControl(href=program.DefaultDERControlLink.href,
-                                                          **default_der_control)
+                default_der_control = m.DefaultDERControl(
+                    href=program.DefaultDERControlLink.href, **default_der_control
+                )
 
                 if not default_der_control.mRID:
                     default_der_control.mRID = adpt.get_global_mrids().new_mrid()
@@ -345,13 +354,14 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
     adpt.ListAdapter.initialize_uri(hrefs.DEFAULT_CURVE_ROOT, m.DERCurve)
 
     for index, curve_cfg in enumerate(config.curves):
-        curve = m.DERCurve(href=hrefs.SEP.join([hrefs.DEFAULT_CURVE_ROOT,
-                                                str(index)]),
-                           **curve_cfg)
+        curve = m.DERCurve(href=hrefs.SEP.join([hrefs.DEFAULT_CURVE_ROOT, str(index)]), **curve_cfg)
 
         if not curve.mRID:
             curve.mRID = adpt.get_global_mrids().new_mrid()
-            _log.debug("Generated new mRID for curve: %s", curve.mRID.hex() if isinstance(curve.mRID, bytes) else curve.mRID)
+            _log.debug(
+                "Generated new mRID for curve: %s",
+                curve.mRID.hex() if isinstance(curve.mRID, bytes) else curve.mRID,
+            )
 
         result = adpt.ListAdapter.append(hrefs.DEFAULT_CURVE_ROOT, curve)
         if not result.success:
@@ -362,12 +372,14 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
     # Add devices
     import time
+
     device_start_time = time.time()
     _log.info(f"Starting device initialization for {len(config.devices)} devices at {time.strftime('%H:%M:%S')}")
     _log.warning("DEBUG LEVEL CHECK: Starting device processing loop")
 
     # Temporarily reduce logging verbosity during device initialization for performance
     import logging
+
     sql_logger = logging.getLogger("ieee_2030_5.persistance.sqlite_store")
     original_level = sql_logger.level
     if len(config.devices) > 10:
@@ -400,9 +412,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             _log.debug(f"TRACE: Device {cfg_device.id} existing_device result: {existing_device is not None}")
 
             if existing_device is not None:
-                _log.warning(
-                    f"End device {cfg_device.id} already exists. Updating lfdi, sfdi, and postRate."
-                )
+                _log.warning(f"End device {cfg_device.id} already exists. Updating lfdi, sfdi, and postRate.")
                 existing_device.lFDI = tlsrepo.lfdi(cfg_device.id)
                 existing_device.sFDI = tlsrepo.sfdi(cfg_device.id)
                 existing_device.postRate = cfg_device.post_rate
@@ -419,12 +429,17 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                             href=ed_href.function_set_assignments,
                             all=list_size,
                         )
-                        _log.info("Created device-specific FSA for device %s at %s (count=%d)",
-                                 cfg_device.id, fsa.href, list_size)
+                        _log.info(
+                            "Created device-specific FSA for device %s at %s (count=%d)",
+                            cfg_device.id,
+                            fsa.href,
+                            list_size,
+                        )
 
                         # Persist the updated device with FSA link using direct database access
                         device_key = f"enddevice:{device_index}"
                         import pickle
+
                         with atomic_operation():
                             adpt.EndDeviceAdapter._db.set_point(device_key, pickle.dumps(existing_device))
                             add_href(existing_device.href, existing_device)
@@ -436,9 +451,13 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 device_key = f"enddevice:{device_index}"
 
                 # Register the EndDevice's mRID to point to its actual storage location
-                if hasattr(existing_device, 'mRID') and existing_device.mRID:
+                if hasattr(existing_device, "mRID") and existing_device.mRID:
                     adpt.get_global_mrids().register_mrid(existing_device.mRID, device_key, "EndDevice")
-                    _log.debug("Registered existing EndDevice mRID %s -> %s", existing_device.mRID, device_key)
+                    _log.debug(
+                        "Registered existing EndDevice mRID %s -> %s",
+                        existing_device.mRID,
+                        device_key,
+                    )
 
                 # Also register by device ID (equipment mRID from GridAPPS-D)
                 adpt.get_global_mrids().register_mrid(cfg_device.id, device_key, "EndDevice")
@@ -450,8 +469,12 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                         if der_name != cfg_device.id:  # Avoid duplicate registration
                             # Register the equipment ID -> device storage location mapping
                             adpt.get_global_mrids().register_mrid(der_name, device_key, "EndDevice")
-                            _log.debug("Registered existing device %s by DER equipment ID: %s -> %s",
-                                     cfg_device.id, der_name, device_key)
+                            _log.debug(
+                                "Registered existing device %s by DER equipment ID: %s -> %s",
+                                cfg_device.id,
+                                der_name,
+                                device_key,
+                            )
 
                 _log.debug("GlobalMRIDs now has %d entries", len(adpt.get_global_mrids()))
 
@@ -460,7 +483,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     # Use the tlsrepo parameter instead of Flask.g to avoid context issues
                     # Get the certificate subject (CN) for this device
                     cn = tlsrepo.get_common_name(cfg_device.id)
-                    if cn and hasattr(cn, 'CN'):
+                    if cn and hasattr(cn, "CN"):
                         cert_cn = cn.CN  # Extract the CN field
                         # Also index by certificate CN -> device storage location
                         adpt.get_global_mrids().register_mrid(cert_cn, device_key, "EndDevice")
@@ -471,16 +494,18 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
             else:
                 _log.debug(f"Adding end device {cfg_device.id} to server")
 
-                end_device = m.EndDevice(lFDI=tlsrepo.lfdi(cfg_device.id),
-                                         sFDI=tlsrepo.sfdi(cfg_device.id),
-                                         postRate=cfg_device.post_rate,
-                                         enabled=True,
-                                         changedTime=adpt.TimeAdapter.current_tick)
+                end_device = m.EndDevice(
+                    lFDI=tlsrepo.lfdi(cfg_device.id),
+                    sFDI=tlsrepo.sfdi(cfg_device.id),
+                    postRate=cfg_device.post_rate,
+                    enabled=True,
+                    changedTime=adpt.TimeAdapter.current_tick,
+                )
 
                 end_device = add_enddevice(end_device, cfg_device.id)
 
                 # Extract device_index from href and create ed_href for later use
-                device_index = int(end_device.href.split('_')[1]) if '_' in end_device.href else None
+                device_index = int(end_device.href.split("_")[1]) if "_" in end_device.href else None
                 if device_index is None:
                     raise Exception(f"Failed to extract device_index from href {end_device.href}")
 
@@ -493,7 +518,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 device_key = f"enddevice:{device_index}"
 
                 # Register the EndDevice's mRID to point to its actual storage location
-                if hasattr(end_device, 'mRID') and end_device.mRID:
+                if hasattr(end_device, "mRID") and end_device.mRID:
                     adpt.get_global_mrids().register_mrid(end_device.mRID, device_key, "EndDevice")
                     _log.debug("Registered EndDevice mRID %s -> %s", end_device.mRID, device_key)
 
@@ -507,8 +532,12 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                         if der_name != cfg_device.id:  # Avoid duplicate registration
                             # Register the equipment ID -> device storage location mapping
                             adpt.get_global_mrids().register_mrid(der_name, device_key, "EndDevice")
-                            _log.debug("Registered device %s by DER equipment ID: %s -> %s",
-                                     cfg_device.id, der_name, device_key)
+                            _log.debug(
+                                "Registered device %s by DER equipment ID: %s -> %s",
+                                cfg_device.id,
+                                der_name,
+                                device_key,
+                            )
 
                 _log.debug(f"GlobalMRIDs now has {len(adpt.get_global_mrids())} entries")
 
@@ -517,7 +546,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     # Use the tlsrepo parameter instead of Flask.g to avoid context issues
                     # Get the certificate subject (CN) for this device
                     cn = tlsrepo.get_common_name(cfg_device.id)
-                    if cn and hasattr(cn, 'CN'):
+                    if cn and hasattr(cn, "CN"):
                         cert_cn = cn.CN  # Extract the CN field
                         # Also index by certificate CN -> device storage location
                         adpt.get_global_mrids().register_mrid(cert_cn, device_key, "EndDevice")
@@ -527,22 +556,23 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     # Continue without CN mapping - direct device ID lookup will still work
 
                 # Add registration
-                reg = m.Registration(href=end_device.RegistrationLink.href,
-                                     pIN=cfg_device.pin,
-                                     pollRate=cfg_device.poll_rate,
-                                     dateTimeRegistered=adpt.TimeAdapter.current_tick)
+                reg = m.Registration(
+                    href=end_device.RegistrationLink.href,
+                    pIN=cfg_device.pin,
+                    pollRate=cfg_device.poll_rate,
+                    dateTimeRegistered=adpt.TimeAdapter.current_tick,
+                )
 
                 adpt.ListAdapter.set_single(uri=reg.href, obj=reg)
                 add_href(reg.href, reg)
 
                 # Initialize DER and FSA lists
                 adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
-                adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments,
-                                                m.FunctionSetAssignments)
+                adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
 
                 # Handle FSAs
                 fsa_linked = False
-                
+
                 # Create device-specific FSA for this device
                 fsa = create_device_fsa_with_program(end_device.href, config)
                 device_specific_program_href = None
@@ -550,26 +580,30 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     fsa_linked = True
                     # The device-specific program is at {fsa_href}/derp/0
                     device_specific_program_href = hrefs.SEP.join((fsa.href, "derp", "0"))
-                    _log.info("Device %s created with device-specific FSA at %s with program at %s (%d FSA(s))",
-                             cfg_device.id, fsa.href, device_specific_program_href,
-                             adpt.ListAdapter.get_list_size(ed_href.function_set_assignments))
+                    _log.info(
+                        "Device %s created with device-specific FSA at %s with program at %s (%d FSA(s))",
+                        cfg_device.id,
+                        fsa.href,
+                        device_specific_program_href,
+                        adpt.ListAdapter.get_list_size(ed_href.function_set_assignments),
+                    )
 
                 # Handle additional device-specific FSAs from config if specified
                 if cfg_device.fsas:
                     for fsa_name in cfg_device.fsas:
-                        fsa_index = adpt.ListAdapter.get_list_size(
-                            ed_href.function_set_assignments)
-                        fsa = m.FunctionSetAssignments(href=hrefs.SEP.join(
-                            (ed_href.function_set_assignments, str(fsa_index))),
-                                                       mRID=adpt.get_global_mrids().new_mrid(),
-                                                       description=fsa_name)
+                        fsa_index = adpt.ListAdapter.get_list_size(ed_href.function_set_assignments)
+                        fsa = m.FunctionSetAssignments(
+                            href=hrefs.SEP.join((ed_href.function_set_assignments, str(fsa_index))),
+                            mRID=adpt.get_global_mrids().new_mrid(),
+                            description=fsa_name,
+                        )
 
                         result = adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)
                         if not result.success:
                             raise Exception(f"Failed to add FSA {fsa_name}: {result.error}")
                         fsa_linked = True
                         _log.info(f"Added device-specific FSA '{fsa_name}' for device {cfg_device.id}")
-                
+
                 # Update link to FSA list if any FSAs were added
                 if fsa_linked:
                     list_size = adpt.ListAdapter.get_list_size(ed_href.function_set_assignments)
@@ -577,12 +611,17 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                         href=ed_href.function_set_assignments,
                         all=list_size,
                     )
-                    _log.debug("Updated EndDevice FSA link: href=%s, all=%d", ed_href.function_set_assignments, list_size)
+                    _log.debug(
+                        "Updated EndDevice FSA link: href=%s, all=%d",
+                        ed_href.function_set_assignments,
+                        list_size,
+                    )
 
                     # IMPORTANT: Persist the updated EndDevice with the FSA link
                     # Use direct database access like add_enddevice() does
                     device_key = f"enddevice:{device_index}"
                     import pickle
+
                     with atomic_operation():
                         adpt.EndDeviceAdapter._db.set_point(device_key, pickle.dumps(end_device))
                         # Also update the href cache
@@ -590,30 +629,42 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                     _log.debug("Persisted EndDevice %s with FSA link count=%d", end_device.href, list_size)
 
                 # Handle DERs
-                _log.debug("Device %s has ders: %s, type: %s", cfg_device.id, cfg_device.ders, type(cfg_device.ders))
+                _log.debug(
+                    "Device %s has ders: %s, type: %s",
+                    cfg_device.id,
+                    cfg_device.ders,
+                    type(cfg_device.ders),
+                )
                 if cfg_device.ders:
                     # Create DER objects for each configured DER
                     for der_index, der in enumerate(cfg_device.ders):
                         with atomic_operation():
                             # Create DER object with device-scoped href
                             der_href_path = hrefs.SEP.join([str(device_index), "der", str(der_index)])
-                            der_href = hrefs.DERHref(
-                                hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, der_href_path]))
+                            der_href = hrefs.DERHref(hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, der_href_path]))
 
                             der_obj = m.DER(
                                 href=der_href.root,
                                 DERStatusLink=m.DERStatusLink(der_href.der_status),
                                 DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
                                 DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
-                                DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
+                                DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability),
+                            )
 
                             # Find the device-specific program with minimum primacy from the device's FSAs
                             # Since we created a device-specific FSA earlier, use that program
                             fsa_list = adpt.ListAdapter.get_list(ed_href.function_set_assignments)
                             if not fsa_list:
-                                _log.warning("No FSA found for device %s - DER will not have a program", cfg_device.id)
+                                _log.warning(
+                                    "No FSA found for device %s - DER will not have a program",
+                                    cfg_device.id,
+                                )
                             else:
-                                _log.debug("Device %s has %d FSA(s) available", cfg_device.id, len(fsa_list))
+                                _log.debug(
+                                    "Device %s has %d FSA(s) available",
+                                    cfg_device.id,
+                                    len(fsa_list),
+                                )
 
                                 # Find program with minimum primacy from device's FSAs
                                 try:
@@ -621,9 +672,11 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                     current_der_program = None
 
                                     for fsa in fsa_list:
-                                        if not hasattr(fsa, 'DERProgramListLink') or not fsa.DERProgramListLink:
-                                            _log.debug("FSA %s has no DERProgramListLink",
-                                                     fsa.href if hasattr(fsa, 'href') else 'unknown')
+                                        if not hasattr(fsa, "DERProgramListLink") or not fsa.DERProgramListLink:
+                                            _log.debug(
+                                                "FSA %s has no DERProgramListLink",
+                                                fsa.href if hasattr(fsa, "href") else "unknown",
+                                            )
                                             continue
 
                                         fsa_programs = adpt.ListAdapter.get_list(fsa.DERProgramListLink.href)
@@ -634,16 +687,27 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                                             if current_der_program is None:
                                                 current_der_program = der_program
 
-                                            if hasattr(der_program, 'primacy') and der_program.primacy < current_min_primacy:
+                                            if (
+                                                hasattr(der_program, "primacy")
+                                                and der_program.primacy < current_min_primacy
+                                            ):
                                                 current_min_primacy = der_program.primacy
                                                 current_der_program = der_program
 
                                     if current_der_program:
-                                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(current_der_program.href)
-                                        _log.info("Set DER %s CurrentDERProgramLink to device-specific program %s",
-                                                der_obj.href, current_der_program.href)
+                                        der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(
+                                            current_der_program.href
+                                        )
+                                        _log.info(
+                                            "Set DER %s CurrentDERProgramLink to device-specific program %s",
+                                            der_obj.href,
+                                            current_der_program.href,
+                                        )
                                     else:
-                                        _log.warning("No program with minimum primacy found for DER %s", der_obj.href)
+                                        _log.warning(
+                                            "No program with minimum primacy found for DER %s",
+                                            der_obj.href,
+                                        )
 
                                 except Exception as e:
                                     _log.warning("Error finding program with minimum primacy: %s", e)
@@ -668,15 +732,15 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
                         # Create default DER with device-scoped href (index 0 since it's the only DER)
                         der_href_path = hrefs.SEP.join([str(device_index), "der", "0"])
-                        der_href = hrefs.DERHref(
-                            hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, der_href_path]))
+                        der_href = hrefs.DERHref(hrefs.SEP.join([hrefs.DEFAULT_DER_ROOT, der_href_path]))
 
                         der_obj = m.DER(
                             href=der_href.root,
                             DERStatusLink=m.DERStatusLink(der_href.der_status),
                             DERSettingsLink=m.DERSettingsLink(der_href.der_settings),
                             DERCapabilityLink=m.DERCapabilityLink(der_href.der_capability),
-                            DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability))
+                            DERAvailabilityLink=m.DERAvailabilityLink(der_href.der_availability),
+                        )
 
                         # Point to the device-specific program, not the shared program
                         if device_specific_program_href:
@@ -684,7 +748,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                         else:
                             # Fallback to shared program if no device-specific program exists
                             der_obj.CurrentDERProgramLink = m.CurrentDERProgramLink(config.default_program.href)
-                            _log.warning("No device-specific program found for device %s, using shared program", cfg_device.id)
+                            _log.warning(
+                                "No device-specific program found for device %s, using shared program",
+                                cfg_device.id,
+                            )
 
                         result = adpt.ListAdapter.append(ed_href.der_list, der_obj)
                         if not result.success:
@@ -706,9 +773,9 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         device_duration = device_end_time - device_start_time
 
         # Output all known mRIDs for debugging
-        _log.info("="*80)
+        _log.info("=" * 80)
         _log.info("KNOWN mRIDs IN SYSTEM AFTER INITIALIZATION:")
-        _log.info("="*80)
+        _log.info("=" * 80)
         try:
             known_mrids = adpt.get_global_mrids().list_all_known_mrids()
             _log.info("DEBUG: Successfully got mRID list")
@@ -722,7 +789,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
             # Quick test of specific mRIDs right here
             _log.info("DEBUG: Quick test of problem mRIDs...")
-            for test_mrid in ["_CA0A0024-DA79-4395-9B05-6A7B9DE0AED9", "_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595"]:
+            for test_mrid in [
+                "_CA0A0024-DA79-4395-9B05-6A7B9DE0AED9",
+                "_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595",
+            ]:
                 if test_mrid in known_mrids:
                     _log.info(f"DEBUG: {test_mrid} IS in registry -> {known_mrids[test_mrid]}")
                 else:
@@ -730,7 +800,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
         else:
             _log.warning("NO mRIDs found in registry - this indicates initialization problems!")
-        _log.info("="*80)
+        _log.info("=" * 80)
 
         # Simple test to ensure this code executes
         _log.info("DEBUG: About to start mRID lookup testing...")
@@ -738,7 +808,10 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
         # DEBUG: Test mRID lookup directly without creating new adapter
         _log.info("DEBUG: Testing mRID lookup for known equipment...")
         try:
-            test_mrids = ["_CA0A0024-DA79-4395-9B05-6A7B9DE0AED9", "_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595"]
+            test_mrids = [
+                "_CA0A0024-DA79-4395-9B05-6A7B9DE0AED9",
+                "_EB6BC0A1-FA4B-46CE-B26E-DD022AB62595",
+            ]
 
             for test_mrid in test_mrids:
                 _log.info(f"DEBUG: Testing lookup for {test_mrid}")
@@ -752,7 +825,7 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 direct_data = adpt.get_list_adapter()._db.get_point(mrid_key)
                 if direct_data:
                     try:
-                        decoded = direct_data.decode('utf-8')
+                        decoded = direct_data.decode("utf-8")
                         _log.info(f"DEBUG: Direct DB lookup '{mrid_key}' = '{decoded}'")
                     except UnicodeDecodeError:
                         _log.error(f"DEBUG: Direct DB lookup '{mrid_key}' = BINARY_DATA (len={len(direct_data)})")
@@ -762,16 +835,19 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 # Test GlobalMRIDs.get_item()
                 if location:
                     item = adpt.get_global_mrids().get_item(test_mrid)
-                    _log.info(f"DEBUG: get_item('{test_mrid}') = {type(item)} {getattr(item, 'href', 'NO_HREF') if item else 'None'}")
+                    _log.info(
+                        f"DEBUG: get_item('{test_mrid}') = {type(item)} {getattr(item, 'href', 'NO_HREF') if item else 'None'}"
+                    )
 
                 _log.info(f"DEBUG: --- End test for {test_mrid} ---")
 
         except Exception as e:
             _log.error(f"DEBUG: mRID lookup test failed: {e}")
             import traceback
+
             _log.error(f"DEBUG: Traceback: {traceback.format_exc()}")
 
-        #_log.info(f"Device initialization completed in {device_duration:.2f} seconds at {time.strftime('%H:%M:%S')}")
+        # _log.info(f"Device initialization completed in {device_duration:.2f} seconds at {time.strftime('%H:%M:%S')}")
 
     # Display all resources for debugging
     # if hasattr(adpt.ListAdapter, "print_all") and callable(adpt.ListAdapter.print_all):

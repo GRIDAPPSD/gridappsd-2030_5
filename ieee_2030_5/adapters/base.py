@@ -47,6 +47,7 @@ Performance:
     Adapters track operation counts and timing for monitoring and debugging.
     Use get_adapter_stats() to retrieve performance metrics.
 """
+
 import logging
 import threading
 import time
@@ -58,8 +59,11 @@ from collections import defaultdict
 import ieee_2030_5.models as m
 import ieee_2030_5.hrefs as hrefs
 from ieee_2030_5.persistance.points import get_db, atomic_operation
+
 _log = logging.getLogger(__name__)
-T = TypeVar('T')
+T = TypeVar("T")
+
+
 @dataclass
 class AdapterResult:
     """Result of an adapter operation with metadata.
@@ -98,12 +102,15 @@ class AdapterResult:
         ...     location="/edev/123"
         ... )
     """
+
     success: bool
     data: Any = None
     error: str | None = None
     was_update: bool = False
     location: str | None = None
     status_code: int | None = None
+
+
 class ConcurrencyMode:
     """Concurrency control modes for adapters.
 
@@ -133,9 +140,12 @@ class ConcurrencyMode:
         ...     concurrency_mode=ConcurrencyMode.READ_WRITE_LOCK
         ... )
     """
-    READ_WRITE_LOCK = "rw_lock"      # Reader-writer locks (best for read-heavy)
-    MUTEX = "mutex"                   # Simple mutual exclusion
-    OPTIMISTIC = "optimistic"         # Optimistic locking with retry
+
+    READ_WRITE_LOCK = "rw_lock"  # Reader-writer locks (best for read-heavy)
+    MUTEX = "mutex"  # Simple mutual exclusion
+    OPTIMISTIC = "optimistic"  # Optimistic locking with retry
+
+
 class ResourceLockManager:
     """Manages fine-grained locks for individual resources.
 
@@ -219,6 +229,8 @@ class ResourceLockManager:
             yield
         finally:
             lock.release()
+
+
 class ReadWriteLock:
     """Reader-writer lock implementation for read-heavy workloads.
 
@@ -340,6 +352,8 @@ class ReadWriteLock:
                 self._write_ready.notify_all()
             with self._read_ready:
                 self._read_ready.notify_all()
+
+
 class ThreadSafeAdapter(Generic[T], ABC):
     """Base class for all thread-safe adapters.
 
@@ -398,9 +412,7 @@ class ThreadSafeAdapter(Generic[T], ABC):
 
     _lock: Union[ReadWriteLock, threading.RLock]
 
-    def __init__(self,
-                 model_class: Type[T],
-                 concurrency_mode: str = ConcurrencyMode.READ_WRITE_LOCK):
+    def __init__(self, model_class: Type[T], concurrency_mode: str = ConcurrencyMode.READ_WRITE_LOCK):
         """Initialize the thread-safe adapter.
 
         Args:
@@ -451,14 +463,14 @@ class ThreadSafeAdapter(Generic[T], ABC):
         self._track_operation("fetch_index")
         try:
             # Try to extract index from href directly
-            parts = href.split('/')
+            parts = href.split("/")
             if parts and parts[-1].isdigit():
                 return int(parts[-1])
 
             # If that fails, try to look up the object and then extract its index
             obj = self.fetch_by_href(href)
-            if obj and hasattr(obj, 'href'):
-                parts = obj.href.split('/')
+            if obj and hasattr(obj, "href"):
+                parts = obj.href.split("/")
                 if parts and parts[-1].isdigit():
                     return int(parts[-1])
 
@@ -630,9 +642,9 @@ class ThreadSafeAdapter(Generic[T], ABC):
             ...     print("Recent fetch activity detected")
         """
         return {
-            'operation_counts': dict(self._operation_count),
-            'last_operation_times': dict(self._last_operation_time),
-            'concurrency_mode': self.concurrency_mode
+            "operation_counts": dict(self._operation_count),
+            "last_operation_times": dict(self._last_operation_time),
+            "concurrency_mode": self.concurrency_mode,
         }
 
 
@@ -747,11 +759,11 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         # Support for both positional and named arguments
         if obj_type is None:
             # Check for 'obj' parameter for backward compatibility
-            obj_type = kwargs.get('obj')
+            obj_type = kwargs.get("obj")
 
         # If list_uri is provided as a named parameter, use it
-        if 'list_uri' in kwargs and not list_uri:
-            list_uri = kwargs.get('list_uri', '')
+        if "list_uri" in kwargs and not list_uri:
+            list_uri = kwargs.get("list_uri", "")
 
         if not list_uri or not obj_type:
             raise ValueError("Both list_uri and obj_type/obj must be provided")
@@ -762,17 +774,18 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             self._track_operation("initialize_uri")
 
             if self._db.exists(list_key):
-                return False    # Already exists
+                return False  # Already exists
 
             try:
                 with atomic_operation():
                     # Initialize empty list
                     import pickle
+
                     empty_list: list[T] = []
                     self._db.set_point(list_key, pickle.dumps(empty_list))
 
                     # Store metadata
-                    metadata = {'type': obj_type.__name__, 'created': time.time(), 'count': 0}
+                    metadata = {"type": obj_type.__name__, "created": time.time(), "count": 0}
                     self._db.set_point(self._get_metadata_key(list_uri), pickle.dumps(metadata))
 
                 _log.debug(f"Initialized list URI: {list_uri}")
@@ -844,7 +857,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                         current_list = pickle.loads(list_data)
 
                     # Add href to object if not present
-                    if not hasattr(obj, 'href') or not obj.href:
+                    if not hasattr(obj, "href") or not obj.href:
                         obj.href = f"{list_uri}_{len(current_list)}"  # type: ignore[attr-defined]
 
                     # Append object
@@ -853,24 +866,28 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     # Store updated list and metadata in sequence to reduce lock contention
                     # During burst periods, add tiny delay to allow batching of rapid requests
                     import time
+
                     now = time.time()
 
                     # For burst mitigation: if this is a list operation and we're in a burst,
                     # add jitter to spread out database writes
-                    if hasattr(self, '_last_write_time'):
-                        time_since_last = now - getattr(self, '_last_write_time', 0)
+                    if hasattr(self, "_last_write_time"):
+                        time_since_last = now - getattr(self, "_last_write_time", 0)
                         if time_since_last < 0.1:  # If last write was < 100ms ago (burst detected)
                             # Add larger randomized delay (5-50ms) to spread out writes during bursts
                             import random
+
                             jitter = random.uniform(0.005, 0.05)
                             time.sleep(jitter)
-                            _log.debug(f"Burst detected (last write {time_since_last*1000:.1f}ms ago), added {jitter*1000:.1f}ms jitter")
+                            _log.debug(
+                                f"Burst detected (last write {time_since_last * 1000:.1f}ms ago), added {jitter * 1000:.1f}ms jitter"
+                            )
 
                     # Store updated list (synchronous for critical operations like MUP creation)
                     self._db.set_point(list_key, pickle.dumps(current_list), synchronous=synchronous)
-                    
+
                     # Register mRID if the object has one
-                    if hasattr(obj, 'mRID') and obj.mRID is not None and hasattr(obj, 'href'):
+                    if hasattr(obj, "mRID") and obj.mRID is not None and hasattr(obj, "href"):
                         try:
                             global _GlobalMRIDs
                             if _GlobalMRIDs is not None:
@@ -882,10 +899,11 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
                     # Update metadata (synchronous for critical operations)
                     metadata = self._get_list_metadata(list_uri)
-                    metadata['count'] = len(current_list)
-                    metadata['last_modified'] = time.time()
-                    self._db.set_point(self._get_metadata_key(list_uri),
-                                     pickle.dumps(metadata), synchronous=synchronous)
+                    metadata["count"] = len(current_list)
+                    metadata["last_modified"] = time.time()
+                    self._db.set_point(
+                        self._get_metadata_key(list_uri), pickle.dumps(metadata), synchronous=synchronous
+                    )
 
                     # Track last write time for burst detection
                     self._last_write_time = time.time()
@@ -940,6 +958,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     return []
 
                 import pickle
+
                 return pickle.loads(list_data)
             except Exception as e:
                 _log.error(f"Failed to get list {list_uri}: {e}")
@@ -978,7 +997,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             self._track_operation("get_list_size")
 
             metadata = self._get_list_metadata(list_uri)
-            return metadata.get('count', 0)
+            return metadata.get("count", 0)
 
     # For backward compatibility
     def list_size(self, list_uri: str) -> int:
@@ -1038,10 +1057,9 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
                     # Update metadata
                     metadata = self._get_list_metadata(list_uri)
-                    metadata['count'] = len(items)
-                    metadata['last_modified'] = time.time()
-                    self._db.set_point(self._get_metadata_key(list_uri),
-                                     pickle.dumps(metadata))
+                    metadata["count"] = len(items)
+                    metadata["last_modified"] = time.time()
+                    self._db.set_point(self._get_metadata_key(list_uri), pickle.dumps(metadata))
 
                 _log.debug(f"Set list {list_uri} with {len(items)} items")
                 return AdapterResult(success=True, data=items)
@@ -1151,8 +1169,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     current_list[index] = obj
 
                     # Store updated list
-                    self._db.set_point(self._get_list_key(list_uri),
-                                     pickle.dumps(current_list))
+                    self._db.set_point(self._get_list_key(list_uri), pickle.dumps(current_list))
 
                 _log.debug(f"Updated object at index {index} in {list_uri}")
                 return AdapterResult(success=True, data=obj, was_update=True)
@@ -1206,47 +1223,47 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             self._track_operation("set_single")
 
             try:
-                #print(f"!!!! STORAGE DEBUG: Starting set_single for URI: {uri}, LFDI: {lfdi}")
+                # print(f"!!!! STORAGE DEBUG: Starting set_single for URI: {uri}, LFDI: {lfdi}")
                 _log.info(f"STORAGE_DEBUG: Starting set_single for URI: {uri}, LFDI: {lfdi}")
                 with atomic_operation():
                     import pickle
 
                     # Store the single object directly
                     obj_key = f"single:{uri}"
-                    #print(f"!!!! STORAGE DEBUG: Storing object with key: {obj_key}")
+                    # print(f"!!!! STORAGE DEBUG: Storing object with key: {obj_key}")
                     _log.info(f"STORAGE_DEBUG: Storing object with key: {obj_key}")
                     # Force synchronous write for critical single objects
                     # Check if the database backend supports synchronous writes
-                    if hasattr(self._db, 'set_point') and 'synchronous' in self._db.set_point.__code__.co_varnames:
+                    if hasattr(self._db, "set_point") and "synchronous" in self._db.set_point.__code__.co_varnames:
                         # SQLite backend - force synchronous write
                         self._db.set_point(obj_key, pickle.dumps(obj), synchronous=True)
                     else:
                         # Other backends
                         self._db.set_point(obj_key, pickle.dumps(obj))
-                    #print(f"!!!! STORAGE DEBUG: Object stored successfully")
+                    # print(f"!!!! STORAGE DEBUG: Object stored successfully")
                     _log.info(f"STORAGE_DEBUG: Object stored successfully")
 
                     # Store metadata if LFDI is provided
                     if lfdi is not None:
                         metadata = {
-                            'uri': uri,
-                            'created': time.time(),
-                            'type': obj.__class__.__name__ if obj else None,
-                            'lfdi': lfdi
+                            "uri": uri,
+                            "created": time.time(),
+                            "type": obj.__class__.__name__ if obj else None,
+                            "lfdi": lfdi,
                         }
                         metadata_key = f"single_meta:{uri}"
-                        #print(f"!!!! STORAGE DEBUG: Storing metadata with key: {metadata_key}")
+                        # print(f"!!!! STORAGE DEBUG: Storing metadata with key: {metadata_key}")
                         _log.info(f"STORAGE_DEBUG: Storing metadata with key: {metadata_key}")
                         self._db.set_point(metadata_key, pickle.dumps(metadata))
-                        #print(f"!!!! STORAGE DEBUG: Metadata stored successfully")
+                        # print(f"!!!! STORAGE DEBUG: Metadata stored successfully")
                         _log.info(f"STORAGE_DEBUG: Metadata stored successfully")
 
                     # Ensure object has the correct href
-                    if hasattr(obj, 'href'):
+                    if hasattr(obj, "href"):
                         obj.href = uri
-                    
+
                     # Register mRID automatically if the object has one
-                    if hasattr(obj, 'mRID') and obj.mRID is not None and hasattr(obj, 'href'):
+                    if hasattr(obj, "mRID") and obj.mRID is not None and hasattr(obj, "href"):
                         try:
                             global _GlobalMRIDs
                             if _GlobalMRIDs is not None:
@@ -1258,18 +1275,18 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                             _log.debug(f"mRID registration failed: {e}")
 
                 # Verify storage immediately after commit
-                #print(f"!!!! STORAGE DEBUG: Verifying storage for key: {obj_key}")
+                # print(f"!!!! STORAGE DEBUG: Verifying storage for key: {obj_key}")
                 _log.info(f"STORAGE_DEBUG: Verifying storage for key: {obj_key}")
                 try:
                     stored_data = self._db.get_point(obj_key)
                     if stored_data:
-                        #print(f"!!!! STORAGE DEBUG: Verification successful - data found in database")
+                        # print(f"!!!! STORAGE DEBUG: Verification successful - data found in database")
                         _log.info(f"STORAGE_DEBUG: Verification successful - data found in database")
                     else:
-                        #print(f"!!!! STORAGE DEBUG: Verification FAILED - no data found in database!")
+                        # print(f"!!!! STORAGE DEBUG: Verification FAILED - no data found in database!")
                         _log.error(f"STORAGE_DEBUG: Verification FAILED - no data found in database!")
                 except Exception as e:
-                    #print(f"!!!! STORAGE DEBUG: Verification error: {e}")
+                    # print(f"!!!! STORAGE DEBUG: Verification error: {e}")
                     _log.error(f"STORAGE_DEBUG: Verification error: {e}")
 
                 _log.debug(f"Set single object at {uri}")
@@ -1431,13 +1448,15 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to fetch by property {prop_name}={prop_value}: {e}")
                 return None
 
-    def get_resource_list(self,
-                         list_uri: str,
-                         start: int = 0,
-                         after: int = 0,
-                         limit: int = 0,
-                         sort_by: str | None = None,
-                         reverse: bool = False) -> Any:
+    def get_resource_list(
+        self,
+        list_uri: str,
+        start: int = 0,
+        after: int = 0,
+        limit: int = 0,
+        sort_by: str | None = None,
+        reverse: bool = False,
+    ) -> Any:
         """Get a paginated resource list with sorting and filtering capabilities.
 
         This method provides advanced list retrieval with pagination, sorting,
@@ -1494,9 +1513,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 # Apply sorting if requested
                 if sort_by and current_list:
                     try:
-                        current_list = sorted(current_list,
-                                            key=lambda x: getattr(x, sort_by, 0),
-                                            reverse=reverse)
+                        current_list = sorted(current_list, key=lambda x: getattr(x, sort_by, 0), reverse=reverse)
                     except Exception as e:
                         _log.warning(f"Failed to sort by {sort_by}: {e}")
 
@@ -1514,7 +1531,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
                 # Create appropriate list type based on metadata
                 metadata = self._get_list_metadata(list_uri)
-                model_type_name = metadata.get('type', self.model_class.__name__)
+                model_type_name = metadata.get("type", self.model_class.__name__)
                 list_class_name = f"{model_type_name}List"
                 list_class = getattr(m, list_class_name, None)
 
@@ -1523,27 +1540,27 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     result.href = list_uri
                     result.all = total_count
                     result.results = len(page_items)
-                    
+
                     # Set pollRate if the list class has this attribute
-                    if hasattr(result, 'pollRate'):
+                    if hasattr(result, "pollRate"):
                         # Determine the resource type from the list class name
                         from ieee_2030_5.adapters import get_poll_rate
-                        
+
                         # Map list class names to resource types
                         resource_type_map = {
-                            'EndDeviceList': 'end_device_list',
-                            'DERList': 'der_list',
-                            'DERProgramList': 'der_program_list',
-                            'DERControlList': 'der_control_list',
-                            'FunctionSetAssignmentsList': 'fsa_list',
-                            'MirrorUsagePointList': 'mirror_usage_point',
-                            'UsagePointList': 'usage_point',
-                            'LogEventList': 'log_event_list',
-                            'MeterReadingList': 'meter_reading',
-                            'ReadingSetList': 'reading_set',
+                            "EndDeviceList": "end_device_list",
+                            "DERList": "der_list",
+                            "DERProgramList": "der_program_list",
+                            "DERControlList": "der_control_list",
+                            "FunctionSetAssignmentsList": "fsa_list",
+                            "MirrorUsagePointList": "mirror_usage_point",
+                            "UsagePointList": "usage_point",
+                            "LogEventList": "log_event_list",
+                            "MeterReadingList": "meter_reading",
+                            "ReadingSetList": "reading_set",
                         }
-                        
-                        resource_type = resource_type_map.get(list_class_name, 'default')
+
+                        resource_type = resource_type_map.get(list_class_name, "default")
                         result.pollRate = get_poll_rate(resource_type)
 
                     # Set the list items using the metadata type name
@@ -1553,17 +1570,11 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     return result
                 else:
                     # Fallback for unknown list types
-                    return {
-                        'href': list_uri,
-                        'all': total_count,
-                        'results': len(page_items),
-                        'items': page_items
-                    }
+                    return {"href": list_uri, "all": total_count, "results": len(page_items), "items": page_items}
 
             except Exception as e:
                 _log.error(f"Failed to get resource list {list_uri}: {e}")
                 return None
-
 
     def filter_single_dict(self, filter_func: Callable[[str], bool]) -> List[str]:
         """
@@ -1580,6 +1591,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
             try:
                 import pickle
+
                 matching_uris = []
 
                 # Find all single object keys
@@ -1588,7 +1600,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
                 for key in all_keys:
                     # Extract the URI part from the key (remove "single:" prefix)
-                    uri = key[7:]    # 7 is the length of "single:"
+                    uri = key[7:]  # 7 is the length of "single:"
 
                     # Apply the filter function
                     try:
@@ -1623,39 +1635,35 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     metadata_data = self._db.get_point(metadata_key)
                     if metadata_data is not None:
                         import pickle
+
                         return pickle.loads(metadata_data)
                 except Exception:
                     pass  # Fall back to generating metadata from object
 
                 # Basic metadata to return (fallback)
-                metadata = {
-                    'uri': uri,
-                    'created': time.time(),
-                    'type': None,
-                    'lfdi': None
-                }
+                metadata = {"uri": uri, "created": time.time(), "type": None, "lfdi": None}
 
                 # Get the object to extract more metadata
                 obj = self.get_single(uri)
                 if obj:
                     # Try to determine type
-                    metadata['type'] = obj.__class__.__name__
+                    metadata["type"] = obj.__class__.__name__
 
                     # Try to extract LFDI if available
-                    if hasattr(obj, 'lfdi'):
-                        metadata['lfdi'] = obj.lfdi
-                    elif hasattr(obj, 'lFDI'):
-                        metadata['lfdi'] = obj.lFDI
+                    if hasattr(obj, "lfdi"):
+                        metadata["lfdi"] = obj.lfdi
+                    elif hasattr(obj, "lFDI"):
+                        metadata["lfdi"] = obj.lFDI
 
                     # Try to get creation time if available
-                    if hasattr(obj, 'createdDateTime'):
-                        metadata['created'] = obj.createdDateTime
+                    if hasattr(obj, "createdDateTime"):
+                        metadata["created"] = obj.createdDateTime
 
                 return metadata
 
             except Exception as e:
                 _log.error(f"Failed to get single metadata for URI {uri}: {e}")
-                return {'uri': uri, 'error': str(e)}
+                return {"uri": uri, "error": str(e)}
 
     def _get_list_metadata(self, list_uri: str) -> Dict[str, Any]:
         """Get metadata for a list."""
@@ -1663,11 +1671,12 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             metadata_data = self._db.get_point(self._get_metadata_key(list_uri))
             if metadata_data:
                 import pickle
+
                 return pickle.loads(metadata_data)
         except Exception as e:
             _log.warning(f"Failed to get metadata for {list_uri}: {e}")
 
-        return {'count': 0, 'created': time.time()}
+        return {"count": 0, "created": time.time()}
 
     def get_all_keys(self) -> List[str]:
         """Get all keys stored in the adapter for debugging and administrative purposes.
@@ -1770,6 +1779,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
             try:
                 import pickle
+
                 _log.info("--- Resource Listing ---")
 
                 # Print lists
@@ -1781,7 +1791,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                             items = pickle.loads(list_data)
                             _log.info(f"{key}: {len(items)} items")
                             for i, item in enumerate(items):
-                                href = getattr(item, 'href', None)
+                                href = getattr(item, "href", None)
                                 _log.info(f"  [{i}] {href}")
                     except Exception as e:
                         _log.warning(f"Error listing {key}: {e}")
@@ -1793,7 +1803,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                         obj_data = self._db.get_point(key)
                         if obj_data:
                             obj = pickle.loads(obj_data)
-                            href = getattr(obj, 'href', None)
+                            href = getattr(obj, "href", None)
                             _log.info(f"{key}: {href}")
                     except Exception as e:
                         _log.warning(f"Error listing {key}: {e}")
@@ -1802,6 +1812,8 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
             except Exception as e:
                 _log.error(f"Failed to print all resources: {e}")
+
+
 class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
     """Thread-safe adapter specialized for IEEE 2030.5 EndDevice objects.
 
@@ -1891,6 +1903,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
         self._track_operation("fetch_index")
         try:
             import pickle
+
             # Get index from href index
             with self._read_lock():
                 index_data = self._db.get_point(self._href_index_key)
@@ -1955,11 +1968,13 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                     # Generate stable device index from device_id (mRID)
                     if device_id:
                         # Use hash of device_id to generate stable index
-                        hash_obj = hashlib.sha256(device_id.encode('utf-8'))
+                        hash_obj = hashlib.sha256(device_id.encode("utf-8"))
                         device_index = int(hash_obj.hexdigest()[:8], 16) % 100000  # Limit to 5 digits
                     else:
                         # Device ID is required for stable indexing
-                        raise ValueError("device_id is required for EndDevice registration. Cannot create stable device index without device_id.")
+                        raise ValueError(
+                            "device_id is required for EndDevice registration. Cannot create stable device index without device_id."
+                        )
 
                     # Set href if not present
                     if not device.href:
@@ -2046,10 +2061,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
 
                     # Check if device exists
                     if not self._db.exists(device_key):
-                        return AdapterResult(
-                            success=False,
-                            error=f"End device with index {index} not found"
-                        )
+                        return AdapterResult(success=False, error=f"End device with index {index} not found")
 
                     # Get existing device to preserve some data
                     existing_data = self._db.get_point(device_key)
@@ -2074,7 +2086,9 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 _log.error(f"Failed to update end device: {e}")
                 return AdapterResult(success=False, error=str(e))
 
-    def fetch_all(self, list_obj: m.EndDeviceList | None = None, start: int = 0, after: int = 0, limit: int = 0) -> m.EndDeviceList:
+    def fetch_all(
+        self, list_obj: m.EndDeviceList | None = None, start: int = 0, after: int = 0, limit: int = 0
+    ) -> m.EndDeviceList:
         """Fetch all EndDevice resources with pagination support.
 
         This method retrieves EndDevice objects from storage with comprehensive
@@ -2243,7 +2257,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                             lfdi_bytes = bytes.fromhex(str(lfdi))
                             device_index = lfdi_index.get(lfdi_bytes)
                         except ValueError:
-                            lfdi_bytes = str(lfdi).encode('utf-8')
+                            lfdi_bytes = str(lfdi).encode("utf-8")
                             device_index = lfdi_index.get(lfdi_bytes)
 
                 if device_index is None:
@@ -2312,10 +2326,10 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 if device_data:
                     device = pickle.loads(device_data)
                     return {
-                        'device_index': device_index,
-                        'mRID': device.mRID,
-                        'href': device.href,
-                        'device_uri': f"/edev{hrefs.SEP}{device_index}"
+                        "device_index": device_index,
+                        "mRID": device.mRID,
+                        "href": device.href,
+                        "device_uri": f"/edev{hrefs.SEP}{device_index}",
                     }
 
                 return None
@@ -2435,7 +2449,9 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 _log.error(f"Failed to fetch device by {prop_name}: {e}")
                 return None
 
-    def _update_lfdi_index(self, lfdi: bytes | str, device_index: int, device: m.EndDevice = None, device_id: str = None):
+    def _update_lfdi_index(
+        self, lfdi: bytes | str, device_index: int, device: m.EndDevice = None, device_id: str = None
+    ):
         """Update both legacy LFDI index and enhanced metadata index."""
         try:
             import pickle
@@ -2449,13 +2465,13 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 try:
                     lfdi_bytes = bytes.fromhex(lfdi_str)
                 except ValueError:
-                    lfdi_bytes = lfdi_str.encode('utf-8')
+                    lfdi_bytes = lfdi_str.encode("utf-8")
 
             # Update legacy index for backward compatibility - store both formats
             index_data = self._db.get_point(self._lfdi_index_key)
             lfdi_index = {} if index_data is None else pickle.loads(index_data)
             lfdi_index[lfdi_bytes] = device_index  # Store with bytes key
-            lfdi_index[lfdi_str] = device_index    # Store with string key for compatibility
+            lfdi_index[lfdi_str] = device_index  # Store with string key for compatibility
             self._db.set_point(self._lfdi_index_key, pickle.dumps(lfdi_index))
 
             # Update enhanced metadata index if device provided
@@ -2467,10 +2483,10 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 lfdi_str = lfdi.hex() if isinstance(lfdi, bytes) else str(lfdi)
 
                 metadata_index[lfdi_str] = {
-                    'device_index': device_index,
-                    'mRID': device_id,  # Use device_id as mRID (often the same in GridAPPS-D)
-                    'href': device.href,
-                    'device_uri': f"/edev{hrefs.SEP}{device_index}"
+                    "device_index": device_index,
+                    "mRID": device_id,  # Use device_id as mRID (often the same in GridAPPS-D)
+                    "href": device.href,
+                    "device_uri": f"/edev{hrefs.SEP}{device_index}",
                 }
                 self._db.set_point(self._lfdi_metadata_key, pickle.dumps(metadata_index))
 
@@ -2492,6 +2508,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
         except Exception as e:
             _log.error(f"Failed to update href index: {e}")
             raise
+
 
 # Global mRID management with thread safety
 class ThreadSafeGlobalMRIDs:
@@ -2530,7 +2547,7 @@ class ThreadSafeGlobalMRIDs:
 
     def register_mrid(self, mrid: str, db_key: str, obj_type: str = None):
         """Register an mRID with its database storage key.
-        
+
         Args:
             mrid: The mRID to register
             db_key: The database key where the object is stored
@@ -2541,98 +2558,100 @@ class ThreadSafeGlobalMRIDs:
             try:
                 # Normalize mRID to string for consistent indexing
                 normalized_mrid = self._normalize_mrid_to_string(mrid)
-                
+
                 # Create value with type prefix if provided
                 if obj_type:
                     value = f"{obj_type}:{db_key}"
                 else:
                     value = f"db:{db_key}"
-                
+
                 # Store mRID as individual database key with prefixed value
                 mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
-                
+
                 # Ensure we're storing text data as UTF-8
                 if isinstance(value, bytes):
                     _log.warning(f"register_mrid received bytes instead of string for {normalized_mrid}, converting")
-                    value = value.decode('utf-8') if len(value) > 0 else ""
-                
+                    value = value.decode("utf-8") if len(value) > 0 else ""
+
                 # Check if there's already data at this key
                 existing_data = self._db.get_point(mrid_key)
                 if existing_data is not None:
                     try:
-                        existing_value = existing_data.decode('utf-8')
+                        existing_value = existing_data.decode("utf-8")
                         if existing_value != value:
                             _log.warning(f"Overwriting mRID {normalized_mrid}: '{existing_value}' -> '{value}'")
                     except UnicodeDecodeError:
-                        _log.error(f"Found corrupted binary data for mRID {normalized_mrid}, replacing with correct text data")
-                
-                self._db.set_point(mrid_key, value.encode('utf-8'))
+                        _log.error(
+                            f"Found corrupted binary data for mRID {normalized_mrid}, replacing with correct text data"
+                        )
+
+                self._db.set_point(mrid_key, value.encode("utf-8"))
                 _log.debug(f"Registered mRID {normalized_mrid} -> {value}")
             except Exception as e:
                 # Use mrid if normalized_mrid failed to be set
                 mrid_str = normalized_mrid if normalized_mrid else str(mrid)
                 _log.error(f"Failed to register mRID {mrid_str}: {e}")
                 raise
-    
+
     def store_and_register(self, item: Any) -> bool:
         """Store an object in the database and register its mRID if present.
-        
+
         This is the main method to use for storing objects with mRIDs.
         It handles both the database storage and mRID registration.
-        
+
         Args:
             item: The object to store (must have 'href' and optionally 'mRID')
-            
+
         Returns:
             True if successful, False otherwise
         """
         try:
             import pickle
-            
+
             # Object must have an href to be stored
-            if not hasattr(item, 'href') or not item.href:
+            if not hasattr(item, "href") or not item.href:
                 _log.error(f"Cannot store object without href: {type(item).__name__}")
                 return False
-            
+
             # Store the object in the database at its href location
             self._db.set_point(item.href, pickle.dumps(item))
             _log.debug(f"Stored {type(item).__name__} at database key: {item.href}")
-            
+
             # If it has an mRID, register it with type prefix
-            if hasattr(item, 'mRID') and item.mRID:
+            if hasattr(item, "mRID") and item.mRID:
                 obj_type = type(item).__name__
                 self.register_mrid(item.mRID, item.href, obj_type)
                 # Format mRID for logging (handle both bytes and strings)
                 mrid_str = self._normalize_mrid_to_string(item.mRID)
                 _log.debug(f"Registered mRID {mrid_str} -> {obj_type}:{item.href}")
-            
+
             return True
-            
+
         except Exception as e:
             _log.error(f"Failed to store and register object: {e}")
             return False
-    
+
     def add_item_with_mrid(self, db_key: str, item: Any):
         """Legacy method - for backward compatibility.
-        
+
         Args:
             db_key: The database key (usually same as href)
             item: The object with an mRID attribute
         """
         # For backward compatibility, store and register the item
-        if hasattr(item, 'href'):
+        if hasattr(item, "href"):
             self.store_and_register(item)
         else:
             # If no href, just register the mRID
-            if hasattr(item, 'mRID') and item.mRID:
+            if hasattr(item, "mRID") and item.mRID:
                 self.register_mrid(item.mRID, db_key)
 
     def get_location(self, mrid: str) -> Optional[str]:
         """Get the database storage key for an mRID.
-        
+
         Args:
             mrid: The mRID to look up
-            
+
         Returns:
             The database key where the object is stored, or None if not found
         """
@@ -2641,109 +2660,109 @@ class ThreadSafeGlobalMRIDs:
                 # Normalize mRID to string for consistent lookup
                 normalized_mrid = self._normalize_mrid_to_string(mrid)
                 mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
-                
+
                 # Get the database key value
                 db_key_bytes = self._db.get_point(mrid_key)
                 if db_key_bytes is None:
                     return None
-                
+
                 # Decode and extract the actual database key from the prefixed value
                 try:
-                    value = db_key_bytes.decode('utf-8')
+                    value = db_key_bytes.decode("utf-8")
                 except UnicodeDecodeError:
                     # This might be pickled data stored incorrectly - skip it
                     _log.warning(f"Found binary data instead of text for mRID {normalized_mrid}, skipping")
                     return None
-                
+
                 # Value format is "type:db_key" or "db:db_key"
-                if ':' in value:
-                    _, db_key = value.split(':', 1)
+                if ":" in value:
+                    _, db_key = value.split(":", 1)
                     return db_key
                 else:
                     # Fallback for old format without prefix
                     return value
-                    
+
             except Exception as e:
                 _log.error(f"Failed to get location for mRID {mrid}: {e}")
                 return None
-    
+
     def list_all_known_mrids(self) -> dict[str, str]:
         """List all mRIDs currently registered in the system.
-        
+
         Returns:
             dict: Mapping of mRID -> database_location for all registered mRIDs
         """
         with self._lock:
             try:
                 all_mrids = {}
-                
+
                 # Get all keys from database that start with our mRID prefix
                 # This is database-specific, so we'll need to implement differently for each backend
-                if hasattr(self._db, 'get_all_keys_with_prefix'):
+                if hasattr(self._db, "get_all_keys_with_prefix"):
                     # If the database supports prefix queries
                     mrid_keys = self._db.get_all_keys_with_prefix(self._mrid_prefix)
                 else:
                     # Fallback: try to get keys from internal storage if available
                     mrid_keys = []
-                    if hasattr(self._db, '_storage') and hasattr(self._db._storage, 'keys'):
+                    if hasattr(self._db, "_storage") and hasattr(self._db._storage, "keys"):
                         all_keys = list(self._db._storage.keys())
                         mrid_keys = [k for k in all_keys if k.startswith(self._mrid_prefix)]
-                
+
                 for mrid_key in mrid_keys:
                     try:
                         # Extract mRID from key (remove prefix)
-                        mrid = mrid_key[len(self._mrid_prefix):]
-                        
+                        mrid = mrid_key[len(self._mrid_prefix) :]
+
                         # Get the location value
                         db_value = self._db.get_point(mrid_key)
                         if db_value:
                             try:
-                                location = db_value.decode('utf-8')
+                                location = db_value.decode("utf-8")
                                 all_mrids[mrid] = location
                             except UnicodeDecodeError:
                                 all_mrids[mrid] = "<BINARY_DATA_ERROR>"
                     except Exception as e:
                         _log.debug(f"Error processing mRID key {mrid_key}: {e}")
-                
+
                 return all_mrids
-                
+
             except Exception as e:
                 _log.error(f"Failed to list mRIDs: {e}")
                 return {}
-    
+
     def get_item(self, mrid: str) -> Any:
         """Get an item by its mRID.
-        
+
         Args:
             mrid: The mRID of the object to retrieve
-            
+
         Returns:
             The object if found, None otherwise
         """
         with self._lock:
             try:
                 import pickle
-                
+
                 # First get the database key for this mRID
                 db_key = self.get_location(mrid)
                 if db_key is None:
                     return None
-                
+
                 # Now retrieve the actual object from the database
                 item_data = self._db.get_point(db_key)
                 if item_data is None:
                     _log.warning(f"mRID {mrid} points to non-existent database key: {db_key}")
                     return None
-                    
+
                 # Deserialize and return the object
                 return pickle.loads(item_data)
             except Exception as e:
                 _log.error(f"Failed to get item with mRID {mrid}: {e}")
                 return None
-    
+
     def list_mrids(self) -> List[str]:
         """List all registered mRIDs.
-        
+
         Returns:
             List of all mRID strings
         """
@@ -2774,10 +2793,10 @@ class ThreadSafeGlobalMRIDs:
                 # For debugging, we could manually check a few known mRIDs if needed
             except Exception as e:
                 _log.error(f"Failed to debug registry contents: {e}")
-    
+
     def debug_mrid_lookup(self, mrid: str):
         """Debug method to show detailed mRID lookup information.
-        
+
         Args:
             mrid: The mRID to debug
         """
@@ -2785,32 +2804,33 @@ class ThreadSafeGlobalMRIDs:
             try:
                 normalized_mrid = self._normalize_mrid_to_string(mrid)
                 mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
-                
+
                 _log.info(f"=== mRID Debug Info for '{mrid}' ===")
                 _log.info(f"  Normalized mRID: '{normalized_mrid}'")
                 _log.info(f"  Database key: '{mrid_key}'")
-                
+
                 # Check if mRID exists in database
                 raw_value = self._db.get_point(mrid_key)
                 if raw_value:
-                    value = raw_value.decode('utf-8')
+                    value = raw_value.decode("utf-8")
                     _log.info(f"  Raw database value: '{value}'")
-                    
+
                     # Parse the value
-                    if ':' in value:
-                        obj_type, db_location = value.split(':', 1)
+                    if ":" in value:
+                        obj_type, db_location = value.split(":", 1)
                         _log.info(f"  Object type: '{obj_type}'")
                         _log.info(f"  Database location: '{db_location}'")
-                        
+
                         # Check if object exists at location
                         obj_data = self._db.get_point(db_location)
                         if obj_data:
                             _log.info(f"  Object found at location: {len(obj_data)} bytes")
                             try:
                                 import pickle
+
                                 obj = pickle.loads(obj_data)
                                 _log.info(f"  Object type in storage: {type(obj).__name__}")
-                                if hasattr(obj, 'href'):
+                                if hasattr(obj, "href"):
                                     _log.info(f"  Object href: {obj.href}")
                             except Exception as e:
                                 _log.error(f"  Failed to deserialize object: {e}")
@@ -2820,9 +2840,9 @@ class ThreadSafeGlobalMRIDs:
                         _log.info(f"  Legacy format (no type prefix): '{value}'")
                 else:
                     _log.error(f"  ERROR: mRID not found in database")
-                    
+
                 _log.info("=== End mRID Debug Info ===")
-                    
+
             except Exception as e:
                 _log.error(f"Failed to debug mRID lookup for '{mrid}': {e}")
 
@@ -2836,10 +2856,12 @@ ListAdapter: ThreadSafeListAdapter | None = None
 EndDeviceAdapter: ThreadSafeEndDeviceAdapter | None = None
 _GlobalMRIDs: ThreadSafeGlobalMRIDs | None = None
 
+
 def get_global_mrids_instance():
     """Get the global MRIDs instance, ensuring proper initialization."""
     ensure_adapters_initialized()
     return _GlobalMRIDs
+
 
 def initialize_adapters():
     """Initialize all global adapter instances.
@@ -2897,14 +2919,17 @@ def initialize_adapters():
         # Update global adapter references in __init__.py
         try:
             from . import _update_global_adapters
+
             _update_global_adapters()
         except ImportError:
             pass  # Module might not have this function yet
+
 
 def ensure_adapters_initialized():
     """Ensure adapters are initialized (lazy initialization)."""
     if not _initialized:
         initialize_adapters()
+
 
 def get_adapter_stats() -> Dict[str, Any]:
     """Get performance statistics from all adapters.
@@ -2939,9 +2964,10 @@ def get_adapter_stats() -> Dict[str, Any]:
         return {}
 
     return {
-        'list_adapter': ListAdapter.get_stats() if ListAdapter is not None else {},
-        'enddevice_adapter': EndDeviceAdapter.get_stats() if EndDeviceAdapter is not None else {},
+        "list_adapter": ListAdapter.get_stats() if ListAdapter is not None else {},
+        "enddevice_adapter": EndDeviceAdapter.get_stats() if EndDeviceAdapter is not None else {},
     }
+
 
 # Don't initialize adapters on module import - wait for configuration
 # initialize_adapters() will be called after point store is configured

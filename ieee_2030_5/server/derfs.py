@@ -27,8 +27,7 @@ class DERRequests(RequestOp):
         super().__init__(**kwargs)
 
     def put(self) -> Response:
-        """Allows putting of 2030.5 DER data to the server.
-        """
+        """Allows putting of 2030.5 DER data to the server."""
         _log.info(f"=== DERRequests PUT ENTRY === Path: {request.path} - LFDI: {self.lfdi}")
         _log.info(f"Request method: {request.method}, Content-Type: {request.content_type}")
 
@@ -66,7 +65,7 @@ class DERRequests(RequestOp):
             _log.info(f"=== CALLING STORAGE === DER PUT {request.path} {asdict(data)}")
             result = adpt.ListAdapter.set_single(uri=f"{request.path}", obj=data, lfdi=self.lfdi)
             _log.info(f"Storage result - Success: {result.success}, Error: {result.error}")
-            rep =  adpt.ListAdapter.get_single(uri=f"{request.path}")
+            rep = adpt.ListAdapter.get_single(uri=f"{request.path}")
             print(f"REP-----------------------: {rep}")
             if not result.success:
                 _log.error(f"Failed to store DER object: {result.error}")
@@ -151,17 +150,16 @@ class DERProgramRequests(RequestOp):
 
         try:
             _log.debug(f"Processing get request for: {request.path} with args: {[x for x in request.args.keys()]}")
-            start = int(request.args.get('s', 0))
-            after = int(request.args.get('a', 0))
-            limit = int(request.args.get('l', 1))
+            start = int(request.args.get("s", 0))
+            after = int(request.args.get("a", 0))
+            limit = int(request.args.get("l", 1))
 
             parsed = hrefs.HrefParser(request.path)
             _log.debug(f"Parsed path - count: {parsed.count()}, has_index: {parsed.has_index()}")
 
             if not parsed.has_index():
                 _log.debug("Getting DER Program list")
-                retval = adpt.ListAdapter.get_resource_list(hrefs.DEFAULT_DERP_ROOT, start, after,
-                                                            limit)
+                retval = adpt.ListAdapter.get_resource_list(hrefs.DEFAULT_DERP_ROOT, start, after, limit)
             elif parsed.count() == 2:
                 _log.debug(f"Getting single DER Program at index {parsed.at(1)}")
                 retval = adpt.ListAdapter.get(hrefs.DEFAULT_DERP_ROOT, parsed.at(1))
@@ -175,7 +173,7 @@ class DERProgramRequests(RequestOp):
             elif parsed.at(2) == hrefs.DERC:
                 _log.debug(f"Retrieving DERC")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
-                if hasattr(retval, 'mRID'):
+                if hasattr(retval, "mRID"):
                     # Use the global mRIDs registry to get the latest version
                     found_item = adpt.get_global_mrids().get_item(retval.mRID)
                     if found_item is not None:
@@ -186,7 +184,7 @@ class DERProgramRequests(RequestOp):
             elif parsed.at(2) == hrefs.DDERC:
                 _log.debug(f"Retrieving DDERC")
                 retval = adpt.ListAdapter.get_single(request.path)
-                if hasattr(retval, 'mRID'):
+                if hasattr(retval, "mRID"):
                     # Use the global mRIDs registry to get the latest version
                     found_item = adpt.get_global_mrids().get_item(retval.mRID)
                     if found_item is not None:
@@ -194,7 +192,7 @@ class DERProgramRequests(RequestOp):
                         _log.debug(f"Found DDERC in GlobalmRIDs registry: {retval.mRID}")
                 _log.debug(f"Retrieving DDERC")
                 retval = adpt.ListAdapter.get_single(request.path)
-                if hasattr(retval, 'mRID'):
+                if hasattr(retval, "mRID"):
                     retval = adpt.GlobalmRIDs.get_item(retval.mRID)
             elif parsed.at(2) == hrefs.DERCURVE:
                 _log.debug(f"Retrieving DC")

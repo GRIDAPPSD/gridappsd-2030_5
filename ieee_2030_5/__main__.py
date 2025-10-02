@@ -65,14 +65,16 @@ from ieee_2030_5.data.indexer import add_href
 # Configure metrics if available (optional)
 try:
     from prometheus_client import start_http_server, Counter, Summary
+
     METRICS_AVAILABLE = True
-    REQUEST_COUNT = Counter('ieee_2030_5_request_count', 'Count of IEEE 2030.5 requests')
-    REQUEST_LATENCY = Summary('ieee_2030_5_request_latency_seconds', 'Latency of IEEE 2030.5 requests')
+    REQUEST_COUNT = Counter("ieee_2030_5_request_count", "Count of IEEE 2030.5 requests")
+    REQUEST_LATENCY = Summary("ieee_2030_5_request_latency_seconds", "Latency of IEEE 2030.5 requests")
 except ImportError:
     METRICS_AVAILABLE = False
 
 # Global logger
 _log = logging.getLogger("ieee_2030_5")
+
 
 class ServerThread(threading.Thread):
     """Thread for running the IEEE 2030.5 server."""
@@ -83,12 +85,12 @@ class ServerThread(threading.Thread):
         self.running = True
 
     def run(self):
-        _log.info(f'Starting server on {self.server.host}:{self.server.port}')
+        _log.info(f"Starting server on {self.server.host}:{self.server.port}")
 
         # Start metrics server if available
         if METRICS_AVAILABLE:
             try:
-                metrics_port = int(os.environ.get('IEEE_2030_5_METRICS_PORT', 9630))
+                metrics_port = int(os.environ.get("IEEE_2030_5_METRICS_PORT", 9630))
                 start_http_server(metrics_port)
                 _log.info(f"Started metrics server on port {metrics_port}")
             except Exception as e:
@@ -120,18 +122,19 @@ def tls_repository_context(cfg: ServerConfiguration, create_certificates: bool =
         _log.debug("Cleaning up TLS repository")
 
 
-def get_tls_repository(cfg: ServerConfiguration,
-                       create_certificates_for_devices: bool = True) -> TLSRepository:
+def get_tls_repository(cfg: ServerConfiguration, create_certificates_for_devices: bool = True) -> TLSRepository:
     """Initialize and return a TLS repository."""
     _log.info(f"Initializing TLS repository at {cfg.tls_repository}")
     _log.debug(f"Proxy enabled: {cfg.proxy_enabled}, Proxy host: {cfg.proxy_hostname}")
 
-    tlsrepo = TLSRepository(cfg.tls_repository,
-                            cfg.openssl_cnf,
-                            cfg.server_hostname,
-                            proxyhost=cfg.proxy_hostname if cfg.proxy_enabled else None,
-                            clear=create_certificates_for_devices,
-                            generate_admin_cert=cfg.generate_admin_cert)
+    tlsrepo = TLSRepository(
+        cfg.tls_repository,
+        cfg.openssl_cnf,
+        cfg.server_hostname,
+        proxyhost=cfg.proxy_hostname if cfg.proxy_enabled else None,
+        clear=create_certificates_for_devices,
+        generate_admin_cert=cfg.generate_admin_cert,
+    )
 
     if create_certificates_for_devices:
         already_represented = set()
@@ -148,113 +151,103 @@ def get_tls_repository(cfg: ServerConfiguration,
 
 def should_stop() -> bool:
     """Check if the server should stop."""
-    return Path('server.stop').exists()
+    return Path("server.stop").exists()
 
 
 def make_stop_file():
     """Create a file to signal server stop."""
-    with open('server.stop', 'w') as w:
+    with open("server.stop", "w") as w:
         pass
 
 
 def remove_stop_file():
     """Remove the server stop signal file."""
-    pth = Path('server.stop')
+    pth = Path("server.stop")
     if pth.exists():
         os.remove(pth)
 
 
-def get_default_logger_config(log_level: Union[str, int] = 'INFO', log_file: str = 'ieee_2030_5_server.log') -> Dict:
+def get_default_logger_config(log_level: Union[str, int] = "INFO", log_file: str = "ieee_2030_5_server.log") -> Dict:
     """Get a default logger configuration."""
     if isinstance(log_level, int):
         log_level = logging.getLevelName(log_level)
     return {
         "version": 1,
         "formatters": {
-            "default": {
-                "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
+            "default": {"format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"},
+            "brief": {"datefmt": "%H:%M:%S", "format": "%(levelname)-8s; %(name)s; %(message)s;"},
+            "single-line": {
+                "datefmt": "%H:%M:%S",
+                "format": "%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s",
             },
-            'brief': {
-                'datefmt': '%H:%M:%S',
-                'format': '%(levelname)-8s; %(name)s; %(message)s;'
-            },
-            'single-line': {
-                'datefmt':
-                '%H:%M:%S',
-                'format':
-                '%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s'
-            },
-            'colorized': {
-                'datefmt': '%H:%M:%S',
-                '()': 'ieee_2030_5.utils.ColorizedFormatter',
-                'format': '%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s'
+            "colorized": {
+                "datefmt": "%H:%M:%S",
+                "()": "ieee_2030_5.utils.ColorizedFormatter",
+                "format": "%(levelname)-8s; %(asctime)s; %(name)s; %(module)s:%(funcName)s;%(lineno)d: %(message)s",
             },
         },
         "handlers": {
             "console": {
-                'level': log_level,
-                'class': 'logging.StreamHandler',
-                'formatter': 'colorized',
+                "level": log_level,
+                "class": "logging.StreamHandler",
+                "formatter": "colorized",
             },
-            'file': {
-                'level': log_level,
-                'class': 'logging.FileHandler',
-                'formatter': 'single-line',
-                'filename': log_file,
-                'mode': 'w',  # Use 'w' mode to recreate the log file each time
-            }
+            "file": {
+                "level": log_level,
+                "class": "logging.FileHandler",
+                "formatter": "single-line",
+                "filename": log_file,
+                "mode": "w",  # Use 'w' mode to recreate the log file each time
+            },
         },
         "loggers": {
-            '': {    # root logger
-                'level': log_level,
-                'handlers': ['console', 'file'],
-                'propagate': False
+            "": {  # root logger
+                "level": log_level,
+                "handlers": ["console", "file"],
+                "propagate": False,
             },
-            'ieee_2030_5.persistance.points': {    # Points logger
-                'level': 'INFO',
-                'handlers': ['console'],
-                'propagate': False
+            "ieee_2030_5.persistance.points": {  # Points logger
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
             },
-            'ieee_2030_5.adapters.base': {    # Points logger
-                'level': 'WARNING',
-                'handlers': ['console'],
-                'propagate': False
+            "ieee_2030_5.adapters.base": {  # Points logger
+                "level": "WARNING",
+                "handlers": ["console"],
+                "propagate": False,
             },
-            'ieee_2030_5.server.server_constructs': {    # Server constructs logger
-                'level': 'INFO',
-                'handlers': ['console', 'file'],
-                'propagate': False
+            "ieee_2030_5.server.server_constructs": {  # Server constructs logger
+                "level": "INFO",
+                "handlers": ["console", "file"],
+                "propagate": False,
             },
-            'werkzeug': {    # Flask/Werkzeug logger
-                'level': 'INFO',
-                'handlers': ['console', 'file'],
-                'propagate': False
+            "werkzeug": {  # Flask/Werkzeug logger
+                "level": "INFO",
+                "handlers": ["console", "file"],
+                "propagate": False,
             },
-            'ieee_2030_5': {    # Our package logger
-                'level': log_level,
-                'handlers': ['console', 'file'],
-                'propagate': False    # Don't propagate to the root logger
+            "ieee_2030_5": {  # Our package logger
+                "level": log_level,
+                "handlers": ["console", "file"],
+                "propagate": False,  # Don't propagate to the root logger
             },
-            'watchdog': {
-                'level': 'INFO',
-                'handlers': ['console'],
-                'propagate': False
-            }
-        }
+            "watchdog": {"level": "INFO", "handlers": ["console"], "propagate": False},
+        },
     }
+
 
 def clear_all_data(config: Optional[ServerConfiguration] = None):
     """Clear all data, databases, and logs for a fresh start."""
     _log.info("=" * 60)
     _log.info("CLEARING ALL DATA FOR FRESH START")
     _log.info("=" * 60)
-    
+
     # Storage directories
     storage_paths = []
     if config and config.storage_path:
         storage_paths.append(Path(config.storage_path))
     storage_paths.append(Path("data_store"))
-    
+
     for storage_path in storage_paths:
         if storage_path.exists():
             _log.info(f"Removing storage directory: {storage_path}")
@@ -262,7 +255,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
                 shutil.rmtree(storage_path)
             except Exception as e:
                 _log.warning(f"Failed to remove {storage_path}: {e}")
-    
+
     # User data directory (contains ZODB and SQLite databases)
     data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
     if data_store_userdir.exists():
@@ -271,7 +264,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
             shutil.rmtree(data_store_userdir)
         except Exception as e:
             _log.warning(f"Failed to remove {data_store_userdir}: {e}")
-    
+
     # Debug client traffic logs
     debug_traffic_dir = Path("debug_client_traffic")
     if debug_traffic_dir.exists():
@@ -280,15 +273,10 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
             shutil.rmtree(debug_traffic_dir)
         except Exception as e:
             _log.warning(f"Failed to remove {debug_traffic_dir}: {e}")
-    
+
     # Server log files
-    log_files = [
-        Path("ieee_2030_5_server.log"),
-        Path("server.log"),
-        Path("proxy.log"),
-        Path("gridappsd.log")
-    ]
-    
+    log_files = [Path("ieee_2030_5_server.log"), Path("server.log"), Path("proxy.log"), Path("gridappsd.log")]
+
     for log_file in log_files:
         if log_file.exists():
             _log.info(f"Removing log file: {log_file}")
@@ -296,7 +284,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
                 log_file.unlink()
             except Exception as e:
                 _log.warning(f"Failed to remove {log_file}: {e}")
-    
+
     # Flask session data
     flask_session_dir = Path("flask_session")
     if flask_session_dir.exists():
@@ -305,7 +293,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
             shutil.rmtree(flask_session_dir)
         except Exception as e:
             _log.warning(f"Failed to remove {flask_session_dir}: {e}")
-    
+
     # Custom database path if specified
     if config and config.database_path:
         db_path = Path(config.database_path).expanduser()
@@ -319,7 +307,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
                     db_path.unlink()
             except Exception as e:
                 _log.warning(f"Failed to remove {db_path}: {e}")
-        
+
         # Also remove any associated files (like SQLite journal files)
         db_parent = db_path.parent
         if db_parent.exists():
@@ -329,7 +317,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
                     related_file.unlink()
                 except Exception as e:
                     _log.warning(f"Failed to remove {related_file}: {e}")
-    
+
     # Stop file if it exists
     stop_file = Path("server.stop")
     if stop_file.exists():
@@ -338,7 +326,7 @@ def clear_all_data(config: Optional[ServerConfiguration] = None):
             stop_file.unlink()
         except Exception as e:
             _log.warning(f"Failed to remove stop file: {e}")
-    
+
     _log.info("=" * 60)
     _log.info("Data clearing complete!")
     _log.info("=" * 60)
@@ -378,41 +366,35 @@ def _main():
     parser = ArgumentParser(description="IEEE 2030.5 Server")
     parser.add_argument(dest="config", help="Configuration file for the server.")
     parser.add_argument(
-        "--create-certs",
-        action="store_true",
-        help="If specified, certificates for client and server will be created.")
+        "--create-certs", action="store_true", help="If specified, certificates for client and server will be created."
+    )
     parser.add_argument("--debug", action="store_true", help="Debug level of the server")
-    parser.add_argument("--production",
-                        action="store_true",
-                        default=False,
-                        help="Run the server in a threaded environment.")
     parser.add_argument(
-        "--lfdi",
-        help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
-    parser.add_argument("--show-lfdi",
-                        action="store_true",
-                        help="Show all of the lfdi for the generated certificates and exit.")
+        "--production", action="store_true", default=False, help="Run the server in a threaded environment."
+    )
+    parser.add_argument("--lfdi", help="Use lfdi mode allows a single lfdi to be connected to on an http connection")
     parser.add_argument(
-        "--simulation_id",
-        help=
-        "When running as a service the simulation_id must be passed for it to run in this mode.")
-    parser.add_argument(
-        "--metrics-port",
-        type=int,
-        default=9630,
-        help="Port for metrics server (if prometheus_client is installed)"
+        "--show-lfdi", action="store_true", help="Show all of the lfdi for the generated certificates and exit."
     )
     parser.add_argument(
-        "--num-threads",
-        type=int,
-        default=4,
-        help="Number of threads to use for the server (requires --production)"
+        "--simulation_id", help="When running as a service the simulation_id must be passed for it to run in this mode."
+    )
+    parser.add_argument(
+        "--metrics-port", type=int, default=9630, help="Port for metrics server (if prometheus_client is installed)"
+    )
+    parser.add_argument(
+        "--num-threads", type=int, default=4, help="Number of threads to use for the server (requires --production)"
     )
     parser.add_argument("--with-proxy", action="store_true", help="Enable proxy mode")
     parser.add_argument("--proxy-debug", action="store_true", help="Enable proxy debug logging")
-    parser.add_argument("--clear", action="store_true", 
-                        help="Clear all data and logs for a fresh start (databases, debug logs, storage)")
-    parser.add_argument("--log-file", type=str, help="Output log to specified file instead of default ieee_2030_5_server.log")
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear all data and logs for a fresh start (databases, debug logs, storage)",
+    )
+    parser.add_argument(
+        "--log-file", type=str, help="Output log to specified file instead of default ieee_2030_5_server.log"
+    )
     parser.add_argument("--admin-http-port", type=int, default=5001, help="Port for HTTP admin access (default: 5001)")
     parser.add_argument("--dual-server", action="store_true", help="Run both HTTPS (API) and HTTP (admin) servers")
 
@@ -423,16 +405,17 @@ def _main():
 
     # Set up metrics if available
     if METRICS_AVAILABLE:
-        os.environ['IEEE_2030_5_METRICS_PORT'] = str(opts.metrics_port)
+        os.environ["IEEE_2030_5_METRICS_PORT"] = str(opts.metrics_port)
 
     # Configure logging
-    log_file = opts.log_file if opts.log_file else 'ieee_2030_5_server.log'
+    log_file = opts.log_file if opts.log_file else "ieee_2030_5_server.log"
     # Check if external logging config file exists
-    logging_config_path = Path('logging_config.yml')
+    logging_config_path = Path("logging_config.yml")
     if logging_config_path.exists():
         import yaml
+
         try:
-            with open(logging_config_path, 'r') as f:
+            with open(logging_config_path, "r") as f:
                 log_config = yaml.safe_load(f)
             _log_early = logging.getLogger("ieee_2030_5")
             _log_early.info(f"Using external logging configuration from {logging_config_path}")
@@ -441,7 +424,7 @@ def _main():
             log_config = get_default_logger_config(log_level, log_file)
     else:
         log_config = get_default_logger_config(log_level, log_file)
-    
+
     # Remove all existing handlers before configuring
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
@@ -460,7 +443,7 @@ def _main():
             config = ServerConfiguration(**cfg_dict)
         except Exception as e:
             _log.warning(f"Could not load config for clearing: {e}")
-        
+
         clear_all_data(config)
         _log.info("Data cleared successfully! Continuing with server startup...")
 
@@ -486,17 +469,17 @@ def _main():
 
     # Set service environment variables
     if config.service_name:
-        os.environ['GRIDAPPSD_SERVICE_NAME'] = config.service_name
+        os.environ["GRIDAPPSD_SERVICE_NAME"] = config.service_name
 
     if config.simulation_id:
-        os.environ['GRIDAPPSD_SIMULATION_ID'] = config.simulation_id
+        os.environ["GRIDAPPSD_SIMULATION_ID"] = config.simulation_id
 
     if opts.simulation_id:
-        os.environ['GRIDAPPSD_SIMULATION_ID'] = opts.simulation_id
+        os.environ["GRIDAPPSD_SIMULATION_ID"] = opts.simulation_id
         config.simulation_id = opts.simulation_id
 
     if config.lfdi_mode == "lfdi_mode_from_file":
-        os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = '1'
+        os.environ["IEEE_2030_5_CERT_FROM_COMBINED_FILE"] = "1"
 
     # Validate configuration
     assert config.tls_repository, "TLS repository not specified in configuration"
@@ -528,6 +511,7 @@ def _main():
 
     # Configure the point store backend before any database operations
     from ieee_2030_5.persistance.points import configure_point_store
+
     configure_point_store(backend=config.database_backend, db_path=config.database_path)
     _log.info(f"Configured {config.database_backend} point store backend")
 
@@ -552,16 +536,16 @@ def _main():
                 from gridappsd import GridAPPSD
                 from ieee_2030_5.adapters.gridappsd_adapter import GridAPPSDAdapter
 
-                gapps = GridAPPSD(stomp_address=config.gridappsd.address,
-                                stomp_port=config.gridappsd.port,
-                                username=config.gridappsd.username,
-                                password=config.gridappsd.password)
+                gapps = GridAPPSD(
+                    stomp_address=config.gridappsd.address,
+                    stomp_port=config.gridappsd.port,
+                    username=config.gridappsd.username,
+                    password=config.gridappsd.password,
+                )
 
                 assert gapps.connected, "Failed to connect to GridAPPSD"
 
-                gridappsd_adpt = GridAPPSDAdapter(gapps=gapps,
-                                                gridappsd_configuration=config.gridappsd,
-                                                tls=tls_repo)
+                gridappsd_adpt = GridAPPSDAdapter(gapps=gapps, gridappsd_configuration=config.gridappsd, tls=tls_repo)
 
                 gridappsd_devices: list = []
                 if opts.create_certs:
@@ -577,6 +561,7 @@ def _main():
                 _log.error(f"Failed to initialize GridAPPSD adapter: {e}")
                 if opts.debug:
                     import traceback
+
                     traceback.print_exc()
 
         # Set LFDI client mode if specified
@@ -589,12 +574,13 @@ def _main():
 
         # Initialize the IEEE 2030.5 server
         from ieee_2030_5.server.server_constructs import initialize_2030_5
-        
+
         # Initialize adapters before server initialization
         from ieee_2030_5.adapters.base import initialize_adapters
+
         initialize_adapters()
         _log.info("Adapters initialized for server startup")
-        
+
         _log.info("Initializing IEEE 2030.5 server")
         initialize_2030_5(config, tls_repo)
 
@@ -602,10 +588,11 @@ def _main():
         if gridappsd_adpt:
             _log.info("Starting GridAPPSD publishing")
             gridappsd_adpt.start_publishing()
-            
+
             # Enable message bus monitoring
             try:
                 from ieee_2030_5.monitoring import patch_gridappsd_adapter, get_message_monitor
+
                 patch_gridappsd_adapter()
                 monitor = get_message_monitor()
                 monitor.enable()
@@ -650,40 +637,41 @@ def _main():
                     _log.warning("Server did not shut down cleanly")
         else:
             # Development mode - run directly
-            if opts.dual_server or getattr(config, 'dual_server_enabled', False):
+            if opts.dual_server or getattr(config, "dual_server_enabled", False):
                 # Use command line arg if provided, otherwise use config value
-                admin_port = opts.admin_http_port if opts.dual_server else getattr(config, 'admin_http_port', 5001)
+                admin_port = opts.admin_http_port if opts.dual_server else getattr(config, "admin_http_port", 5001)
                 _log.info(f"Running in development mode with dual servers (HTTPS + HTTP admin on port {admin_port})")
                 try:
-                    run_dual_server(config,
-                                  tls_repo,
-                                  admin_http_port=admin_port,
-                                  debug=opts.debug,
-                                  use_reloader=False,
-                                  use_debugger=opts.debug,
-                                  threaded=True)  # Enable threading for better performance
+                    run_dual_server(
+                        config,
+                        tls_repo,
+                        admin_http_port=admin_port,
+                        debug=opts.debug,
+                        use_reloader=False,
+                        use_debugger=opts.debug,
+                        threaded=True,
+                    )  # Enable threading for better performance
                 except KeyboardInterrupt:
                     _log.info("Keyboard interrupt received")
                 except Exception as e:
                     _log.error(f"Dual server error: {e}")
                     if opts.debug:
                         import traceback
+
                         traceback.print_exc()
             else:
                 _log.info("Running in development mode")
                 try:
-                    run_server(config,
-                             tls_repo,
-                             debug=opts.debug,
-                             use_reloader=False,
-                             use_debugger=opts.debug,
-                             threaded=True)  # Enable threading for better performance
+                    run_server(
+                        config, tls_repo, debug=opts.debug, use_reloader=False, use_debugger=opts.debug, threaded=True
+                    )  # Enable threading for better performance
                 except KeyboardInterrupt:
                     _log.info("Keyboard interrupt received")
                 except Exception as e:
                     _log.error(f"Server error: {e}")
                     if opts.debug:
                         import traceback
+
                         traceback.print_exc()
                 finally:
                     _log.info("Server shutdown complete")
@@ -691,7 +679,7 @@ def _main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(_main())
     except InvalidConfigFile as ex:
