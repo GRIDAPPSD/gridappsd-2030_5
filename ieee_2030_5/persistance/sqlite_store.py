@@ -311,8 +311,8 @@ class SQLitePointStore(PointStoreBase):
 
         # Performance tuning for high client count
         conn.execute("PRAGMA threads=4")  # Enable multi-threading
-        conn.execute("PRAGMA read_uncommitted=true")  # Allow dirty reads for better concurrency
-
+        # NOTE: Dirty reads (PRAGMA read_uncommitted=true) are NOT enabled by default to ensure data consistency.
+        # If dirty reads are required for specific, non-critical operations, use a separate connection and document the use case.
         return conn
 
     def _get_pooled_connection(self) -> sqlite3.Connection:
