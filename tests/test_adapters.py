@@ -1,10 +1,11 @@
+import os
 from dataclasses import dataclass
+
 import pytest
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.adapters import Adapter, ResourceListAdapter, NotFoundError
-import os
+from ieee_2030_5.adapters import Adapter, NotFoundError, ResourceListAdapter
 
 
 def test_missing_type():
@@ -112,7 +113,7 @@ def test_generic_list_with_resource_list(ignore_adapter_load):
     gl = ResourceListAdapter()
     gl.append(edl.href, edl)
 
-    assert 5 == gl.count()
+    assert gl.count() == 5
 
     assert isinstance(gl.get_resource_list(edl.href), m.EndDeviceList)
 

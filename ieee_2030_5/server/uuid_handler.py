@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import Optional, List
 from uuid import uuid4
 
 from ieee_2030_5.server.exceptions import AlreadyExistsError
@@ -42,7 +41,7 @@ class UUIDHandler:
         self.add_known(new_uuid, obj)
         return new_uuid
 
-    def get_uuid(self, obj) -> Optional[str]:
+    def get_uuid(self, obj) -> str | None:
         """
         Retrieve a uuid for a matching object.  If match exists the
         function returns the uuid, if not then returns None.
@@ -53,7 +52,7 @@ class UUIDHandler:
         """
         return self.bag.get(id(obj))
 
-    def get_obj(self, uuid: str) -> Optional[object]:
+    def get_obj(self, uuid: str) -> object | None:
         """
         Retrieve an object based on the passed uuid.  If match exists the
         function returns the object, if not then returns None.
@@ -64,7 +63,7 @@ class UUIDHandler:
         """
         return self.bag.get(uuid)
 
-    def get_uuids(self) -> List[str]:
+    def get_uuids(self) -> list[str]:
         return list(self.uuids.copy())
 
     def generate(self) -> str:

@@ -1,6 +1,4 @@
 import logging
-from copy import deepcopy
-from typing import Dict, List
 
 from nicegui import ui
 
@@ -34,37 +32,34 @@ def render_select():
     der_programs = [p.description for p in programs.DERProgram]
     der_programs.insert(0, "NEW")
 
-    with ui.row():
-        with ui.column():
-            if not current_program.description:
-                ui.select(der_programs, label="Programs", value=der_programs[0]).classes("w-64")
-            else:
-                ui.select(der_programs, label="Programs", value=current_program.description).classes("w-64")
+    with ui.row(), ui.column():
+        if not current_program.description:
+            ui.select(der_programs, label="Programs", value=der_programs[0]).classes("w-64")
+        else:
+            ui.select(der_programs, label="Programs", value=current_program.description).classes("w-64")
 
-            if current_program.href:
-                ui.label(f"Href: {current_program.href}")
+        if current_program.href:
+            ui.label(f"Href: {current_program.href}")
 
 
 def render_primacy_select():
     global current_primacy_type
 
-    with ui.row():
-        with ui.column():
-            current_primacy_type = (
-                ui.select({v.value: v.name for i, v in enumerate(m.PrimacyType)}, label="Primacy")
-                .classes("w-96")
-                .bind_value(current_program, "primacy")
-            )
+    with ui.row(), ui.column():
+        current_primacy_type = (
+            ui.select({v.value: v.name for i, v in enumerate(m.PrimacyType)}, label="Primacy")
+            .classes("w-96")
+            .bind_value(current_program, "primacy")
+        )
 
 
 def render_default_control_select():
     der_controls = {p.href: p.description for p in control_list.DERControl}
 
-    with ui.row():
-        with ui.column():
-            ui.select(der_controls, label="Default Control", value=current_program.DefaultDERControlLink.href).classes(
-                "w-64"
-            )
+    with ui.row(), ui.column():
+        ui.select(der_controls, label="Default Control", value=current_program.DefaultDERControlLink.href).classes(
+            "w-64"
+        )
 
 
 def change_control(new_control: str):
@@ -74,11 +69,10 @@ def change_control(new_control: str):
 @ui.refreshable
 def render_form():
     if current_program.href:
-        with ui.row():
-            with ui.column():
-                ui.label(f"Href: {current_program.href}")
-                ui.label(f"MRID: {current_program.mRID}")
-                ui.label(f"version: {current_program.version}")
+        with ui.row(), ui.column():
+            ui.label(f"Href: {current_program.href}")
+            ui.label(f"MRID: {current_program.mRID}")
+            ui.label(f"version: {current_program.version}")
 
     with ui.row():
         ui.input("description").classes("w-64").bind_value(current_program, "description")
@@ -88,9 +82,8 @@ def render_form():
     render_primacy_select()
     render_default_control_select()
 
-    with ui.row():
-        with ui.column():
-            pass
+    with ui.row(), ui.column():
+        pass
 
 
 def revert_changes():

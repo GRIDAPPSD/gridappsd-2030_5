@@ -3,23 +3,17 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Tuple, Union
-
-from blinker import Signal
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
-from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint
+from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import DeviceConfiguration, ServerConfiguration
-from ieee_2030_5.data.indexer import add_href, get_href
+from ieee_2030_5.data.indexer import add_href
 from ieee_2030_5.persistance.points import atomic_operation
 from ieee_2030_5.server.device_fsa import create_device_fsa_with_program
 
 _log = logging.getLogger(__name__)
-import ieee_2030_5.adapters as adpt
-import ieee_2030_5.hrefs as hrefs
-import ieee_2030_5.models as m
 
 
 # Define ConfigurationError here since it's not in ieee_2030_5.config

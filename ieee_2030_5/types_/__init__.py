@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import IntEnum
 from pathlib import Path
-from typing import Union, Any, List, Dict
+from typing import Any
 
-PathStr = Union[Path, str]
+PathStr = Path | str
 StrPath = PathStr
 TimeType = int
 TimeOffsetType = int

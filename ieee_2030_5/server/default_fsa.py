@@ -4,7 +4,6 @@ This FSA is shared by all devices but each device gets individual controls.
 """
 
 import logging
-from typing import Optional
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
@@ -16,12 +15,12 @@ from ieee_2030_5.persistance.points import atomic_operation
 _log = logging.getLogger(__name__)
 
 # Global reference to the default FSA
-_default_fsa_href: Optional[str] = None
+_default_fsa_href: str | None = None
 
 
 def create_default_fsa_with_program(
     config: ServerConfiguration,
-) -> Optional[m.FunctionSetAssignments]:
+) -> m.FunctionSetAssignments | None:
     """
     Create a shared default FSA containing the default DER program from config.
     This FSA can be referenced by all devices but each will get their own controls.
@@ -207,7 +206,7 @@ def link_device_to_default_fsa(end_device: m.EndDevice, ed_href) -> bool:
 
 
 def create_device_specific_control(
-    device_id: str, program: m.DERProgram, control_template: Optional[m.DERControl] = None
+    device_id: str, program: m.DERProgram, control_template: m.DERControl | None = None
 ) -> m.DERControl:
     """
     Create a device-specific DER control based on the program and template.

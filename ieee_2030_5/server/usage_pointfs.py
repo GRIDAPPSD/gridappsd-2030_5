@@ -4,9 +4,7 @@ This module handles MirrorUsagePoint and UsagePoint constructs for a server.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
@@ -16,8 +14,7 @@ import ieee_2030_5.models as m
 from ieee_2030_5 import hrefs
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.server.base_request import RequestOp
-from ieee_2030_5.server.uuid_handler import UUIDHandler
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import xml_to_dataclass
 
 
 class Error(Exception):
@@ -31,14 +28,14 @@ class ResponseStatus:
 
 
 class UsagePointsContainer:
-    __upt__: Dict[bytes, m.UsagePoint] = {}
-    __mup__: Dict[bytes, m.MirrorUsagePoint] = {}
-    __sorted_mrid__: List = []
-    __mup_href__: Dict[str, m.MirrorUsagePoint] = {}
-    __mup_readings__: Dict[bytes, m.MirrorReadingSet] = {}
+    __upt__: dict[bytes, m.UsagePoint] = {}
+    __mup__: dict[bytes, m.MirrorUsagePoint] = {}
+    __sorted_mrid__: list = []
+    __mup_href__: dict[str, m.MirrorUsagePoint] = {}
+    __mup_readings__: dict[bytes, m.MirrorReadingSet] = {}
 
     def get_mup_list(
-        self, start: Optional[int] = None, after: Optional[int] = None, length: Optional[int] = None
+        self, start: int | None = None, after: int | None = None, length: int | None = None
     ) -> m.MirrorUsagePointList:
         if start is not None and after is not None:
             # after takes precedence
@@ -69,7 +66,7 @@ class UsagePointsContainer:
     def get_upt_list(self) -> m.UsagePointList:
         pass
 
-    def get_mup_href(self, href: str) -> Optional[m.MirrorUsagePoint]:
+    def get_mup_href(self, href: str) -> m.MirrorUsagePoint | None:
         return self.__mup_href__.get(href)
 
     def create_reading_set(self, mup_href: str, mrs: m.MirrorReadingSet) -> ResponseStatus | Error:
@@ -125,7 +122,7 @@ class UTP(RequestOp):
     def get(self) -> Response:
         pass
 
-    def create(self, mrid: Optional[str] = None) -> m.UsagePoint:
+    def create(self, mrid: str | None = None) -> m.UsagePoint:
         up = m.UsagePoint(href=f"{hrefs.build_link(hrefs.upt, UTP.__next_index__)}", mRID=mrid)
         UTP.__next_index__ += 1
 

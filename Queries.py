@@ -1,6 +1,4 @@
 import sys
-from pprint import pprint
-from typing import Optional
 
 import cimlab.data_profile.rc4_2021 as cim
 from cimlab.loaders import ConnectionParameters, Parameter
@@ -21,23 +19,23 @@ def get_inverter_buses(network_area):
         network_area.get_all_attributes(cim.Terminal)
         network_area.get_all_attributes(cim.Analog)
 
-        print('\n \n EXAMPLE 6: GET ALL INVERTER PHASES AND BUSES')
+        print("\n \n EXAMPLE 6: GET ALL INVERTER PHASES AND BUSES")
         for pec in network_area.typed_catalog[cim.PowerElectronicsConnection].values():
-            print('\n name: ', pec.name, pec.mRID)
-            print('p = ', pec.p, 'q = ', pec.q)
+            print("\n name: ", pec.name, pec.mRID)
+            print("p = ", pec.p, "q = ", pec.q)
             node1 = pec.Terminals[0].ConnectivityNode
-            print('bus: ', node1.name, node1.mRID)
+            print("bus: ", node1.name, node1.mRID)
             for pec_phs in pec.PowerElectronicsConnectionPhases:
-                print('phase ', pec_phs.phase, ': ', pec_phs.mRID)
+                print("phase ", pec_phs.phase, ": ", pec_phs.mRID)
 
             for meas in pec.Measurements:
-                print('Measurement: ', meas.name, meas.mRID)
-                print('type:', meas.measurementType, 'phases:', meas.phases)
+                print("Measurement: ", meas.name, meas.mRID)
+                print("type:", meas.measurementType, "phases:", meas.phases)
 
 
 topic = "goss.gridappsd.request.data.topology"
-#feeder_mrid = "_C07972A7-600D-4AA5-B254-4CAA4263560E"    # Ochre 13-node
-feeder_mrid = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"    # 13-node
+# feeder_mrid = "_C07972A7-600D-4AA5-B254-4CAA4263560E"    # Ochre 13-node
+feeder_mrid = "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62"  # 13-node
 # feeder_mrid = "_E407CBB6-8C8D-9BC9-589C-AB83FBF0826D"    # 123-node
 message = {"requestType": "GET_SWITCH_AREAS", "modelID": feeder_mrid, "resultFormat": "JSON"}
 
@@ -48,13 +46,12 @@ sys.exit()
 
 topology_response = gapps.get_response(topic, message, timeout=30)
 # Blazegraph connection for running outside the container
-params = ConnectionParameters(
-    [Parameter(key="url", value="http://localhost:8889/bigdata/namespace/kb/sparql")])
-bg = BlazegraphConnection(params, 'rc4_2021')
+params = ConnectionParameters([Parameter(key="url", value="http://localhost:8889/bigdata/namespace/kb/sparql")])
+bg = BlazegraphConnection(params, "rc4_2021")
 
 # Initialize Model
 feeder = cim.Feeder(mRID=feeder_mrid)
-network = DistributedModel(connection=bg, feeder=feeder, topology=topology_response['feeders'])
+network = DistributedModel(connection=bg, feeder=feeder, topology=topology_response["feeders"])
 
 for switch_area in network.switch_areas:
     get_inverter_buses(switch_area)
@@ -71,7 +68,7 @@ import atexit
 
 from gridappsd import GridAPPSD
 
-conn: Optional[GridAPPSD] = None
+conn: GridAPPSD | None = None
 
 
 def get_conn() -> GridAPPSD:
@@ -83,7 +80,8 @@ def get_conn() -> GridAPPSD:
 
 
 def QuerySynchronousMachine(feeder_id):
-    querySynchronousMachine = """# SynchronousMachine - DistSyncMachine
+    querySynchronousMachine = (
+        """# SynchronousMachine - DistSyncMachine
     PREFIX r:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX c:  <http://iec.ch/TC57/CIM100#>
     SELECT ?name ?bus (group_concat(distinct ?phs;separator="\\n") as ?phases) ?ratedS ?ratedU ?p ?q ?id ?fdrid WHERE {
@@ -108,13 +106,16 @@ def QuerySynchronousMachine(feeder_id):
     }
     GROUP by ?name ?bus ?ratedS ?ratedU ?p ?q ?id ?fdrid
     ORDER by ?name
-    """ % feeder_id
+    """
+        % feeder_id
+    )
     results = get_conn().query_data(querySynchronousMachine)
     return results
 
 
 def QuerySolar(feeder_id):
-    querySolar = """# Solar - DistSolar
+    querySolar = (
+        """# Solar - DistSolar
     PREFIX r:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX c:  <http://iec.ch/TC57/CIM100#>
     SELECT ?name ?bus ?ratedS ?ratedU ?ipu ?p ?q ?fdrid ?id (group_concat(distinct ?phs;separator="\\n") as ?phases) WHERE {
@@ -148,14 +149,17 @@ def QuerySolar(feeder_id):
     }
     GROUP by ?name ?bus ?ratedS ?ratedU ?ipu ?p ?q ?fdrid ?id
     ORDER by ?name
-    """ % feeder_id
+    """
+        % feeder_id
+    )
     results = get_conn().query_data(querySolar)
     print(results)
     return results
 
 
 def QueryBattery(feeder_id):
-    queryBattery = """# Storage - DistStorage
+    queryBattery = (
+        """# Storage - DistStorage
     PREFIX r:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX c:  <http://iec.ch/TC57/CIM100#>
     SELECT ?name ?bus ?ratedS ?ratedU ?ipu ?ratedE ?storedE ?state ?p ?q ?id ?fdrid (group_concat(distinct ?phs;separator="\\n") as ?phases) WHERE {
@@ -191,14 +195,17 @@ def QueryBattery(feeder_id):
     }
     GROUP by ?name ?bus ?ratedS ?ratedU ?ipu ?ratedE ?storedE ?state ?p ?q ?id ?fdrid
     ORDER by ?name
-    """ % feeder_id
+    """
+        % feeder_id
+    )
 
     results = get_conn().query_data(queryBattery)
     return results
 
 
 def QueryInverter(feeder_id):
-    queryInverter = """
+    queryInverter = (
+        """
     PREFIX r: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX c: <http://iec.ch/TC57/CIM100#>
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
@@ -226,14 +233,17 @@ def QueryInverter(feeder_id):
     }
     GROUP by ?name ?bus ?ratedS ?ratedU ?ipu ?p ?q ?fdrid ?id ?pecid
     ORDER by ?name
-    """ % feeder_id
+    """
+        % feeder_id
+    )
 
     results = get_conn().query_data(queryInverter)
     return results
 
 
 def QueryAllDERGroups(feeder_id):
-    queryAllDERGroups = """#get all EndDeviceGroup
+    queryAllDERGroups = (
+        """#get all EndDeviceGroup
     PREFIX  xsd:  <http://www.w3.org/2001/XMLSchema#>
     PREFIX  r:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX  c:    <http://iec.ch/TC57/CIM100#>
@@ -261,7 +271,9 @@ def QueryAllDERGroups(feeder_id):
     }
     Group by ?mRID ?description
     Order by ?mRID
-    """ % feeder_id
+    """
+        % feeder_id
+    )
 
     results = get_conn().query_data(queryAllDERGroups)
     return results

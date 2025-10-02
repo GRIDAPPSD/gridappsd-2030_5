@@ -1,14 +1,14 @@
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import werkzeug
-from flask import request, Response
+from flask import Response, request
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.models import DeviceCategoryType
 
 if TYPE_CHECKING:
     import ieee_2030_5.server.server_endpoints as eps
@@ -52,7 +52,7 @@ class ServerOperation:
 
 
 class RequestOp(ServerOperation):
-    def __init__(self, server_endpoints: "eps.ServerEndpoints"):
+    def __init__(self, server_endpoints: eps.ServerEndpoints):
         super().__init__()
         self._tls_repository = server_endpoints.tls_repo
         self._server_endpoints = server_endpoints
@@ -73,7 +73,7 @@ class RequestOp(ServerOperation):
     def device_id(self):
         return request.environ.get("ieee_2030_5_subject")
 
-    def get_path(self, required_prefix: Optional[str] = None) -> str:
+    def get_path(self, required_prefix: str | None = None) -> str:
         """
         Retrieve the context web request environment PATH_INFO with optional required_prefix
         argument.  If that argument is specified then it will be validated against PATH_INFO.  The

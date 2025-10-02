@@ -1,8 +1,6 @@
 import hashlib
-import itertools
 import json
 import logging
-import os
 import socket
 import ssl
 import threading
@@ -12,15 +10,13 @@ from dataclasses import fields
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from queue import Queue
 
 import OpenSSL
 import werkzeug.exceptions
 from flask import Flask, Response, g, redirect, render_template, request, url_for
-from flask_session import Session
 
 # from flask_socketio import SocketIO, send
-from werkzeug.serving import BaseWSGIServer, make_server
+from werkzeug.serving import BaseWSGIServer
 
 from ieee_2030_5.utils import dataclass_to_xml
 
@@ -447,12 +443,11 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
             self.wfile.flush()
 
             # For HTTP/1.1, persistent is default unless 'Connection: close'
-            if self.request_version >= "HTTP/1.1" and "close" not in connection_header:
-                self.close_connection = False
-                # Keep-alive is normal, no need to log
-                pass
-            # For HTTP/1.0 with keep-alive header
-            elif "keep-alive" in connection_header:
+            if (
+                self.request_version >= "HTTP/1.1"
+                and "close" not in connection_header
+                or "keep-alive" in connection_header
+            ):
                 self.close_connection = False
                 # Keep-alive is normal, no need to log
                 pass
@@ -462,7 +457,7 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
                 # Connection close is normal, no need to log
                 pass
 
-        except socket.timeout:
+        except TimeoutError:
             # Timeout reading from socket - close connection
             # Socket timeouts can be logged at warning level if needed
             _log.warning(f"Socket timeout from {self.client_address}")
@@ -915,7 +910,7 @@ def __build_http_app__(config: ServerConfiguration) -> Flask:
 
     @app.route("/dcap", methods=["GET"])
     def http_root() -> Response:
-        return dataclass_to_xml(m.DeviceCapability(href=f"https://localhost:7443/dcap"))
+        return dataclass_to_xml(m.DeviceCapability(href="https://localhost:7443/dcap"))
         # return adpt.DeviceCapabilityAdapter()
 
 
@@ -1167,7 +1162,6 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
 
             # Set up real-time subscription
             import queue
-            import threading
 
             message_queue = queue.Queue(maxsize=100)
 

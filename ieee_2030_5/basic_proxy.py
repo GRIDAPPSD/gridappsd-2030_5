@@ -29,22 +29,22 @@ License: See LICENSE file
 """
 
 from __future__ import annotations
+
 import logging
 import logging.handlers
 import os
 import socket
 import ssl
-import threading
-import traceback
+import time
 from dataclasses import dataclass
 from http.client import HTTPSConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Tuple
 from urllib.parse import urlparse
-import time
+
 import OpenSSL
 import yaml
+
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration
 
@@ -282,7 +282,7 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
 
             # Apply SSL context
             if hasattr(self, "context") and self.context:
-                _log.debug(f"Wrapping socket with provided SSL context")
+                _log.debug("Wrapping socket with provided SSL context")
                 self.sock = self.context.wrap_socket(self.sock, server_hostname=self.host)
                 _log.debug(
                     f"SSL handshake complete, cipher: {self.sock.cipher() if hasattr(self.sock, 'cipher') else 'unknown'}"
@@ -302,7 +302,7 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
             if hasattr(e, "verify_message"):
                 _log.error(f"SSL verification error: {e.verify_message}")
             raise
-        except socket.timeout:
+        except TimeoutError:
             _log.error(f"Connection timeout to {self.host}:{self.port} after {self.timeout_connect}s")
             raise
         except Exception as e:
@@ -345,7 +345,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
     timeout = 300  # 5 minutes for client socket timeout
 
     # Type annotation for the server to ensure it has our required attributes
-    server: "ProxyServer"
+    server: ProxyServer
 
     def setup(self):
         """
@@ -462,7 +462,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
             return True
 
-        except socket.timeout:
+        except TimeoutError:
             _log.debug(f"Socket timeout on client connection from {self.client_address}")
             self.close_connection = True
             return False
@@ -642,12 +642,12 @@ class RequestForwarder(BaseHTTPRequestHandler):
         try:
             # Use TLS_CLIENT since we're acting as a client to the target server
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            _log.debug(f"Created SSL context with PROTOCOL_TLS_CLIENT")
+            _log.debug("Created SSL context with PROTOCOL_TLS_CLIENT")
 
             # Don't verify server certificate - typically needed for test environments
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-            _log.debug(f"Set SSL verification: check_hostname=False, verify_mode=CERT_NONE")
+            _log.debug("Set SSL verification: check_hostname=False, verify_mode=CERT_NONE")
 
             # Load CA file if available
             ca_file = str(Path(cert_file).parent.joinpath("ca.crt"))
@@ -674,7 +674,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         except ssl.SSLError as e:
             _log.error(f"SSL configuration error: {e}")
             raise RuntimeError(f"Failed to configure SSL context: {e}") from e
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             # Let this bubble up - caller should handle missing certificates
             raise
         except Exception as e:
@@ -739,7 +739,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.debug(f"Created server connection on attempt {attempt + 1} for client {client_info}")
                 return conn
 
-            except (ssl.SSLError, socket.timeout) as e:
+            except (TimeoutError, ssl.SSLError) as e:
                 _log.warning(f"Connection attempt {attempt + 1} failed for client {client_info}: {e}")
                 if attempt < max_retries - 1:
                     _log.debug(f"Retrying in {retry_delay}s for client {client_info}...")
@@ -772,7 +772,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.debug("Reading response data")
                 data = response.read()
                 _log.debug(f"Response size: {len(data)} bytes")
-            except socket.timeout:
+            except TimeoutError:
                 _log.error("Timeout reading response data from server")
                 try:
                     self.send_error(504, "Gateway Timeout")
@@ -783,7 +783,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # COMPREHENSIVE RESPONSE LOGGING - Log all response data from backend
             _log.info(f"=== RESPONSE FROM BACKEND FOR CLIENT {client_info} ===")
             _log.info(f"Status: {response.status} {response.reason}")
-            _log.info(f"Response Headers from backend:")
+            _log.info("Response Headers from backend:")
             for header_name, header_value in response.headers.items():
                 _log.info(f"  {header_name}: {header_value}")
 
@@ -812,7 +812,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # Log what headers we're sending back to client
             _log.info(f"=== RESPONSE TO CLIENT {client_info} ===")
             _log.info(f"Status: {response.status} {response.reason}")
-            _log.info(f"Headers being sent to client:")
+            _log.info("Headers being sent to client:")
 
             for k, v in response.headers.items():
                 if k.lower() not in skip_headers:
@@ -834,24 +834,24 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 if "close" not in client_connection:
                     self.send_header("Connection", "keep-alive")
                     self.send_header("Keep-Alive", "timeout=300, max=1000")
-                    _log.info(f"  Connection: keep-alive")
-                    _log.info(f"  Keep-Alive: timeout=300, max=1000")
+                    _log.info("  Connection: keep-alive")
+                    _log.info("  Keep-Alive: timeout=300, max=1000")
                     _log.debug("Maintaining keep-alive connection with client")
                 else:
                     self.send_header("Connection", "close")
-                    _log.info(f"  Connection: close")
+                    _log.info("  Connection: close")
                     _log.debug("Client requested connection close")
             elif "keep-alive" in client_connection:
                 # HTTP/1.0 with explicit keep-alive
                 self.send_header("Connection", "keep-alive")
                 self.send_header("Keep-Alive", "timeout=300, max=1000")
-                _log.info(f"  Connection: keep-alive")
-                _log.info(f"  Keep-Alive: timeout=300, max=1000")
+                _log.info("  Connection: keep-alive")
+                _log.info("  Keep-Alive: timeout=300, max=1000")
                 _log.debug("HTTP/1.0 client requested keep-alive")
             else:
                 # HTTP/1.0 default or explicit close
                 self.send_header("Connection", "close")
-                _log.info(f"  Connection: close")
+                _log.info("  Connection: close")
                 _log.debug("Using connection close for HTTP/1.0 client")
 
             self.end_headers()
@@ -882,10 +882,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
             return response
 
-        except (ssl.SSLError, socket.timeout) as e:
+        except (TimeoutError, ssl.SSLError) as e:
             _log.error(f"Network error handling response from server: {e}")
             try:
-                self.send_error(502, f"Bad Gateway: Server Error")
+                self.send_error(502, "Bad Gateway: Server Error")
             except Exception as ex:
                 _log.error(f"Failed to send error response: {ex}")
                 self.close_connection = True
@@ -901,7 +901,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # and need to provide some response to the client
             _log.error(f"Unexpected error handling response: {e}", exc_info=True)
             try:
-                self.send_error(502, f"Bad Gateway: Response Error")
+                self.send_error(502, "Bad Gateway: Response Error")
             except Exception as ex:
                 _log.error(f"Failed to send error response: {ex}")
                 self.close_connection = True
@@ -977,7 +977,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
         _log.info(f"Method: {method}")
         _log.info(f"Path: {self.path}")
         _log.info(f"HTTP Version: {self.request_version}")
-        _log.info(f"Request Headers:")
+        _log.info("Request Headers:")
         for header_name, header_value in self.headers.items():
             _log.info(f"  {header_name}: {header_value}")
 
@@ -1053,7 +1053,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                                     cert_common_name, without_colan=False
                                 )
 
-                                _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (FILE-BASED METHOD) ===")
+                                _log.info("=== CLIENT CERTIFICATE IDENTIFIERS (FILE-BASED METHOD) ===")
                                 _log.info(f"Client {client_info}:")
                                 _log.info(f"  Certificate CN: {cert_common_name}")
                                 _log.info(f"  LFDI mode: {self.server.config.lfdi_mode}")
@@ -1064,12 +1064,12 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
                             except Exception as file_error:
                                 _log.warning(f"Error calculating LFDI from file for {cert_common_name}: {file_error}")
-                                _log.info(f"Falling back to connection certificate method")
+                                _log.info("Falling back to connection certificate method")
                                 # Fall back to connection method
                                 client_lfdi = lfdi_from_fingerprint(fingerprint)
                                 client_sfdi = sfdi_from_lfdi(client_lfdi)
 
-                                _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (FALLBACK CONNECTION METHOD) ===")
+                                _log.info("=== CLIENT CERTIFICATE IDENTIFIERS (FALLBACK CONNECTION METHOD) ===")
                                 _log.info(f"Client {client_info}:")
                                 _log.info(f"  Certificate CN: {cert_common_name}")
                                 _log.info(f"  LFDI mode: {self.server.config.lfdi_mode} (failed, using fallback)")
@@ -1082,7 +1082,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                             client_lfdi = lfdi_from_fingerprint(fingerprint)
                             client_sfdi = sfdi_from_lfdi(client_lfdi)
 
-                            _log.info(f"=== CLIENT CERTIFICATE IDENTIFIERS (CERTIFICATE-BASED METHOD) ===")
+                            _log.info("=== CLIENT CERTIFICATE IDENTIFIERS (CERTIFICATE-BASED METHOD) ===")
                             _log.info(f"Client {client_info}:")
                             _log.info(f"  Certificate CN: {cert_common_name}")
                             _log.info(f"  LFDI mode: {self.server.config.lfdi_mode}")
@@ -1132,7 +1132,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             _log.info(f"=== OUTGOING REQUEST TO BACKEND {host}:{port} ===")
             _log.info(f"Method: {method}")
             _log.info(f"Path: {self.path}")
-            _log.info(f"Headers being sent to backend:")
+            _log.info("Headers being sent to backend:")
             for header_name, header_value in headers.items():
                 # Truncate SSL-Client-Cert for readability, highlight LFDI/SFDI
                 if header_name == "SSL-Client-Cert":
@@ -1157,7 +1157,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 _log.debug(f"Sending {method} request to server: {self.path} for client {client_info}")
                 conn.request(method=method, url=self.path, headers=headers, body=body)
                 _log.debug(f"Request sent successfully for client {client_info}")
-            except (ssl.SSLError, socket.timeout, BrokenPipeError, ConnectionResetError) as e:
+            except (TimeoutError, ssl.SSLError, BrokenPipeError, ConnectionResetError) as e:
                 _log.error(f"Network error sending request to server for client {client_info}: {e}")
                 try:
                     self.send_error(502, f"Bad Gateway: {str(e)}")
@@ -1178,7 +1178,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # These are from our own methods (SSL context creation, connection creation)
             _log.error(f"Configuration error forwarding {method} request for client {client_info}: {e}")
             try:
-                self.send_error(502, f"Bad Gateway: Configuration Error")
+                self.send_error(502, "Bad Gateway: Configuration Error")
             except Exception:
                 self.close_connection = True
 
@@ -1187,7 +1187,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             # and must provide some response to the client
             _log.error(f"Unexpected error forwarding {method} request for client {client_info}: {e}", exc_info=True)
             try:
-                self.send_error(502, f"Bad Gateway: Internal Error")
+                self.send_error(502, "Bad Gateway: Internal Error")
             except Exception as ex:
                 _log.error(f"Failed to send error response to client {client_info}: {ex}")
                 # If we can't send error response, close the client connection
@@ -1294,9 +1294,7 @@ class RequestForwarder(BaseHTTPRequestHandler):
             code: HTTP response code (string or integer)
             size: Response size (string or integer)
         """
-        if isinstance(code, str):
-            _log.info(f"{self.command} {self.path} {code} {size}")
-        elif code < 400:
+        if isinstance(code, str) or code < 400:
             _log.info(f"{self.command} {self.path} {code} {size}")
         else:
             _log.warning(f"{self.command} {self.path} {code} {size}")
@@ -1339,7 +1337,7 @@ class ProxyServer(ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True  # Don't wait for threads to finish on shutdown
 
-    def __init__(self, tls_repo: TLSRepository, proxy_target: Tuple[str, int], config: ServerConfiguration, **kwargs):
+    def __init__(self, tls_repo: TLSRepository, proxy_target: tuple[str, int], config: ServerConfiguration, **kwargs):
         """
         Initialize the proxy server with TLS repository and target configuration.
 
@@ -1369,7 +1367,7 @@ class ProxyServer(ThreadingHTTPServer):
         _log.debug("ProxyServer initialized with concurrent client support")
 
     @property
-    def proxy_target(self) -> Tuple[str, int]:
+    def proxy_target(self) -> tuple[str, int]:
         """Get the backend server target address."""
         return self._proxy_target
 
@@ -1431,7 +1429,7 @@ class ProxyServer(ThreadingHTTPServer):
 
 
 def start_proxy(
-    server_address: Tuple[str, int], tls_repo: TLSRepository, proxy_target: Tuple[str, int], config: ServerConfiguration
+    server_address: tuple[str, int], tls_repo: TLSRepository, proxy_target: tuple[str, int], config: ServerConfiguration
 ):
     """
     Start the proxy server with SSL/TLS configuration.
@@ -1536,7 +1534,7 @@ def start_proxy(
         _log.info("Proxy server shut down")
 
 
-def build_address_tuple(hostname: str) -> Tuple[str, int]:
+def build_address_tuple(hostname: str) -> tuple[str, int]:
     """
     Create a Tuple[str, int] from the passed hostname.
 

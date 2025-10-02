@@ -1,11 +1,11 @@
 from __future__ import annotations
-from dataclasses import dataclass, field, is_dataclass
-from typing import Optional
-from enum import Enum
-from uuid import UUID, uuid4
-from random import Random
+
 import json
 import logging
+from dataclasses import dataclass, field, is_dataclass
+from enum import Enum
+from random import Random
+from uuid import UUID, uuid4
 
 _log = logging.getLogger(__name__)
 """
@@ -23,7 +23,7 @@ class Identity:
     mRID is superseded by Identity.identifier, which is typed to be a UUID.
     """
 
-    identifier: Optional[str | UUID] = field(
+    identifier: str | UUID | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "1", "maxOccurs": "1"}
     )
 
@@ -105,177 +105,177 @@ class Command(Identity):
 class IEEE1547ControlSettings(Identity):
     """ """
 
-    constantPowerFactor: Optional[float | PU] = field(
+    constantPowerFactor: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    constantReactivePower: Optional[float | PU] = field(
+    constantReactivePower: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceIntentionalDelay: Optional[float | Seconds] = field(
+    enterServiceIntentionalDelay: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMaxFrequency: Optional[float | Frequency] = field(
+    enterServiceMaxFrequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMaxVoltage: Optional[float | PU] = field(
+    enterServiceMaxVoltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMinFrequency: Optional[float | Frequency] = field(
+    enterServiceMinFrequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMinVoltage: Optional[float | PU] = field(
+    enterServiceMinVoltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    frequencyDroopResponseTime: Optional[float | Seconds] = field(
+    frequencyDroopResponseTime: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    openLoopResponseTimeP: Optional[float | Seconds] = field(
+    openLoopResponseTimeP: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    overFrequencyDeadband: Optional[float | Frequency] = field(
+    overFrequencyDeadband: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    overFrequencyDroop: Optional[float | PU] = field(
+    overFrequencyDroop: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    timeConstantOpenLoop: Optional[float | Seconds] = field(
+    timeConstantOpenLoop: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    timeConstantReferenceVoltage: Optional[float | Seconds] = field(
+    timeConstantReferenceVoltage: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    underFrequencyDeadband: Optional[float | Frequency] = field(
+    underFrequencyDeadband: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    underFrequencyDroop: Optional[float | PU] = field(
+    underFrequencyDroop: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarQ1: Optional[float | PU] = field(
+    voltVarQ1: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarQ2: Optional[float | PU] = field(
+    voltVarQ2: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarQ3: Optional[float | PU] = field(
+    voltVarQ3: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarQ4: Optional[float | PU] = field(
+    voltVarQ4: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarV1: Optional[float | PU] = field(
+    voltVarV1: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarV2: Optional[float | PU] = field(
+    voltVarV2: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarV3: Optional[float | PU] = field(
+    voltVarV3: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltVarV4: Optional[float | PU] = field(
+    voltVarV4: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltWattP1: Optional[float | PU] = field(
+    voltWattP1: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltWattP2: Optional[float | PU] = field(
+    voltWattP2: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltWattV1: Optional[float | PU] = field(
+    voltWattV1: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    voltWattV2: Optional[float | PU] = field(
+    voltWattV2: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarP1: Optional[float | PU] = field(
+    wattVarP1: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarP2: Optional[float | PU] = field(
+    wattVarP2: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarP3: Optional[float | PU] = field(
+    wattVarP3: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarP4: Optional[float | PU] = field(
+    wattVarP4: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarQ1: Optional[float | PU] = field(
+    wattVarQ1: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarQ2: Optional[float | PU] = field(
+    wattVarQ2: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarQ3: Optional[float | PU] = field(
+    wattVarQ3: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    wattVarQ4: Optional[float | PU] = field(
+    wattVarQ4: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -308,148 +308,144 @@ class IEEE1547ControlSettings(Identity):
 class IEEE1547Info(Identity):
     """ """
 
-    manufacturer: Optional[str] = field(
+    manufacturer: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    """
+    """
+    model: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    """
+    """
+    overExcitedPF: float | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    model: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    serialNumber: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     """
-    overExcitedPF: Optional[float] = field(
+    supportsDynamicReactiveCurrent: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    serialNumber: Optional[str] = field(
+    supportsIEC61850: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsDynamicReactiveCurrent: Optional[bool] = field(
+    supportsIEEE1815: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsIEC61850: Optional[bool] = field(
+    supportsIEEE20305: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsIEEE1815: Optional[bool] = field(
+    supportsIslanding: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsIEEE20305: Optional[bool] = field(
+    supportsSunSpecModBusEthernet: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsIslanding: Optional[bool] = field(
+    supportsSunSpecModBusRS485: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsSunSpecModBusEthernet: Optional[bool] = field(
+    supportsVoltWatt: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsSunSpecModBusRS485: Optional[bool] = field(
+    supportsWattVar: bool | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsVoltWatt: Optional[bool] = field(
+    underExcitedPF: float | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    supportsWattVar: Optional[bool] = field(
-        default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
-    )
+    version: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     """
-    underExcitedPF: Optional[float] = field(
-        default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
-    )
-    """
-    """
-    version: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
-    """
-    """
-    abnormalPerformanceCategory: Optional[str | IEEE1547AbnormalPerfomanceCategory] = field(
+    abnormalPerformanceCategory: str | IEEE1547AbnormalPerfomanceCategory | None = field(
         default=None, metadata={"type": "Enumeration", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    islandingCategory: Optional[str | IEEE1547IslandingCategory] = field(
+    islandingCategory: str | IEEE1547IslandingCategory | None = field(
         default=None, metadata={"type": "enum", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    maximumU: Optional[float | Voltage] = field(
+    maximumU: float | Voltage | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    minimumU: Optional[float | Voltage] = field(
+    minimumU: float | Voltage | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    normalPerformanceCategory: Optional[str | IEEE1547NormalPerformanceCategory] = field(
+    normalPerformanceCategory: str | IEEE1547NormalPerformanceCategory | None = field(
         default=None, metadata={"type": "enum", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedPatUnityPF: Optional[float | ActivePower] = field(
+    ratedPatUnityPF: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedPcharge: Optional[float | ActivePower] = field(
+    ratedPcharge: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedPoverExcited: Optional[float | ActivePower] = field(
+    ratedPoverExcited: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedPunderExcited: Optional[float | ActivePower] = field(
+    ratedPunderExcited: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedQabsorbed: Optional[float | ReactivePower] = field(
+    ratedQabsorbed: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedQinjected: Optional[float | ReactivePower] = field(
+    ratedQinjected: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedS: Optional[float | ApparentPower] = field(
+    ratedS: float | ApparentPower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedScharge: Optional[float | ApparentPower] = field(
+    ratedScharge: float | ApparentPower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    ratedU: Optional[float | Voltage] = field(
+    ratedU: float | Voltage | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    susceptanceCeaseToEnergize: Optional[float | Susceptance] = field(
+    susceptanceCeaseToEnergize: float | Susceptance | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -482,82 +478,82 @@ class IEEE1547Info(Identity):
 class IEEE1547Setting(Identity):
     """ """
 
-    constantPowerFactor: Optional[float | PU] = field(
+    constantPowerFactor: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    constantReactivePower: Optional[float | PU] = field(
+    constantReactivePower: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceIntentionalDelay: Optional[float | Seconds] = field(
+    enterServiceIntentionalDelay: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMaxFrequency: Optional[float | Frequency] = field(
+    enterServiceMaxFrequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMaxVoltage: Optional[float | PU] = field(
+    enterServiceMaxVoltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMinFrequency: Optional[float | Frequency] = field(
+    enterServiceMinFrequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    enterServiceMinVoltage: Optional[float | PU] = field(
+    enterServiceMinVoltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    frequencyDroopResponseTime: Optional[float | Seconds] = field(
+    frequencyDroopResponseTime: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    islandClearingTime: Optional[float | Seconds] = field(
+    islandClearingTime: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    openLoopResponseTimeP: Optional[float | Seconds] = field(
+    openLoopResponseTimeP: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    overFrequencyDeadband: Optional[float | Frequency] = field(
+    overFrequencyDeadband: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    overFrequencyDroop: Optional[float | PU] = field(
+    overFrequencyDroop: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    timeConstantOpenLoop: Optional[float | Seconds] = field(
+    timeConstantOpenLoop: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    timeConstantReferenceVoltage: Optional[float | Seconds] = field(
+    timeConstantReferenceVoltage: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    underFrequencyDeadband: Optional[float | Frequency] = field(
+    underFrequencyDeadband: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    underFrequencyDroop: Optional[float | PU] = field(
+    underFrequencyDroop: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -590,82 +586,82 @@ class IEEE1547Setting(Identity):
 class IEEE1547TripSettings(Identity):
     """ """
 
-    OF1frequency: Optional[float | Frequency] = field(
+    OF1frequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OF1time: Optional[float | Seconds] = field(
+    OF1time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OF2frequency: Optional[float | Frequency] = field(
+    OF2frequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OF2time: Optional[float | Seconds] = field(
+    OF2time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OV1time: Optional[float | Seconds] = field(
+    OV1time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OV1voltage: Optional[float | PU] = field(
+    OV1voltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OV2time: Optional[float | Seconds] = field(
+    OV2time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    OV2voltage: Optional[float | PU] = field(
+    OV2voltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UF1frequency: Optional[float | Frequency] = field(
+    UF1frequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UF1time: Optional[float | Seconds] = field(
+    UF1time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UF2frequency: Optional[float | Frequency] = field(
+    UF2frequency: float | Frequency | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UF2time: Optional[float | Seconds] = field(
+    UF2time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UV1time: Optional[float | Seconds] = field(
+    UV1time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UV1voltage: Optional[float | PU] = field(
+    UV1voltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UV2time: Optional[float | Seconds] = field(
+    UV2time: float | Seconds | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    UV2voltage: Optional[float | PU] = field(
+    UV2voltage: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -701,7 +697,7 @@ class IdentifiedObject(Identity):
     identification and naming attributes.
     """
 
-    mRID: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    mRID: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     Master resource identifier issued by a model authority. The mRID is unique
     within an exchange context. Global uniqueness is easily achieved by using
@@ -711,7 +707,7 @@ class IdentifiedObject(Identity):
     1, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM
     object elements.
     """
-    aliasName: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    aliasName: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The aliasName is free text human readable name of the object alternative
     to IdentifiedObject.name. It may be non unique and may not correlate to
@@ -720,12 +716,12 @@ class IdentifiedObject(Identity):
     between CIM relases. It is however recommended to replace aliasName with
     the Name class as aliasName is planned for retirement at a future time.
     """
-    description: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    description: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The description is a free human readable text describing or naming the
     object. It may be non unique and may not correlate to a naming hierarchy.
     """
-    name: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    name: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The name is any free human readable and possibly non unique text naming
     the object.
@@ -740,7 +736,7 @@ class ACDCTerminal(IdentifiedObject):
     nodes.
     """
 
-    connected: Optional[bool] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    connected: bool | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The connected status is related to a bus-branch model and the topological
     node to terminal relation. True implies the terminal is connected to the
@@ -771,7 +767,7 @@ class Terminal(ACDCTerminal):
     are connected at physical connection points called connectivity nodes.
     """
 
-    ConductingEquipment: Optional[str | ConductingEquipment] = field(
+    ConductingEquipment: str | ConductingEquipment | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -803,18 +799,18 @@ class MeasurementValue(IOPoint):
     many state values, each representing a different source for the measurement.
     """
 
-    timeStamp: Optional[str] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    timeStamp: str | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The time when the value was last updated
     """
-    sensorAccuracy: Optional[float | PerCent] = field(
+    sensorAccuracy: float | PerCent | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     The limit, expressed as a percentage of the sensor maximum, that errors
     will not exceed when the sensor is used under reference conditions.
     """
-    MeasurementValueQuality: Optional[str | MeasurementValueQuality] = field(
+    MeasurementValueQuality: str | MeasurementValueQuality | None = field(
         default=None,
         metadata={
             "type": "Aggregate Of",
@@ -826,7 +822,7 @@ class MeasurementValue(IOPoint):
     """
     A MeasurementValue has a MeasurementValueQuality associated with it.
     """
-    MeasurementValueSource: Optional[str | MeasurementValueSource] = field(
+    MeasurementValueSource: str | MeasurementValueSource | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -848,18 +844,18 @@ class AnalogValue(MeasurementValue):
     AnalogValue represents an analog MeasurementValue.
     """
 
-    value: Optional[float] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    value: float | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The value to supervise.
     """
-    Analog: Optional[str | Analog] = field(
+    Analog: str | Analog | None = field(
         default=None,
         metadata={"type": "Association", "minOccurs": "0", "maxOccurs": "1", "inverse": "Analog.AnalogValues"},
     )
     """
     Measurement to which this value is connected.
     """
-    AnalogControl: Optional[str | AnalogControl] = field(
+    AnalogControl: str | AnalogControl | None = field(
         default=None,
         metadata={"type": "Association", "minOccurs": "0", "maxOccurs": "1", "inverse": "AnalogControl.AnalogValue"},
     )
@@ -874,18 +870,18 @@ class DiscreteValue(MeasurementValue):
     DiscreteValue represents a discrete MeasurementValue.
     """
 
-    value: Optional[int] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    value: int | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     The value to supervise.
     """
-    Command: Optional[str | Command] = field(
+    Command: str | Command | None = field(
         default=None,
         metadata={"type": "Association", "minOccurs": "0", "maxOccurs": "1", "inverse": "Command.DiscreteValue"},
     )
     """
     The Control variable associated with the MeasurementValue.
     """
-    Discrete: Optional[str | Discrete] = field(
+    Discrete: str | Discrete | None = field(
         default=None,
         metadata={"type": "Association", "minOccurs": "0", "maxOccurs": "1", "inverse": "Discrete.DiscreteValues"},
     )
@@ -919,7 +915,7 @@ class Measurement(IdentifiedObject):
     are used. The Measurement-Terminal association is never used alone.
     """
 
-    measurementType: Optional[str] = field(
+    measurementType: str | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -930,7 +926,7 @@ class Measurement(IdentifiedObject):
     is defined in more detail by the specialized class which inherits from
     Measurement.
     """
-    phases: Optional[str | PhaseCode] = field(
+    phases: str | PhaseCode | None = field(
         default=None, metadata={"type": "Enumeration", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -942,7 +938,7 @@ class Measurement(IdentifiedObject):
     phasing is changed due to jumpers or other reasons.
     If the attribute is missing three phases (ABC) shall be assumed.
     """
-    PowerSystemResource: Optional[str | PowerSystemResource] = field(
+    PowerSystemResource: str | PowerSystemResource | None = field(
         default=None,
         metadata={
             "type": "Of Aggregate",
@@ -954,7 +950,7 @@ class Measurement(IdentifiedObject):
     """
     The power system resource that contains the measurement.
     """
-    Terminal: Optional[str | ACDCTerminal] = field(
+    Terminal: str | ACDCTerminal | None = field(
         default=None,
         metadata={"type": "Association", "minOccurs": "0", "maxOccurs": "1", "inverse": "ACDCTerminal.Measurements"},
     )
@@ -969,9 +965,7 @@ class Analog(Measurement):
     Analog represents an analog Measurement.
     """
 
-    normalValue: Optional[float] = field(
-        default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
-    )
+    normalValue: float | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     Normal measurement value, e.g., used for percentage calculations.
     """
@@ -984,7 +978,7 @@ class Discrete(Measurement):
     discrete values, e.g. a Breaker position.
     """
 
-    normalValue: Optional[int] = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
+    normalValue: int | None = field(default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"})
     """
     Normal measurement value, e.g., used for percentage calculations.
     """
@@ -1037,33 +1031,33 @@ class PowerElectronicsConnection(ConductingEquipment):
     uses power electronics rather than rotating machines.
     """
 
-    inverterMode: Optional[str | SmartInverterMode] = field(
+    inverterMode: str | SmartInverterMode | None = field(
         default=None, metadata={"type": "enum", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     """
-    maxIFault: Optional[float | PU] = field(
+    maxIFault: float | PU | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Maximum fault current this device will contribute, in per-unit of rated
     current, before the converter protection will trip or bypass.
     """
-    maxQ: Optional[float | ReactivePower] = field(
+    maxQ: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Maximum reactive power limit. This is the maximum (nameplate) limit for
     the unit.
     """
-    minQ: Optional[float | ReactivePower] = field(
+    minQ: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Minimum reactive power limit for the unit. This is the minimum (nameplate)
     limit for the unit.
     """
-    p: Optional[float | ActivePower] = field(
+    p: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -1071,7 +1065,7 @@ class PowerElectronicsConnection(ConductingEquipment):
     means flow out from a node.
     Starting value for a steady state solution.
     """
-    q: Optional[float | ReactivePower] = field(
+    q: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -1079,21 +1073,21 @@ class PowerElectronicsConnection(ConductingEquipment):
     means flow out from a node.
     Starting value for a steady state solution.
     """
-    ratedS: Optional[float | ApparentPower] = field(
+    ratedS: float | ApparentPower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Nameplate apparent power rating for the unit.
     The attribute shall have a positive value.
     """
-    ratedU: Optional[float | Voltage] = field(
+    ratedU: float | Voltage | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Rated voltage (nameplate data, Ur in IEC 60909-0). It is primarily used
     for short circuit data exchange according to IEC 60909.
     """
-    IEEE1547ControlSettings: Optional[str | IEEE1547ControlSettings] = field(
+    IEEE1547ControlSettings: str | IEEE1547ControlSettings | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1104,7 +1098,7 @@ class PowerElectronicsConnection(ConductingEquipment):
     )
     """
     """
-    IEEE1547Info: Optional[str | IEEE1547Info] = field(
+    IEEE1547Info: str | IEEE1547Info | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1115,7 +1109,7 @@ class PowerElectronicsConnection(ConductingEquipment):
     )
     """
     """
-    IEEE1547Setting: Optional[str | IEEE1547Setting] = field(
+    IEEE1547Setting: str | IEEE1547Setting | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1126,7 +1120,7 @@ class PowerElectronicsConnection(ConductingEquipment):
     )
     """
     """
-    IEEE1547TripSettings: Optional[str | IEEE1547TripSettings] = field(
+    IEEE1547TripSettings: str | IEEE1547TripSettings | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1167,14 +1161,14 @@ class RotatingMachine(ConductingEquipment):
     A rotating machine which may be used as a generator or motor.
     """
 
-    ratedPowerFactor: Optional[float] = field(
+    ratedPowerFactor: float | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Power factor (nameplate data). It is primarily used for short circuit data
     exchange according to IEC 60909.
     """
-    p: Optional[float | ActivePower] = field(
+    p: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -1182,7 +1176,7 @@ class RotatingMachine(ConductingEquipment):
     means flow out from a node.
     Starting value for a steady state solution.
     """
-    q: Optional[float | ReactivePower] = field(
+    q: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -1190,21 +1184,21 @@ class RotatingMachine(ConductingEquipment):
     means flow out from a node.
     Starting value for a steady state solution.
     """
-    ratedS: Optional[float | ApparentPower] = field(
+    ratedS: float | ApparentPower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Nameplate apparent power rating for the unit.
     The attribute shall have a positive value.
     """
-    ratedU: Optional[float | Voltage] = field(
+    ratedU: float | Voltage | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Rated voltage (nameplate data, Ur in IEC 60909-0). It is primarily used
     for short circuit data exchange according to IEC 60909.
     """
-    GeneratingUnit: Optional[str | GeneratingUnit] = field(
+    GeneratingUnit: str | GeneratingUnit | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1217,7 +1211,7 @@ class RotatingMachine(ConductingEquipment):
     A synchronous machine may operate as a generator and as such becomes a
     member of a generating unit.
     """
-    IEEE1547ControlSettings: Optional[str | IEEE1547ControlSettings] = field(
+    IEEE1547ControlSettings: str | IEEE1547ControlSettings | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1228,7 +1222,7 @@ class RotatingMachine(ConductingEquipment):
     )
     """
     """
-    IEEE1547Info: Optional[str | IEEE1547Info] = field(
+    IEEE1547Info: str | IEEE1547Info | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1239,7 +1233,7 @@ class RotatingMachine(ConductingEquipment):
     )
     """
     """
-    IEEE1547Setting: Optional[str | IEEE1547Setting] = field(
+    IEEE1547Setting: str | IEEE1547Setting | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1250,7 +1244,7 @@ class RotatingMachine(ConductingEquipment):
     )
     """
     """
-    IEEE1547TripSettings: Optional[str | IEEE1547TripSettings] = field(
+    IEEE1547TripSettings: str | IEEE1547TripSettings | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1293,14 +1287,14 @@ class GeneratingUnit(PowerSystemResource):
 class PowerElectronicsConnectionPhase(PowerSystemResource):
     """ """
 
-    p: Optional[float | ActivePower] = field(
+    p: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Active power injection. Load sign convention is used, i.e. positive sign
     means flow into the equipment from the network.
     """
-    phase: Optional[str | SinglePhaseKind] = field(
+    phase: str | SinglePhaseKind | None = field(
         default=None, metadata={"type": "Enumeration", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
@@ -1310,14 +1304,14 @@ class PowerElectronicsConnectionPhase(PowerSystemResource):
     indicates an energy producer connected from the indicated phase to the
     next logical non-neutral phase.
     """
-    q: Optional[float | ReactivePower] = field(
+    q: float | ReactivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Reactive power injection. Load sign convention is used, i.e. positive sign
     means flow into the equipment from the network.
     """
-    PowerElectronicsConnection: Optional[str | PowerElectronicsConnection] = field(
+    PowerElectronicsConnection: str | PowerElectronicsConnection | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1337,21 +1331,21 @@ class PowerElectronicsUnit(PowerSystemResource):
     using power electronics rather than rotating machines.
     """
 
-    maxP: Optional[float | ActivePower] = field(
+    maxP: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Maximum active power limit. This is the maximum (nameplate) limit for the
     unit.
     """
-    minP: Optional[float | ActivePower] = field(
+    minP: float | ActivePower | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     Minimum active power limit. This is the minimum (nameplate) limit for the
     unit.
     """
-    PowerElectronicsConnection: Optional[str | PowerElectronicsConnection] = field(
+    PowerElectronicsConnection: str | PowerElectronicsConnection | None = field(
         default=None,
         metadata={
             "type": "Association",
@@ -1370,19 +1364,19 @@ class BatteryUnit(PowerElectronicsUnit):
     An electrochemical energy storage device
     """
 
-    batteryState: Optional[str | BatteryState] = field(
+    batteryState: str | BatteryState | None = field(
         default=None, metadata={"type": "Enumeration", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     indicates whether the battery is charging, discharging or idle
     """
-    ratedE: Optional[float | RealEnergy] = field(
+    ratedE: float | RealEnergy | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """
     full energy storage capacity of the battery
     """
-    storedE: Optional[float | RealEnergy] = field(
+    storedE: float | RealEnergy | None = field(
         default=None, metadata={"type": "Attribute", "minOccurs": "0", "maxOccurs": "1"}
     )
     """

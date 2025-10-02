@@ -51,14 +51,16 @@ Performance:
 import logging
 import threading
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
+from collections import defaultdict
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Callable, Union
-from collections import defaultdict
-import ieee_2030_5.models as m
+from typing import Any, Generic, TypeVar
+
 import ieee_2030_5.hrefs as hrefs
-from ieee_2030_5.persistance.points import get_db, atomic_operation
+import ieee_2030_5.models as m
+from ieee_2030_5.persistance.points import atomic_operation, get_db
 
 _log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -174,7 +176,7 @@ class ResourceLockManager:
 
         Creates empty lock dictionary and master lock for thread-safe access.
         """
-        self._locks: Dict[str, threading.RLock] = {}
+        self._locks: dict[str, threading.RLock] = {}
         self._locks_lock = threading.Lock()
 
     def get_resource_lock(self, resource_id: str) -> threading.RLock:
@@ -410,9 +412,9 @@ class ThreadSafeAdapter(Generic[T], ABC):
         >>> result = adapter.fetch_by_href("/my/resource/123")
     """
 
-    _lock: Union[ReadWriteLock, threading.RLock]
+    _lock: ReadWriteLock | threading.RLock
 
-    def __init__(self, model_class: Type[T], concurrency_mode: str = ConcurrencyMode.READ_WRITE_LOCK):
+    def __init__(self, model_class: type[T], concurrency_mode: str = ConcurrencyMode.READ_WRITE_LOCK):
         """Initialize the thread-safe adapter.
 
         Args:
@@ -606,7 +608,7 @@ class ThreadSafeAdapter(Generic[T], ABC):
         self._operation_count[operation] += 1
         self._last_operation_time[operation] = time.time()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get adapter performance statistics.
 
         This method returns comprehensive performance and monitoring data
@@ -695,7 +697,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         >>> device = adapter.get("/edev", 0)
     """
 
-    def __init__(self, model_class: Type[T]):
+    def __init__(self, model_class: type[T]):
         super().__init__(model_class, ConcurrencyMode.READ_WRITE_LOCK)
         self._db = get_db()
 
@@ -707,7 +709,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         """Get storage key for list metadata."""
         return f"list_meta:{list_uri}"
 
-    def initialize_uri(self, list_uri: str, obj_type: Type[T] | None = None, **kwargs) -> bool:
+    def initialize_uri(self, list_uri: str, obj_type: type[T] | None = None, **kwargs) -> bool:
         """Initialize a new list URI with metadata and configuration.
 
         This method creates a new list at the specified URI with initial metadata
@@ -915,7 +917,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to append to {list_uri}: {e}")
                 return AdapterResult(success=False, error=str(e))
 
-    def get_list(self, list_uri: str) -> List[T]:
+    def get_list(self, list_uri: str) -> list[T]:
         """Get the complete list of objects from the specified URI.
 
         This method retrieves all objects stored in a list at the given URI.
@@ -1004,7 +1006,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
         """Alias for get_list_size for backward compatibility."""
         return self.get_list_size(list_uri)
 
-    def set_list(self, list_uri: str, items: List[T]) -> AdapterResult:
+    def set_list(self, list_uri: str, items: list[T]) -> AdapterResult:
         """Replace the entire list with new items atomically.
 
         This method replaces all items in a list with a new set of items in a
@@ -1178,7 +1180,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to put item {index} in {list_uri}: {e}")
                 return AdapterResult(success=False, error=str(e))
 
-    def set_single(self, uri: str, obj: Any, lfdi: Optional[str] = None) -> AdapterResult:
+    def set_single(self, uri: str, obj: Any, lfdi: str | None = None) -> AdapterResult:
         """Store a single object at a URI (not part of a list).
 
         This method stores an individual object directly at a URI, independent
@@ -1241,7 +1243,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                         # Other backends
                         self._db.set_point(obj_key, pickle.dumps(obj))
                     # print(f"!!!! STORAGE DEBUG: Object stored successfully")
-                    _log.info(f"STORAGE_DEBUG: Object stored successfully")
+                    _log.info("STORAGE_DEBUG: Object stored successfully")
 
                     # Store metadata if LFDI is provided
                     if lfdi is not None:
@@ -1256,7 +1258,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                         _log.info(f"STORAGE_DEBUG: Storing metadata with key: {metadata_key}")
                         self._db.set_point(metadata_key, pickle.dumps(metadata))
                         # print(f"!!!! STORAGE DEBUG: Metadata stored successfully")
-                        _log.info(f"STORAGE_DEBUG: Metadata stored successfully")
+                        _log.info("STORAGE_DEBUG: Metadata stored successfully")
 
                     # Ensure object has the correct href
                     if hasattr(obj, "href"):
@@ -1281,10 +1283,10 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                     stored_data = self._db.get_point(obj_key)
                     if stored_data:
                         # print(f"!!!! STORAGE DEBUG: Verification successful - data found in database")
-                        _log.info(f"STORAGE_DEBUG: Verification successful - data found in database")
+                        _log.info("STORAGE_DEBUG: Verification successful - data found in database")
                     else:
                         # print(f"!!!! STORAGE DEBUG: Verification FAILED - no data found in database!")
-                        _log.error(f"STORAGE_DEBUG: Verification FAILED - no data found in database!")
+                        _log.error("STORAGE_DEBUG: Verification FAILED - no data found in database!")
                 except Exception as e:
                     # print(f"!!!! STORAGE DEBUG: Verification error: {e}")
                     _log.error(f"STORAGE_DEBUG: Verification error: {e}")
@@ -1417,7 +1419,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 import pickle
 
                 # First check single objects that might match
-                pattern = f"single:*"
+                pattern = "single:*"
                 for key in self._db.get_keys_matching(pattern):
                     try:
                         obj_data = self._db.get_point(key)
@@ -1429,7 +1431,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                         _log.warning(f"Error loading object from {key}: {e}")
 
                 # Then check all lists
-                pattern = f"list:*"
+                pattern = "list:*"
                 for key in self._db.get_keys_matching(pattern):
                     try:
                         list_data = self._db.get_point(key)
@@ -1576,7 +1578,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to get resource list {list_uri}: {e}")
                 return None
 
-    def filter_single_dict(self, filter_func: Callable[[str], bool]) -> List[str]:
+    def filter_single_dict(self, filter_func: Callable[[str], bool]) -> list[str]:
         """
         Filter single objects based on a filter function applied to their keys.
 
@@ -1590,12 +1592,10 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
             self._track_operation("filter_single_dict")
 
             try:
-                import pickle
-
                 matching_uris = []
 
                 # Find all single object keys
-                pattern = f"single:*"
+                pattern = "single:*"
                 all_keys = self._db.get_keys_matching(pattern)
 
                 for key in all_keys:
@@ -1615,7 +1615,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to filter single dict: {e}", exc_info=True)
                 return []
 
-    def get_single_meta_data(self, uri: str) -> Dict[str, Any]:
+    def get_single_meta_data(self, uri: str) -> dict[str, Any]:
         """
         Get metadata for a single object.
 
@@ -1665,7 +1665,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.error(f"Failed to get single metadata for URI {uri}: {e}")
                 return {"uri": uri, "error": str(e)}
 
-    def _get_list_metadata(self, list_uri: str) -> Dict[str, Any]:
+    def _get_list_metadata(self, list_uri: str) -> dict[str, Any]:
         """Get metadata for a list."""
         try:
             metadata_data = self._db.get_point(self._get_metadata_key(list_uri))
@@ -1678,7 +1678,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
 
         return {"count": 0, "created": time.time()}
 
-    def get_all_keys(self) -> List[str]:
+    def get_all_keys(self) -> list[str]:
         """Get all keys stored in the adapter for debugging and administrative purposes.
 
         This method returns all storage keys managed by this adapter, including
@@ -1783,7 +1783,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                 _log.info("--- Resource Listing ---")
 
                 # Print lists
-                pattern = f"list:*"
+                pattern = "list:*"
                 for key in sorted(self._db.get_keys_matching(pattern)):
                     try:
                         list_data = self._db.get_point(key)
@@ -1797,7 +1797,7 @@ class ThreadSafeListAdapter(ThreadSafeAdapter[T]):
                         _log.warning(f"Error listing {key}: {e}")
 
                 # Print single objects
-                pattern = f"single:*"
+                pattern = "single:*"
                 for key in sorted(self._db.get_keys_matching(pattern)):
                     try:
                         obj_data = self._db.get_point(key)
@@ -1962,8 +1962,8 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
 
             try:
                 with atomic_operation():
-                    import pickle
                     import hashlib
+                    import pickle
 
                     # Generate stable device index from device_id (mRID)
                     if device_id:
@@ -2646,7 +2646,7 @@ class ThreadSafeGlobalMRIDs:
             if hasattr(item, "mRID") and item.mRID:
                 self.register_mrid(item.mRID, db_key)
 
-    def get_location(self, mrid: str) -> Optional[str]:
+    def get_location(self, mrid: str) -> str | None:
         """Get the database storage key for an mRID.
 
         Args:
@@ -2760,7 +2760,7 @@ class ThreadSafeGlobalMRIDs:
                 _log.error(f"Failed to get item with mRID {mrid}: {e}")
                 return None
 
-    def list_mrids(self) -> List[str]:
+    def list_mrids(self) -> list[str]:
         """List all registered mRIDs.
 
         Returns:
@@ -2839,7 +2839,7 @@ class ThreadSafeGlobalMRIDs:
                     else:
                         _log.info(f"  Legacy format (no type prefix): '{value}'")
                 else:
-                    _log.error(f"  ERROR: mRID not found in database")
+                    _log.error("  ERROR: mRID not found in database")
 
                 _log.info("=== End mRID Debug Info ===")
 
@@ -2931,7 +2931,7 @@ def ensure_adapters_initialized():
         initialize_adapters()
 
 
-def get_adapter_stats() -> Dict[str, Any]:
+def get_adapter_stats() -> dict[str, Any]:
     """Get performance statistics from all adapters.
 
     This function collects and returns performance metrics from all global

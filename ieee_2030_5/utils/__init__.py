@@ -6,10 +6,10 @@ from typing import Optional, Type
 
 from xsdata.formats.dataclass.context import XmlContext
 from xsdata.formats.dataclass.parsers.config import ParserConfig
+from xsdata.formats.dataclass.parsers.handlers import LxmlEventHandler
 from xsdata.formats.dataclass.parsers.xml import XmlParser
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
-from xsdata.formats.dataclass.parsers.handlers import LxmlEventHandler
 
 from ieee_2030_5.models.sep import EndDevice, EndDeviceList
 
@@ -66,7 +66,7 @@ def serialize_dataclass(obj: dataclass) -> str:
     return xml
 
 
-def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:
+def xml_to_dataclass(xml: str, type: type | None = None) -> dataclass:
     """
     Parse the xml passed and return result from loaded classes.
     """
@@ -249,7 +249,7 @@ class ColorizedFormatter(logging.Formatter):
         return msg
 
 
-from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
+from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
 
 __all__ = ["OpensslWrapper", "CryptographyWrapper", "uuid_2030_5", "ColorizedFormatter"]

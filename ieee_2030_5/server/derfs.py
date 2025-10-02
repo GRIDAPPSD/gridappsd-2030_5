@@ -1,19 +1,16 @@
+import logging
 from dataclasses import asdict
-from typing import Optional
-from pprint import pformat
 
-from flask import Response, request
-from werkzeug.exceptions import NotFound, BadRequest
 import werkzeug.exceptions
+from flask import Response, request
+from werkzeug.exceptions import BadRequest, NotFound
 
 import ieee_2030_5.adapters as adpt
-from ieee_2030_5.data.indexer import add_href, get_href
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
+from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.utils import xml_to_dataclass
-
-import logging
 
 _log = logging.getLogger(__name__)
 
@@ -171,7 +168,7 @@ class DERProgramRequests(RequestOp):
                 # The index that we want to get the control from.
                 retval = dercl.DERControl[parsed.at(3)]
             elif parsed.at(2) == hrefs.DERC:
-                _log.debug(f"Retrieving DERC")
+                _log.debug("Retrieving DERC")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
                 if hasattr(retval, "mRID"):
                     # Use the global mRIDs registry to get the latest version
@@ -182,7 +179,7 @@ class DERProgramRequests(RequestOp):
                 # Note: IEEE 2030.5 does not define pollRate for DERControlList
                 # Empty DERControlList means client should check DefaultDERControl if available
             elif parsed.at(2) == hrefs.DDERC:
-                _log.debug(f"Retrieving DDERC")
+                _log.debug("Retrieving DDERC")
                 retval = adpt.ListAdapter.get_single(request.path)
                 if hasattr(retval, "mRID"):
                     # Use the global mRIDs registry to get the latest version
@@ -190,12 +187,12 @@ class DERProgramRequests(RequestOp):
                     if found_item is not None:
                         retval = found_item
                         _log.debug(f"Found DDERC in GlobalmRIDs registry: {retval.mRID}")
-                _log.debug(f"Retrieving DDERC")
+                _log.debug("Retrieving DDERC")
                 retval = adpt.ListAdapter.get_single(request.path)
                 if hasattr(retval, "mRID"):
                     retval = adpt.GlobalmRIDs.get_item(retval.mRID)
             elif parsed.at(2) == hrefs.DERCURVE:
-                _log.debug(f"Retrieving DC")
+                _log.debug("Retrieving DC")
                 retval = adpt.ListAdapter.get_resource_list(request.path, start, after, limit)
             # elif parsed.at(2) == hrefs.DDERC:
             #     retval = adpt.DERControlAdapter.fetch_at(parsed.at(3))

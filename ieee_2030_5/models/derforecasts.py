@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+
 from ieee_2030_5.models.sep import (
     DER,
     IdentifiedObject,
@@ -25,14 +25,14 @@ class ForecastNumericType:
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    value: Optional[int] = field(
+    value: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    multiplier: Optional[int] = field(
+    multiplier: int | None = field(
         default=None,
         metadata={
             "type": "Element",
@@ -71,21 +71,21 @@ class ForecastParameter:
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    name: Optional[int] = field(
+    name: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    forecast: Optional[ForecastNumericType] = field(
+    forecast: ForecastNumericType | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    sigma: Optional[ForecastNumericType] = field(
+    sigma: ForecastNumericType | None = field(
         default=None,
         metadata={
             "type": "Element",
@@ -102,7 +102,7 @@ class DERFlexibility(DER):
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    DERForecastLink: Optional[DERForecastLink] = field(
+    DERForecastLink: DERForecastLink | None = field(
         default=None,
         metadata={
             "type": "Element",
@@ -119,7 +119,7 @@ class ForecastParameterSet(Resource):
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    ForecastParameter: List[ForecastParameter] = field(
+    ForecastParameter: list[ForecastParameter] = field(
         default_factory=list,
         metadata={
             "type": "Element",
@@ -136,7 +136,7 @@ class ForecastParameterSetList(SubscribableList):
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    ForecastParameterSet: List[ForecastParameterSet] = field(
+    ForecastParameterSet: list[ForecastParameterSet] = field(
         default_factory=list,
         metadata={
             "type": "Element",
@@ -158,21 +158,21 @@ class DERForecast(IdentifiedObject):
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    startTime: Optional[int] = field(
+    startTime: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    interval: Optional[int] = field(
+    interval: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
         },
     )
-    ForecastParameterSetList: Optional[ForecastParameterSetList] = field(
+    ForecastParameterSetList: ForecastParameterSetList | None = field(
         default=None,
         metadata={
             "type": "Element",

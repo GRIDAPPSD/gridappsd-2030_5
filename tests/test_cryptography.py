@@ -1,5 +1,6 @@
-from ieee_2030_5.utils import CryptographyWrapper
 from pathlib import Path
+
+from ieee_2030_5.utils import CryptographyWrapper
 
 
 def test_create_pk():

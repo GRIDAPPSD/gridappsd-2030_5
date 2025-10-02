@@ -6,14 +6,14 @@ It captures and logs all messages flowing through the system for debugging
 and analysis purposes.
 """
 
-import json
 import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 _log = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class MessageEvent:
     size: int
     message_type: str = "unknown"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "timestamp": self.timestamp,
@@ -125,7 +125,7 @@ class MessageBusMonitor:
 
         _log.debug(f"Message logged: {direction} on {topic} ({len(message)} bytes)")
 
-    def get_recent_messages(self, count: Optional[int] = None) -> List[MessageEvent]:
+    def get_recent_messages(self, count: int | None = None) -> list[MessageEvent]:
         """Get recent messages."""
         with self._lock:
             if count is None:
@@ -133,7 +133,7 @@ class MessageBusMonitor:
             else:
                 return list(self._messages)[-count:]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get monitoring statistics."""
         with self._lock:
             uptime = time.time() - self._stats["start_time"]
@@ -168,7 +168,7 @@ class MessageBusMonitor:
                 "start_time": time.time(),
             }
 
-    def search_messages(self, query: str, topic_filter: Optional[str] = None) -> List[MessageEvent]:
+    def search_messages(self, query: str, topic_filter: str | None = None) -> list[MessageEvent]:
         """
         Search messages by content or topic.
 

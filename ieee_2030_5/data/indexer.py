@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import logging
 import pickle
 from copy import deepcopy
 from dataclasses import dataclass, field
-import logging
-
 from datetime import datetime
 from email.utils import format_datetime
-from typing import Dict, Optional, List
-from ieee_2030_5.models.sep import Link
-from ieee_2030_5.persistance.points import set_point, get_point
 
-__all__: List[str] = ["get_href", "add_href", "get_href_all_names", "get_href_filtered"]
+from ieee_2030_5.models.sep import Link
+from ieee_2030_5.persistance.points import get_point, set_point
+
+__all__: list[str] = ["get_href", "add_href", "get_href_all_names", "get_href_filtered"]
 
 _log = logging.getLogger(__name__)
 
@@ -22,12 +21,12 @@ class Index:
     item: object
     added: str  # Optional[Union[datetime | str]]
     last_written: str  # Optional[Union[datetime | str]]
-    last_hash: Optional[int]
+    last_hash: int | None
 
 
 @dataclass
 class Indexer:
-    __items__: Dict = field(default=None)
+    __items__: dict = field(default=None)
 
     def init(self):
         if self.__items__ is None:
@@ -100,7 +99,7 @@ class Indexer:
 
         return data
 
-    def get_all(self) -> List:
+    def get_all(self) -> list:
         return deepcopy([x.item for x in self.__items__.values()])
 
 
@@ -115,7 +114,7 @@ def get_href(href: str) -> dataclass:
     return __indexer__.get(href)
 
 
-def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
+def get_href_filtered(href_prefix: str) -> list[dataclass] | []:
     if __indexer__.__items__ is None:
         return []
 

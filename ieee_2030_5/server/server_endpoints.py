@@ -1,21 +1,17 @@
 from __future__ import annotations
+
 import json
 import logging
-from datetime import datetime, timedelta
-from http.client import BAD_REQUEST
-from typing import Optional
-import pytz
-import tzlocal
-import werkzeug.exceptions
+
 from flask import Flask, Response, request
 from werkzeug.exceptions import Forbidden
 from werkzeug.routing import BaseConverter
+
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.data.indexer import get_href, get_href_filtered
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.server.dcapfs import DcapRequest
 from ieee_2030_5.server.derfs import DERProgramRequests, DERRequests
@@ -25,8 +21,7 @@ from ieee_2030_5.server.enddevicesfs import EDevRequests, FSARequests, SDevReque
 from ieee_2030_5.server.meteringfs import MirrorUsagePointRequest, UsagePointRequest
 from ieee_2030_5.server.timefs import TimeRequest
 from ieee_2030_5.server.uuid_handler import UUIDHandler
-from ieee_2030_5.types_ import TimeOffsetType, format_time
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import dataclass_to_xml
 
 _log = logging.getLogger(__name__)
 
@@ -143,7 +138,7 @@ class ServerEndpoints:
     def _dcap(self) -> Response:
         return DcapRequest(server_endpoints=self).execute()
 
-    def _edev(self, path: Optional[str] = None) -> Response:
+    def _edev(self, path: str | None = None) -> Response:
         return EDevRequests(server_endpoints=self).execute()
 
     def _sdev(self) -> Response:

@@ -1,24 +1,24 @@
 # import sys
-from dataclasses import dataclass, field
+import logging
+import math
 import time
 from argparse import ArgumentParser
 
 # import asyncio
 from pathlib import Path
+
 # from typing import List, Optional, Dict
 # from threading import Thread
 # from threading import Timer
-
 # import pandas as pd
 # import matplotlib.pyplot as plt
 # import subprocess
 import pvlib
-import math
-import logging
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
-from ieee_2030_5.models import MirrorUsagePoint, MirrorMeterReading, ReadingType, Reading, DERCurveList, DERProgramList
+from ieee_2030_5.models import MirrorMeterReading, MirrorUsagePoint
+
 # from ieee_2030_5.utils import serialize_dataclass
 
 
@@ -66,7 +66,7 @@ def run_inverter(client: IEEE2030_5_Client, capabilities_url: str = "/dcap"):
     outdoor_temp = weather["temp_air"]
     # both the total_solar_radiace and outdoor_temp has 1hr sampling rate.
     # you should be able modify the sampling rate by resampling it
-    for x, y in zip(total_solar_radiance, outdoor_temp):
+    for x, y in zip(total_solar_radiance, outdoor_temp, strict=False):
         dc = pvlib.pvsystem.sapm(x, y, module)
         # print(dc)
         p_ac = pvlib.inverter.sandia(dc["v_mp"], dc["p_mp"], inverter)

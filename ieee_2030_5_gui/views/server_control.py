@@ -1,10 +1,8 @@
-import flet as ft
-
-from typing import Callable
-
 import logging
 import os
 from pathlib import Path
+
+import flet as ft
 from fastapi.middleware.wsgi import WSGIMiddleware
 
 _log = logging.getLogger(__name__)
@@ -17,8 +15,8 @@ this_page: ft.Ref[ft.Page] = ft.Ref()
 
 def start_server() -> None:
     _log.debug("Starting server")
-    from ieee_2030_5_gui.__main__ import app
     from ieee_2030_5.flask_server import make_app
+    from ieee_2030_5_gui.__main__ import app
 
     config_file = Path(os.environ["CONFIG_FILE"])
     reset_certs = bool(os.environ.get("RESET_CERTS", False))

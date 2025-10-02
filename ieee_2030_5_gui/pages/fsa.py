@@ -1,6 +1,4 @@
 import logging
-from copy import deepcopy
-from typing import Dict, List
 
 from nicegui import ui
 
@@ -27,17 +25,14 @@ def render_select():
     fsa_selection = [p.description for p in fsa_list.FunctionSetAssignments]
     fsa_selection.insert(0, "NEW")
 
-    with ui.row():
-        with ui.column():
-            if not current_fsa.description:
-                ui.select(fsa_selection, label="Function Set Assignments", value=fsa_selection[0]).classes("w-64")
-            else:
-                ui.select(fsa_selection, label="Function Set Assignments", value=current_fsa.description).classes(
-                    "w-64"
-                )
+    with ui.row(), ui.column():
+        if not current_fsa.description:
+            ui.select(fsa_selection, label="Function Set Assignments", value=fsa_selection[0]).classes("w-64")
+        else:
+            ui.select(fsa_selection, label="Function Set Assignments", value=current_fsa.description).classes("w-64")
 
-            if current_fsa.href:
-                ui.label(f"Href: {current_fsa.href}")
+        if current_fsa.href:
+            ui.label(f"Href: {current_fsa.href}")
 
 
 @ui.refreshable
@@ -46,13 +41,11 @@ def render_form():
         ui.input("description").classes("w-64").bind_value(current_fsa, "description")
     ui.separator()
 
-    with ui.row():
-        with ui.column():
-            pass
+    with ui.row(), ui.column():
+        pass
 
-    with ui.row():
-        with ui.column():
-            pass
+    with ui.row(), ui.column():
+        pass
 
 
 def revert_changes():

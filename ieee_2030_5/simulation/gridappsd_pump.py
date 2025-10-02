@@ -1,23 +1,20 @@
-import json
 import atexit
 import os
-import sys
 import time
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
-from pprint import pprint, pformat
+from pprint import pformat, pprint
 from queue import Queue
 from threading import Thread
 
-from gridappsd.field_interface import MessageBusDefinition, ContextManager
+from gridappsd.field_interface import ContextManager, MessageBusDefinition
 from gridappsd.field_interface.agents import FeederAgent, SecondaryAreaAgent
-
-from Queries import QueryAllDERGroups, QueryBattery, QuerySolar, QueryInverter
 
 # from ieee_2030_5.models import Resource, PowerStatus, DERCapability, UsagePoint
 # from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models import UsagePoint
+from Queries import QueryInverter
 
 
 class DataPumpFeederAgent(FeederAgent):
@@ -74,13 +71,10 @@ if __name__ == "__main__":
 
     def run_simulation(queue: Queue):
         import json
-        import os
         from pathlib import Path
 
         from gridappsd import GridAPPSD
         from gridappsd.simulation import Simulation
-
-        import auth_context
 
         sim_config = json.load(
             Path("/repos/gridappsd-2030_5/examples/config_files_simulated/simulation-config.json").open()

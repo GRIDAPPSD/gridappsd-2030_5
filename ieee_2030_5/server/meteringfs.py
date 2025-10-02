@@ -6,20 +6,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
+import werkzeug.exceptions
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
-import werkzeug.exceptions
 
 import ieee_2030_5.adapters as adpt
-from ieee_2030_5.adapters import _get_href_generation_lock
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
+from ieee_2030_5.adapters import _get_href_generation_lock
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.server.base_request import RequestOp
-from ieee_2030_5.server.uuid_handler import UUIDHandler
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import xml_to_dataclass
 
 _log = logging.getLogger(__name__)
 

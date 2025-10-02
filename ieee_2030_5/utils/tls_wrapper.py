@@ -1,7 +1,8 @@
+import logging
 import subprocess
 from pathlib import Path
+
 from ieee_2030_5.utils import TLSWrap
-import logging
 
 _log = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class OpensslWrapper(TLSWrap):
             buffer = []
 
             # Ensure full certificate & key are copied
-            with open(tmpfile2, "r") as f:
+            with open(tmpfile2) as f:
                 for line in f:
                     line = line.strip()  # Remove unnecessary spaces/newlines
 

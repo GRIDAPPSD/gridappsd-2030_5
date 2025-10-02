@@ -1,14 +1,11 @@
 import json
-import os
 from pathlib import Path
 
 from gridappsd import GridAPPSD
 from gridappsd.simulation import Simulation
 
-import auth_context
-
 sim_config = json.load(Path("config_files_simulated/simulation-config.json").open())
-sim_feeder = sim_config['power_system_config']['Line_name']
+sim_feeder = sim_config["power_system_config"]["Line_name"]
 print(f"Simulation for feeder: {sim_feeder}")
 gapps = GridAPPSD()
 sim = Simulation(gapps, run_config=sim_config)

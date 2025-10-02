@@ -1,4 +1,3 @@
-import textual
 import yaml
 from textual.app import App
 from textual.widget import Widget
@@ -6,7 +5,6 @@ from textual.widgets import TreeItem, TreeWidget
 
 
 class MyTreeWidget(TreeWidget):
-
     def __init__(self, data):
         super().__init__(data)
 
@@ -32,7 +30,6 @@ class MyTreeWidget(TreeWidget):
 
 
 class MyTreeWidgetContainer(Widget):
-
     def __init__(self, data):
         super().__init__()
         self.tree_widget = MyTreeWidget(data)
@@ -40,7 +37,6 @@ class MyTreeWidgetContainer(Widget):
 
 
 class MyCLIApp(App):
-
     async def on_load(self, event):
         # Load the data from the YAML file
         with open("my_data.yaml") as file:

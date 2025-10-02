@@ -3,9 +3,8 @@ Create device-specific Function Set Assignments (FSA).
 Each device gets its own FSA with its own DERProgram and DERControlList.
 """
 
-import logging
-from typing import Optional
 import copy
+import logging
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
@@ -17,7 +16,7 @@ from ieee_2030_5.persistance.points import atomic_operation
 _log = logging.getLogger(__name__)
 
 
-def create_device_fsa_with_program(device_href: str, config: ServerConfiguration) -> Optional[m.FunctionSetAssignments]:
+def create_device_fsa_with_program(device_href: str, config: ServerConfiguration) -> m.FunctionSetAssignments | None:
     """
     Create a device-specific FSA with its own DERProgram and DERControlList.
 

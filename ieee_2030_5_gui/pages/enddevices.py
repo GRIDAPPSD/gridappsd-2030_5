@@ -1,7 +1,7 @@
 import logging
 from copy import deepcopy
 from pprint import pformat
-from typing import Any, Dict, List
+from typing import Any
 
 from nicegui import ui
 
@@ -39,22 +39,21 @@ def render_select():
     end_device_hrefs = [p.href for p in enddevice_list.EndDevice]
     end_device_hrefs.insert(0, "NEW")
 
-    with ui.row():
-        with ui.column():
-            if not current_enddevice.href:
-                ui.select(
-                    end_device_hrefs,
-                    label="Programs",
-                    value=end_device_hrefs[0],
-                    on_change=lambda e: change_select(e.value),
-                ).classes("w-64")
-            else:
-                ui.select(
-                    end_device_hrefs,
-                    label="Programs",
-                    value=current_enddevice.href,
-                    on_change=lambda e: change_select(e.value),
-                ).classes("w-64")
+    with ui.row(), ui.column():
+        if not current_enddevice.href:
+            ui.select(
+                end_device_hrefs,
+                label="Programs",
+                value=end_device_hrefs[0],
+                on_change=lambda e: change_select(e.value),
+            ).classes("w-64")
+        else:
+            ui.select(
+                end_device_hrefs,
+                label="Programs",
+                value=current_enddevice.href,
+                on_change=lambda e: change_select(e.value),
+            ).classes("w-64")
 
 
 def change_select(selected_value: str):
