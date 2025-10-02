@@ -376,9 +376,15 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
 
     sql_logger = logging.getLogger("ieee_2030_5.persistance.sqlite_store")
     original_level = sql_logger.level
-    if len(config.devices) > 10:
-        sql_logger.setLevel(logging.WARNING)  # Reduce SQLite debug spam during bulk initialization
-        _log.info("Reduced database logging verbosity for bulk device initialization performance")
+    bulk_init_threshold = getattr(config, "bulk_device_init_threshold", None)
+    bulk_init_log_level = getattr(config, "bulk_device_init_log_level", None)
+    if bulk_init_threshold is not None and bulk_init_log_level is not None:
+        if len(config.devices) > bulk_init_threshold:
+            sql_logger.setLevel(bulk_init_log_level)
+            _log.info(
+                f"Reduced database logging verbosity to {logging.getLevelName(bulk_init_log_level)} "
+                f"for bulk device initialization performance (threshold: {bulk_init_threshold})"
+            )
 
     try:
         _log.warning(f"TRACE: About to start device loop with {len(config.devices)} devices")
