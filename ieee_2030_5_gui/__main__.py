@@ -1,11 +1,12 @@
-from fastapi import Request
-from fastapi.middleware.wsgi import WSGIMiddleware
-import flet as ft
-from flet.fastapi import FastAPI
 import os
 from pathlib import Path
-#from ieee_2030_5.server
-#from asyncio import asynccontextmanager
+
+import flet as ft
+from fastapi import Request
+from flet.fastapi import FastAPI
+
+# from ieee_2030_5.server
+# from asyncio import asynccontextmanager
 
 
 # Hook flet into FastAPI using flet.fastapi module
@@ -18,6 +19,7 @@ from pathlib import Path
 app = FastAPI()
 
 os.environ["FLET_SECRET_KEY"] = "secret"
+
 
 @app.get("/")
 def read_root(request: Request):
@@ -61,14 +63,18 @@ def gui_main(page: ft.Page):
 # Mount the flet app to the fastapi app.  More than one endpoint can be mounted to the same fastapi app.
 app.mount(
     "/gui",
-    ft.app(gui_main, export_asgi_app=True,
-                     web_renderer=ft.WebRenderer.AUTO,
-                     upload_dir=Path("~/.2030_5_uploads").expanduser().as_posix()))
+    ft.app(
+        gui_main,
+        export_asgi_app=True,
+        web_renderer=ft.WebRenderer.AUTO,
+        upload_dir=Path("~/.2030_5_uploads").expanduser().as_posix(),
+    ),
+)
 
 
 def _main():
-    from argparse import ArgumentParser
     import os
+    from argparse import ArgumentParser
 
     parser = ArgumentParser()
 
@@ -84,9 +90,10 @@ def _main():
 
     uvicorn.run(app, host="localhost", port=8000)
 
+
 if __name__ == "__main__":
-    from argparse import ArgumentParser
     import os
+    from argparse import ArgumentParser
 
     parser = ArgumentParser()
 
@@ -97,8 +104,6 @@ if __name__ == "__main__":
 
     os.environ["CONFIG_FILE"] = opts.config
     os.environ["RESET_CERTS"] = str(opts.reset_certs)
-
-
 
     import uvicorn
 
@@ -226,9 +231,6 @@ if __name__ == "__main__":
 
 
 #     # ui.run(show=False)
-
-
-
 
 
 # # ui.html("""

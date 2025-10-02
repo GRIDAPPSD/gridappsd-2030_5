@@ -1,5 +1,3 @@
-import base64
-
 from ieee_2030_5.models.sep import EndDevice, EndDeviceList
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
@@ -17,7 +15,6 @@ def test_serialize_bytes():
 
 
 def test_from_string():
-
     xml = """<EndDeviceList xmlns="urn:ieee:std:2030.5:ns" subscribable="0" all="1" results="1" pollRate="900"> 
         <EndDevice href="/edev_0">
             <DERListLink href="/edev_0_der"/>
@@ -36,5 +33,5 @@ def test_from_string():
 
     assert len(new_class.EndDevice) == 1
     ed = new_class.EndDevice[0]
-    assert 125842441685 == ed.sFDI
-    assert b'2EE1453C8A019B6BE4EC91317DCF6082C2F8090A' == ed.lFDI
+    assert ed.sFDI == 125842441685
+    assert ed.lFDI == b"2EE1453C8A019B6BE4EC91317DCF6082C2F8090A"

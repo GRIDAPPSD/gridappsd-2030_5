@@ -1,10 +1,8 @@
-from typing import List, Tuple
-
 import ieee_2030_5.models as m
 from ieee_2030_5.client import IEEE2030_5_Client
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import xml_to_dataclass
 
-mirror_usage_points: List[m.MirrorUsagePoint] = [
+mirror_usage_points: list[m.MirrorUsagePoint] = [
     xml_to_dataclass("""
         <MirrorUsagePoint xmlns="urn:ieee:std:2030.5:ns">
         <mRID>0600006CC8</mRID>
@@ -68,7 +66,7 @@ mirror_usage_points: List[m.MirrorUsagePoint] = [
 # ]
 
 
-def create_mup_list_on_server(client: IEEE2030_5_Client) -> List[Tuple[int, str]]:
+def create_mup_list_on_server(client: IEEE2030_5_Client) -> list[tuple[int, str]]:
     client.device_capability()
 
     response = []
@@ -194,14 +192,14 @@ def test_no_mup_default(first_client: IEEE2030_5_Client):
     upt: m.UsagePointList = first_client.get("/upt")
     assert upt is not None
     assert isinstance(upt, m.UsagePointList)
-    assert "/upt" == upt.href
-    assert 0 == upt.all
+    assert upt.href == "/upt"
+    assert upt.all == 0
 
     mup = first_client.get("/mup")
     assert mup is not None
     assert isinstance(mup, m.MirrorUsagePointList)
-    assert "/mup" == mup.href
-    assert 0 == mup.all
+    assert mup.href == "/mup"
+    assert mup.all == 0
 
 
 def test_create_mup(first_client: IEEE2030_5_Client):
@@ -245,7 +243,6 @@ def test_create_mup(first_client: IEEE2030_5_Client):
     # mup_responses = []
 
     for mup in mirror_usage_points:
-
         status, loc = first_client.create_mirror_usage_point(mup)
         assert status == 201
         mup_data = first_client.get(loc)
@@ -261,24 +258,23 @@ def test_create_mup(first_client: IEEE2030_5_Client):
         assert u.href is not None
         assert u.MeterReadingListLink is not None and u.MeterReadingListLink.href is not None
 
+
 def test_post_mirror_reading_with_type(first_client: IEEE2030_5_Client):
     response: m.DeviceCapability = first_client.device_capability()
 
-    active_power_type = m.ReadingType(accumulationBehaviour=12,
-                                      commodity=1,
-                                      flowDirection=19,
-                                      kind=38,
-                                      uom=38)
-    active_power_reading = m.MirrorMeterReading(mRID="5509D69F8B353595000082",
-                             description="Real Power(W)",
-                             ReadingType=active_power_type),
-    mup = m.MirrorUsagePoint(mRID="006CC8",
-                             description="Inverter Active Power",
-                                roleFlags=13,
-                                serviceCategoryKind=1,
-                                status=1,
-                                deviceLFDI="00",
-                                MirrorMeterReading=active_power_reading)
+    active_power_type = m.ReadingType(accumulationBehaviour=12, commodity=1, flowDirection=19, kind=38, uom=38)
+    active_power_reading = (
+        m.MirrorMeterReading(mRID="5509D69F8B353595000082", description="Real Power(W)", ReadingType=active_power_type),
+    )
+    mup = m.MirrorUsagePoint(
+        mRID="006CC8",
+        description="Inverter Active Power",
+        roleFlags=13,
+        serviceCategoryKind=1,
+        status=1,
+        deviceLFDI="00",
+        MirrorMeterReading=active_power_reading,
+    )
     status, loc = first_client.create_mirror_usage_point(mup)
     assert status == 201
     assert loc.startswith("/mup")
@@ -293,9 +289,9 @@ def test_post_mirror_reading_with_type(first_client: IEEE2030_5_Client):
     assert mup is not None
     assert mup.href == loc
 
-    status, loc = first_client.create_mirror_meter_reading(loc, m.MirrorMeterReading(mRID="14772",
-                                                                                     ReadingType=active_power_type,
-                                                                                     Reading=[m.Reading(value=100)]))
+    status, loc = first_client.create_mirror_meter_reading(
+        loc, m.MirrorMeterReading(mRID="14772", ReadingType=active_power_type, Reading=[m.Reading(value=100)])
+    )
 
     assert status == 201
     assert loc.startswith("/upt")
@@ -310,21 +306,18 @@ def test_post_mirror_reading_with_type(first_client: IEEE2030_5_Client):
     assert rt is not None
 
 
-
-
-
 def test_post_mirror_reading(first_client: IEEE2030_5_Client):
     response = create_mup_list_on_server(first_client)
     assert len(mirror_usage_points) == len(response)
 
     status, loc = create_mmr_on_server(first_client, response[0][1])
-    assert 201 == status
+    assert status == 201
     assert loc.startswith("/upt")
 
     mr_list: m.MeterReadingList = first_client.get(f"{loc}?l=1000")
     assert mr_list is not None
-    assert 2 == mr_list.all
-    assert 2 == mr_list.results
+    assert mr_list.all == 2
+    assert mr_list.results == 2
     assert isinstance(mr_list, m.MeterReadingList)
     assert len(mr_list.MeterReading) == 2
     mr = mr_list.MeterReading[1]
@@ -353,7 +346,7 @@ def test_post_mirror_reading(first_client: IEEE2030_5_Client):
     r_list = first_client.get(f"{rs.ReadingListLink.href}?l=10")
     assert r_list is not None and isinstance(r_list, m.ReadingList)
     r = r_list.Reading[0]
-    assert 10 == len(r_list.Reading)
+    assert len(r_list.Reading) == 10
     assert r is not None and isinstance(r, m.Reading)
     r_get = first_client.get(r.href)
     assert r == r_get
@@ -363,14 +356,14 @@ def test_no_mup_default2(first_client: IEEE2030_5_Client):
     upt: m.UsagePointList = first_client.get("/upt")
     assert upt is not None
     assert isinstance(upt, m.UsagePointList)
-    assert "/upt" == upt.href
-    assert 0 == upt.all
+    assert upt.href == "/upt"
+    assert upt.all == 0
 
     mup = first_client.get("/mup")
     assert mup is not None
     assert isinstance(mup, m.MirrorUsagePointList)
-    assert "/mup" == mup.href
-    assert 0 == mup.all
+    assert mup.href == "/mup"
+    assert mup.all == 0
 
 
 def test_create_update_mup(first_client: IEEE2030_5_Client):

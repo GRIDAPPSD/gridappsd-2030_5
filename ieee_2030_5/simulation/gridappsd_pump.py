@@ -1,40 +1,48 @@
-import json
 import atexit
 import os
-import sys
 import time
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
-from pprint import pprint, pformat
+from pprint import pformat, pprint
 from queue import Queue
 from threading import Thread
 
-from gridappsd.field_interface import MessageBusDefinition, ContextManager
+from gridappsd.field_interface import ContextManager, MessageBusDefinition
 from gridappsd.field_interface.agents import FeederAgent, SecondaryAreaAgent
 
-from Queries import QueryAllDERGroups, QueryBattery, QuerySolar, QueryInverter
 # from ieee_2030_5.models import Resource, PowerStatus, DERCapability, UsagePoint
 # from ieee_2030_5.models.end_devices import EndDevices
 from ieee_2030_5.models import UsagePoint
+from Queries import QueryInverter
 
 
 class DataPumpFeederAgent(FeederAgent):
-
-    def __init__(self, upstream_message_bus_def: MessageBusDefinition,
-                 downstream_message_bus_def: MessageBusDefinition = None,
-                 feeder_dict=None, simulation_id=None):
+    def __init__(
+        self,
+        upstream_message_bus_def: MessageBusDefinition,
+        downstream_message_bus_def: MessageBusDefinition = None,
+        feeder_dict=None,
+        simulation_id=None,
+    ):
         super().__init__(upstream_message_bus_def, downstream_message_bus_def, feeder_dict, simulation_id)
-    #TODO remove first four
+
+    # TODO remove first four
     def on_measurement(self, peer, sender, bus, topic, headers, message):
         # with open("feeder.txt", "a") as fp:
         #     fp.write(json.dumps(message))
         print("Feeder!")
         print(message)
 
+
 class DataPumperAgent(SecondaryAreaAgent):
-    def __init__(self, upstream_message_bus_def: MessageBusDefinition, downstream_message_bus_def: MessageBusDefinition,
-                 secondary_area_dict=None, simulation_id=None):
+    def __init__(
+        self,
+        upstream_message_bus_def: MessageBusDefinition,
+        downstream_message_bus_def: MessageBusDefinition,
+        secondary_area_dict=None,
+        simulation_id=None,
+    ):
         super().__init__(upstream_message_bus_def, downstream_message_bus_def, secondary_area_dict, simulation_id)
 
     def on_measurement(self, peer, sender, bus, topic, headers, message):
@@ -46,15 +54,16 @@ class DataPumperAgent(SecondaryAreaAgent):
         print("Secondary Area")
         print(message)
 
-def start_data_pump(msg_bus_def: MessageBusDefinition):
 
+def start_data_pump(msg_bus_def: MessageBusDefinition):
     atexit.register(stop_data_pump)
+
 
 def stop_data_pump():
     pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     os.environ["GRIDAPPSD_USER"] = "system"
     os.environ["GRIDAPPSD_PASSWORD"] = "manager"
     os.environ["GRIDAPPSD_ADDRESS"] = "gridappsd"
@@ -62,17 +71,16 @@ if __name__ == '__main__':
 
     def run_simulation(queue: Queue):
         import json
-        import os
         from pathlib import Path
 
         from gridappsd import GridAPPSD
         from gridappsd.simulation import Simulation
 
-        import auth_context
-
-        sim_config = json.load(Path("/repos/gridappsd-2030_5/examples/config_files_simulated/simulation-config.json").open())
+        sim_config = json.load(
+            Path("/repos/gridappsd-2030_5/examples/config_files_simulated/simulation-config.json").open()
+        )
         # sim_config = json.load(Path("config_files_simulated/simulation-config.json").open())
-        sim_feeder = sim_config['power_system_config']['Line_name']
+        sim_feeder = sim_config["power_system_config"]["Line_name"]
         print(f"Simulation for feeder: {sim_feeder}")
         gapps = GridAPPSD()
         sim = Simulation(gapps, run_config=sim_config)
@@ -122,30 +130,29 @@ connections:
     pprint(context)
     bus_refs = defaultdict(list)
 
-    for switch_area in context['data']['switch_areas']:
-        for secondary_area in switch_area['secondary_areas']:
-            for binding in inverters['data']['results']['bindings']:
-
+    for switch_area in context["data"]["switch_areas"]:
+        for secondary_area in switch_area["secondary_areas"]:
+            for binding in inverters["data"]["results"]["bindings"]:
                 # TODO: Change to use id later...Topo processor is using pecid for now.
-                pprint(binding['pecid']['value'])
-                pecid = binding['pecid']['value']
-                mrid = binding['id']['value']
+                pprint(binding["pecid"]["value"])
+                pecid = binding["pecid"]["value"]
+                mrid = binding["id"]["value"]
                 # ieee_resources.append(
                 #     UsagePoint(mRID=mRID)
                 # )
                 # pecid is being found, but id is not
-                #ieee_resources.append(UsagePoint(mRID=other_mrid))
+                # ieee_resources.append(UsagePoint(mRID=other_mrid))
                 ieee_resources.append(UsagePoint(mRID=pecid))
-                if pecid in secondary_area['addressable_equipment']:
+                if pecid in secondary_area["addressable_equipment"]:
                     new_area = deepcopy(secondary_area)
-                    new_area['addressable_equipment'] = [pecid, mrid]
-                    new_area['unaddressable_equipment'] = []
+                    new_area["addressable_equipment"] = [pecid, mrid]
+                    new_area["unaddressable_equipment"] = []
 
-                    bus_refs[secondary_area['message_bus_id']].append(new_area)
+                    bus_refs[secondary_area["message_bus_id"]].append(new_area)
 
     pprint(bus_refs)
-    feeder = context['data']
-    Path("../server/data.dump.json").write_text(pformat(context['data'], indent=2))
+    feeder = context["data"]
+    Path("../server/data.dump.json").write_text(pformat(context["data"], indent=2))
     data = Path("../server/data.dump.json").read_text()
     for p in ieee_resources:
         if str(p.mRID) in data:
@@ -160,8 +167,12 @@ connections:
         bus_def = deepcopy(system_bus_def)
         bus_def.id = bus_id
         for area in secondary_area:
-            dpa = DataPumperAgent(system_bus_def, downstream_message_bus_def=bus_def, secondary_area_dict=area,
-                                  simulation_id=simulation_id)
+            dpa = DataPumperAgent(
+                system_bus_def,
+                downstream_message_bus_def=bus_def,
+                secondary_area_dict=area,
+                simulation_id=simulation_id,
+            )
             dpa.connect()
 
     while True:

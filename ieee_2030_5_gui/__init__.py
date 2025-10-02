@@ -109,9 +109,6 @@
 #     # ui.run(show=False)
 
 
-
-
-
 # # ui.html("""
 # #     <table>
 # #         <tr>

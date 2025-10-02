@@ -2,7 +2,6 @@ from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
 
 class MyListener(ServiceListener):
-
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         print(f"Service {name} updated")
 
@@ -18,14 +17,12 @@ zeroconf = Zeroconf()
 listener = MyListener()
 browser = ServiceBrowser(zeroconf, "_smartenergy._tcp.local.", listener)
 
-si = ServiceInfo(type_="_smartenergy._tcp.local.",
-                 name="device-dev1._smartenergy._tcp.local.",
-                 properties={
-                     'txtvers': 1,
-                     'https': 7443,
-                     'dcap': '/dcap'
-                 })
-si.addresses = ['127.0.0.1']
+si = ServiceInfo(
+    type_="_smartenergy._tcp.local.",
+    name="device-dev1._smartenergy._tcp.local.",
+    properties={"txtvers": 1, "https": 7443, "dcap": "/dcap"},
+)
+si.addresses = ["127.0.0.1"]
 si.port = 7443
 zeroconf.register_service(si)
 try:

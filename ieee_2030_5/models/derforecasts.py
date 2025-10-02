@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+
 from ieee_2030_5.models.sep import (
     DER,
     IdentifiedObject,
@@ -21,22 +21,23 @@ class ForecastNumericType:
     :ivar value: Value expressed as integer
     :ivar multiplier: Multiplier for value. Multiply value by 10^this.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    value: Optional[int] = field(
+    value: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
-    multiplier: Optional[int] = field(
+    multiplier: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
 
 
@@ -45,6 +46,7 @@ class DERForecastLink(Link):
     """
     SHALL contain a Link to an instance of DERForecast.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
@@ -52,7 +54,7 @@ class DERForecastLink(Link):
         default=900,
         metadata={
             "type": "Attribute",
-        }
+        },
     )
 
 
@@ -65,28 +67,29 @@ class ForecastParameter:
     :ivar forecast: Forecast for the parameter named.
     :ivar sigma: Standard deviation for the parameter named.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    name: Optional[int] = field(
+    name: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
-    forecast: Optional[ForecastNumericType] = field(
+    forecast: ForecastNumericType | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
-    sigma: Optional[ForecastNumericType] = field(
+    sigma: ForecastNumericType | None = field(
         default=None,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -95,14 +98,15 @@ class DERFlexibility(DER):
     """
     Extends sep DER to include DERForecastLink.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    DERForecastLink: Optional[DERForecastLink] = field(
+    DERForecastLink: DERForecastLink | None = field(
         default=None,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -111,14 +115,15 @@ class ForecastParameterSet(Resource):
     """
     A set of forecasts.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    ForecastParameter: List[ForecastParameter] = field(
+    ForecastParameter: list[ForecastParameter] = field(
         default_factory=list,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -127,14 +132,15 @@ class ForecastParameterSetList(SubscribableList):
     """
     A List element to hold ForecastParameterSet  objects.
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    ForecastParameterSet: List[ForecastParameterSet] = field(
+    ForecastParameterSet: list[ForecastParameterSet] = field(
         default_factory=list,
         metadata={
             "type": "Element",
-        }
+        },
     )
 
 
@@ -148,26 +154,27 @@ class DERForecast(IdentifiedObject):
         ForecastParameterSetList, in seconds.
     :ivar ForecastParameterSetList:
     """
+
     class Meta:
         namespace = "epri:derforecast:ns"
 
-    startTime: Optional[int] = field(
+    startTime: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
-    interval: Optional[int] = field(
+    interval: int | None = field(
         default=None,
         metadata={
             "type": "Element",
             "required": True,
-        }
+        },
     )
-    ForecastParameterSetList: Optional[ForecastParameterSetList] = field(
+    ForecastParameterSetList: ForecastParameterSetList | None = field(
         default=None,
         metadata={
             "type": "Element",
-        }
+        },
     )

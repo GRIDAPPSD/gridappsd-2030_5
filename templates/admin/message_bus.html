@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridAPPS-D Message Bus Monitor</title>
+    <style>
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: #444;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .nav-header a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-header a:hover {
+            text-decoration: underline;
+        }
+        .header {
+            background: linear-gradient(135deg, #2d4a66 0%, #1a2332 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .controls {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .btn {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn:hover {
+            background: #357abd;
+        }
+        .btn.danger {
+            background: #e74c3c;
+        }
+        .btn.danger:hover {
+            background: #c0392b;
+        }
+        .btn.success {
+            background: #27ae60;
+        }
+        .btn.success:hover {
+            background: #219a52;
+        }
+        input[type="text"] {
+            background: #404040;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        select {
+            background: #404040;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .stats {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4a90e2;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #ccc;
+            margin-top: 5px;
+        }
+        .message-container {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 8px;
+            height: 600px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .message {
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            border-left: 3px solid #4a90e2;
+            background: rgba(74, 144, 226, 0.1);
+            border-radius: 3px;
+            word-wrap: break-word;
+        }
+        .message.outbound {
+            border-left-color: #e67e22;
+            background: rgba(230, 126, 34, 0.1);
+        }
+        .message.error {
+            border-left-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+        }
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 3px;
+            font-size: 10px;
+            opacity: 0.8;
+        }
+        .message-timestamp {
+            color: #888;
+        }
+        .message-topic {
+            color: #f39c12;
+        }
+        .message-direction {
+            color: #27ae60;
+        }
+        .message-direction.outbound {
+            color: #e67e22;
+        }
+        .message-size {
+            color: #9b59b6;
+        }
+        .message-content {
+            margin-top: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-indicator.connected {
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.disconnected {
+            background: #e74c3c;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .no-messages {
+            text-align: center;
+            color: #888;
+            margin: 50px 0;
+        }
+        .filter-info {
+            background: #3d3d3d;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #ccc;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
+        </div>
+        <div class="header">
+            <h1>📡 GridAPPS-D Message Bus Monitor</h1>
+            <p>Real-time monitoring of GridAPPS-D message traffic</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+            
+            <div class="control-group">
+                <button class="btn success" id="toggleMonitoring" onclick="toggleMonitoring()">⏸️ Pause</button>
+                <button class="btn" onclick="clearMessages()">🗑️ Clear</button>
+                <button class="btn" onclick="exportMessages()">💾 Export</button>
+            </div>
+            
+            <div class="control-group">
+                <input type="text" id="searchInput" placeholder="Search messages..." onkeyup="filterMessages()">
+                <select id="topicFilter" onchange="filterMessages()">
+                    <option value="">All Topics</option>
+                </select>
+                <select id="directionFilter" onchange="filterMessages()">
+                    <option value="">All Directions</option>
+                    <option value="inbound">Inbound</option>
+                    <option value="outbound">Outbound</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <button class="btn" onclick="toggleAutoScroll()">📜 Auto-scroll: <span id="autoScrollStatus">ON</span></button>
+                <button class="btn" onclick="refreshStats()">🔄 Refresh Stats</button>
+            </div>
+        </div>
+
+        <div class="stats" id="messageStats">
+            <div class="stat-item">
+                <div class="stat-value" id="totalMessages">0</div>
+                <div class="stat-label">Total Messages</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="inboundMessages">0</div>
+                <div class="stat-label">Inbound</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="outboundMessages">0</div>
+                <div class="stat-label">Outbound</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="bytesTransferred">0</div>
+                <div class="stat-label">Bytes Transferred</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="messagesPerSecond">0.0</div>
+                <div class="stat-label">Messages/Second</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="topicCount">0</div>
+                <div class="stat-label">Unique Topics</div>
+            </div>
+        </div>
+
+        <div class="filter-info" id="filterInfo" style="display: none;">
+            Showing filtered results. <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="clearFilters()">Clear Filters</button>
+        </div>
+
+        <div class="message-container" id="messageContainer">
+            <div class="no-messages">
+                🔍 Listening for GridAPPS-D messages...<br>
+                <small>Start GridAPPS-D services to see message traffic</small>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let messages = [];
+        let filteredMessages = [];
+        let autoScroll = true;
+        let monitoringEnabled = true;
+        let allTopics = new Set();
+
+        // Initialize the monitor
+        function initializeMonitor() {
+            connectToEventStream();
+            refreshStats();
+            setInterval(refreshStats, 5000); // Refresh stats every 5 seconds
+        }
+
+        function connectToEventStream() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/api/message-bus/events');
+            
+            eventSource.onopen = function() {
+                updateConnectionStatus(true);
+            };
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'keepalive') {
+                    return;
+                }
+                
+                messages.push(data);
+                allTopics.add(data.topic);
+                updateTopicFilter();
+                
+                // Keep only last 1000 messages for performance
+                if (messages.length > 1000) {
+                    messages = messages.slice(-1000);
+                }
+                
+                filterMessages();
+                updateDisplay();
+            };
+
+            eventSource.onerror = function() {
+                updateConnectionStatus(false);
+                setTimeout(connectToEventStream, 5000); // Reconnect after 5 seconds
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+            
+            if (connected) {
+                indicator.className = 'status-indicator connected';
+                text.textContent = 'Connected';
+            } else {
+                indicator.className = 'status-indicator disconnected';
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function updateDisplay() {
+            const container = document.getElementById('messageContainer');
+            
+            if (filteredMessages.length === 0) {
+                container.innerHTML = '<div class="no-messages">No messages match current filters</div>';
+                return;
+            }
+
+            let html = '';
+            const displayMessages = filteredMessages.slice(-100); // Show last 100 filtered messages
+            
+            for (const msg of displayMessages) {
+                const messageClass = msg.direction === 'outbound' ? 'message outbound' : 
+                                   msg.message_type === 'error' ? 'message error' : 'message';
+                
+                const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+                
+                html += `
+                    <div class="${messageClass}">
+                        <div class="message-header">
+                            <span class="message-timestamp">${timestamp}</span> |
+                            <span class="message-topic">${msg.topic}</span> |
+                            <span class="message-direction ${msg.direction}">${msg.direction.toUpperCase()}</span> |
+                            <span class="message-size">${formatBytes(msg.size)}</span>
+                            ${msg.message_type !== 'unknown' ? ` | <span style="color: #8e44ad">${msg.message_type}</span>` : ''}
+                        </div>
+                        <div class="message-content">${escapeHtml(msg.message)}</div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+            if (autoScroll) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function filterMessages() {
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const topicFilter = document.getElementById('topicFilter').value;
+            const directionFilter = document.getElementById('directionFilter').value;
+            
+            filteredMessages = messages.filter(msg => {
+                // Search filter
+                if (searchQuery && !msg.topic.toLowerCase().includes(searchQuery) && 
+                    !msg.message.toLowerCase().includes(searchQuery)) {
+                    return false;
+                }
+                
+                // Topic filter
+                if (topicFilter && msg.topic !== topicFilter) {
+                    return false;
+                }
+                
+                // Direction filter
+                if (directionFilter && msg.direction !== directionFilter) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            // Update filter info
+            const filterInfo = document.getElementById('filterInfo');
+            const hasFilters = searchQuery || topicFilter || directionFilter;
+            filterInfo.style.display = hasFilters ? 'block' : 'none';
+            
+            updateDisplay();
+        }
+
+        function updateTopicFilter() {
+            const select = document.getElementById('topicFilter');
+            const currentValue = select.value;
+            
+            // Rebuild options
+            const topics = Array.from(allTopics).sort();
+            let html = '<option value="">All Topics</option>';
+            
+            for (const topic of topics) {
+                html += `<option value="${escapeHtml(topic)}">${escapeHtml(topic)}</option>`;
+            }
+            
+            select.innerHTML = html;
+            select.value = currentValue; // Restore selection
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('topicFilter').value = '';
+            document.getElementById('directionFilter').value = '';
+            filterMessages();
+        }
+
+        function toggleMonitoring() {
+            fetch('/api/message-bus/toggle', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        monitoringEnabled = data.status === 'enabled';
+                        const btn = document.getElementById('toggleMonitoring');
+                        btn.textContent = monitoringEnabled ? '⏸️ Pause' : '▶️ Resume';
+                        btn.className = monitoringEnabled ? 'btn success' : 'btn';
+                    }
+                })
+                .catch(error => console.error('Error toggling monitoring:', error));
+        }
+
+        function clearMessages() {
+            if (confirm('Clear all message history?')) {
+                fetch('/api/message-bus/clear', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            messages = [];
+                            filteredMessages = [];
+                            allTopics.clear();
+                            updateTopicFilter();
+                            updateDisplay();
+                            refreshStats();
+                        }
+                    })
+                    .catch(error => console.error('Error clearing messages:', error));
+            }
+        }
+
+        function exportMessages() {
+            const dataStr = JSON.stringify(messages, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `gridappsd-messages-${new Date().toISOString().slice(0,19)}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            document.getElementById('autoScrollStatus').textContent = autoScroll ? 'ON' : 'OFF';
+        }
+
+        function refreshStats() {
+            fetch('/api/message-bus/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) {
+                        document.getElementById('totalMessages').textContent = data.total_messages || 0;
+                        document.getElementById('inboundMessages').textContent = data.inbound_messages || 0;
+                        document.getElementById('outboundMessages').textContent = data.outbound_messages || 0;
+                        document.getElementById('bytesTransferred').textContent = formatBytes(data.bytes_transferred || 0);
+                        document.getElementById('messagesPerSecond').textContent = (data.messages_per_second || 0).toFixed(1);
+                        document.getElementById('topicCount').textContent = (data.topics_seen || []).length;
+                    }
+                })
+                .catch(error => console.error('Error refreshing stats:', error));
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initializeMonitor);
+
+        // Cleanup when page unloads
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html>

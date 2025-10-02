@@ -2,7 +2,7 @@ import subprocess
 
 
 def execute_command(cmds, env=None, cwd=None, logger=None, err_prefix=None) -> str:
-    """ Executes a command as a subprocess
+    """Executes a command as a subprocess
     If the return code of the call is 0 then return stdout otherwise
     raise a RuntimeError.  If logger is specified then write the exception
     to the logger otherwise this call will remain silent.
@@ -15,21 +15,14 @@ def execute_command(cmds, env=None, cwd=None, logger=None, err_prefix=None) -> s
     :raises RuntimeError: if the return code is not 0 from suprocess.run
     """
 
-    results = subprocess.run(cmds,
-                             env=env,
-                             cwd=cwd,
-                             stderr=subprocess.PIPE,
-                             stdout=subprocess.PIPE)
+    results = subprocess.run(cmds, env=env, cwd=cwd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     if results.returncode != 0:
         err_prefix = err_prefix if err_prefix is not None else "Error executing command"
-        err_message = "\n{}: Below Command failed with non zero exit code.\n" \
-                      "Command:{} \nStderr:\n{}\n".format(err_prefix,
-                                                          results.args,
-                                                          results.stderr)
+        err_message = f"\n{err_prefix}: Below Command failed with non zero exit code.\nCommand:{results.args} \nStderr:\n{results.stderr}\n"
         if logger:
             logger.exception(err_message)
             raise RuntimeError()
         else:
             raise RuntimeError(err_message)
 
-    return results.stdout.decode('utf-8')
+    return results.stdout.decode("utf-8")

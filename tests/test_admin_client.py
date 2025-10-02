@@ -36,9 +36,7 @@ def test_admin_correct_derp_links(admin_client: IEEE2030_5_Client, first_client_
     assert derp_0_default_control.DERControlBase.opModEnergize
 
 
-def test_can_update_derp_default_der_control(admin_client: IEEE2030_5_Client,
-                                             first_client_data: IEEE2030_5_Client):
-
+def test_can_update_derp_default_der_control(admin_client: IEEE2030_5_Client, first_client_data: IEEE2030_5_Client):
     assert admin_client
     assert first_client_data
 

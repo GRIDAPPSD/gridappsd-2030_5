@@ -1,15 +1,17 @@
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional
+from typing import TYPE_CHECKING
 
 import werkzeug
-from flask import request, Response
+from flask import Response, request
 
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.models import DeviceCategoryType
-import ieee_2030_5.server.server_endpoints as eps
+
+if TYPE_CHECKING:
+    import ieee_2030_5.server.server_endpoints as eps
 
 from ieee_2030_5.types_ import SEP_XML
 from ieee_2030_5.utils import dataclass_to_xml
@@ -18,11 +20,10 @@ _log = logging.getLogger(__name__)
 
 
 class ServerOperation:
-
     def __init__(self):
-        if 'ieee_2030_5_peercert' not in request.environ:
+        if "ieee_2030_5_peercert" not in request.environ:
             raise werkzeug.exceptions.Forbidden()
-        self._headers = {'Content-Type': SEP_XML}
+        self._headers = {"Content-Type": SEP_XML}
         self._environ = request.environ
 
     def head(self, **kwargs):
@@ -41,14 +42,9 @@ class ServerOperation:
         raise werkzeug.exceptions.MethodNotAllowed()
 
     def execute(self, **kwargs):
-        methods = {
-            'GET': self.get,
-            'POST': self.post,
-            'DELETE': self.delete,
-            'PUT': self.put
-        }
+        methods = {"GET": self.get, "POST": self.post, "DELETE": self.delete, "PUT": self.put}
 
-        fn = methods.get(request.environ['REQUEST_METHOD'])
+        fn = methods.get(request.environ["REQUEST_METHOD"])
         if not fn:
             raise werkzeug.exceptions.MethodNotAllowed()
 
@@ -71,13 +67,13 @@ class RequestOp(ServerOperation):
 
     @property
     def lfdi(self):
-        return request.environ["ieee_2030_5_lfdi"] # self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
+        return request.environ["ieee_2030_5_lfdi"]  # self._tls_repository.lfdi(request.environ['ieee_2030_5_subject'])
 
     @property
     def device_id(self):
         return request.environ.get("ieee_2030_5_subject")
 
-    def get_path(self, required_prefix: Optional[str] = None) -> str:
+    def get_path(self, required_prefix: str | None = None) -> str:
         """
         Retrieve the context web request environment PATH_INFO with optional required_prefix
         argument.  If that argument is specified then it will be validated against PATH_INFO.  The
@@ -90,7 +86,7 @@ class RequestOp(ServerOperation):
             The path specified in request.environ['PATH_INFO'
         """
 
-        pth = request.environ['PATH_INFO']
+        pth = request.environ["PATH_INFO"]
 
         if required_prefix and not pth.startswith(required_prefix):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")

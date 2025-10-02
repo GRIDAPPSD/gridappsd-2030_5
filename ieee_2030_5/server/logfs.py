@@ -10,19 +10,18 @@ from ieee_2030_5.utils import xml_to_dataclass
 
 
 class Log(RequestOp):
-
     def get(self) -> Response:
-        pth = request.environ['PATH_INFO']
+        pth = request.environ["PATH_INFO"]
         return self.build_response_from_dataclass(adpt.LogAdapter.fetch_list(pth))
 
     def post(self) -> Response:
         """Posting of log event allows client to store information for a display to get.
-        
+
         For 2030.5 this is posted at an end device level so that its available to the
         server.
         """
-        path = request.environ['PATH_INFO']
-        data: m.LogEvent = xml_to_dataclass(request.data.decode('utf-8'))
+        path = request.environ["PATH_INFO"]
+        data: m.LogEvent = xml_to_dataclass(request.data.decode("utf-8"))
         data_type = type(data)
         if data_type not in (m.LogEvent):
             raise BAD_REQUEST()

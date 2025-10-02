@@ -10,7 +10,7 @@ from http.client import HTTPSConnection
 from os import PathLike
 from pathlib import Path
 from threading import Timer
-from typing import Dict, Optional, Tuple, Any
+from typing import Any
 
 import werkzeug.middleware.lint
 import xsdata
@@ -27,14 +27,15 @@ class IEEE2030_5_Client:
     clients: set[IEEE2030_5_Client] = set()
 
     # noinspection PyUnresolvedReferences
-    def __init__(self,
-                 cafile: PathLike,
-                 server_hostname: str,
-                 keyfile: PathLike,
-                 certfile: PathLike,
-                 server_ssl_port: Optional[int] = 443,
-                 debug: bool = True):
-
+    def __init__(
+        self,
+        cafile: PathLike,
+        server_hostname: str,
+        keyfile: PathLike,
+        certfile: PathLike,
+        server_ssl_port: int | None = 443,
+        debug: bool = True,
+    ):
         cafile = cafile if isinstance(cafile, PathLike) else Path(cafile)
         keyfile = keyfile if isinstance(keyfile, PathLike) else Path(keyfile)
         certfile = certfile if isinstance(certfile, PathLike) else Path(certfile)
@@ -49,25 +50,23 @@ class IEEE2030_5_Client:
 
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self._ssl_context.check_hostname = False
-        self._ssl_context.verify_mode = ssl.CERT_OPTIONAL    #  ssl.CERT_REQUIRED
+        self._ssl_context.verify_mode = ssl.CERT_OPTIONAL  #  ssl.CERT_REQUIRED
         self._ssl_context.load_verify_locations(cafile=cafile)
 
         # Loads client information from the passed cert and key files. For
         # client side validation.
         self._ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
-        self._http_conn = HTTPSConnection(host=server_hostname,
-                                          port=server_ssl_port,
-                                          context=self._ssl_context)
-        self._device_cap: Optional[m.DeviceCapability] = None
-        self._mup: Optional[m.MirrorUsagePointList] = None
-        self._upt: Optional[m.UsagePointList] = None
-        self._edev: Optional[m.EndDeviceListLink] = None
-        self._end_devices: Optional[m.EndDeviceListLink] = None
-        self._fsa_list: Optional[m.FunctionSetAssignmentsListLink] = None
+        self._http_conn = HTTPSConnection(host=server_hostname, port=server_ssl_port, context=self._ssl_context)
+        self._device_cap: m.DeviceCapability | None = None
+        self._mup: m.MirrorUsagePointList | None = None
+        self._upt: m.UsagePointList | None = None
+        self._edev: m.EndDeviceListLink | None = None
+        self._end_devices: m.EndDeviceListLink | None = None
+        self._fsa_list: m.FunctionSetAssignmentsListLink | None = None
         self._debug = debug
         self._dcap_poll_rate: int = 0
-        self._dcap_timer: Optional[Timer] = None
+        self._dcap_timer: Timer | None = None
         self._disconnect: bool = False
         self._tls = tls.OpensslWrapper
 
@@ -82,8 +81,7 @@ class IEEE2030_5_Client:
     def register_end_device(self) -> str:
         lfid = utils.get_lfdi_from_cert(self._cert)
         sfid = utils.get_sfdi_from_lfdi(lfid)
-        response = self.__post__(dcap.EndDeviceListLink.href,
-                                 data=utils.dataclass_to_xml(m.EndDevice(sFDI=sfid)))
+        response = self.__post__(dcap.EndDeviceListLink.href, data=utils.dataclass_to_xml(m.EndDevice(sFDI=sfid)))
         print(response)
 
         if response.status in (200, 201):
@@ -109,7 +107,7 @@ class IEEE2030_5_Client:
         self._end_devices = self.__get_request__(self._device_cap.EndDeviceListLink.href)
         return self._end_devices
 
-    def end_device(self, index: Optional[int] = 0) -> m.EndDevice:
+    def end_device(self, index: int | None = 0) -> m.EndDevice:
         if not self._end_devices:
             self.end_devices()
 
@@ -121,20 +119,17 @@ class IEEE2030_5_Client:
 
         return self.__get_request__(self._device_cap.SelfDeviceLink.href)
 
-    def function_set_assignment_list(self,
-                                     edev_index: Optional[int] = 0
-                                     ) -> m.FunctionSetAssignmentsList:
-        fsa_list = self.__get_request__(
-            self.end_device(edev_index).FunctionSetAssignmentsListLink.href)
+    def function_set_assignment_list(self, edev_index: int | None = 0) -> m.FunctionSetAssignmentsList:
+        fsa_list = self.__get_request__(self.end_device(edev_index).FunctionSetAssignmentsListLink.href)
         return fsa_list
 
-    def function_set_assignment(self,
-                                edev_index: Optional[int] = 0,
-                                fsa_index: Optional[int] = 0) -> m.FunctionSetAssignments:
+    def function_set_assignment(
+        self, edev_index: int | None = 0, fsa_index: int | None = 0
+    ) -> m.FunctionSetAssignments:
         fsa_list = self.function_set_assignment_list(edev_index)
         return fsa_list.FunctionSetAssignments[fsa_index]
 
-    def der_list(self, edev_index: Optional[int] = 0) -> m.DERList:
+    def der_list(self, edev_index: int | None = 0) -> m.DERList:
         der_list = self.__get_request__(self.end_device(edev_index).DERListLink.href)
         return der_list
 
@@ -162,17 +157,14 @@ class IEEE2030_5_Client:
         timexml = self.__get_request__(self._device_cap.TimeLink.href)
         return timexml
 
-    def der_program_list(self,
-                         edev_index: Optional[int] = 0,
-                         fsa_index: Optional[int] = 0) -> m.DERProgramList:
+    def der_program_list(self, edev_index: int | None = 0, fsa_index: int | None = 0) -> m.DERProgramList:
         fsa = self.function_set_assignment(edev_index, fsa_index)
         derp_list = self.__get_request__(fsa.DERProgramListLink.href)
         return derp_list
 
-    def der_program(self,
-                    edev_index: Optional[int] = 0,
-                    fsa_index: Optional[int] = 0,
-                    derp_index: Optional[int] = 0) -> m.DERProgram:
+    def der_program(
+        self, edev_index: int | None = 0, fsa_index: int | None = 0, derp_index: int | None = 0
+    ) -> m.DERProgram:
         derp_list = self.der_program_list(edev_index, fsa_index)
         return derp_list.DERProgram[derp_index]
 
@@ -200,31 +192,31 @@ class IEEE2030_5_Client:
         IEEE2030_5_Client.clients.remove(self)
 
     def request(self, endpoint: str, body: dict = None, method: str = "GET", headers: dict = None):
-
-        if method.upper() == 'GET':
+        if method.upper() == "GET":
             return self.__get_request__(endpoint, body, headers=headers)
 
-        if method.upper() == 'POST':
+        if method.upper() == "POST":
             print("Doing post")
             return self.__post__(endpoint, body, headers=headers)
 
-    def create_mirror_usage_point(self, mirror_usage_point: m.MirrorUsagePoint) -> Tuple[int, str]:
+    def create_mirror_usage_point(self, mirror_usage_point: m.MirrorUsagePoint) -> tuple[int, str]:
         data = utils.dataclass_to_xml(mirror_usage_point)
         resp = self.__post__(self._device_cap.MirrorUsagePointListLink.href, data=data)
-        return resp.status, resp.headers['Location']
+        return resp.status, resp.headers["Location"]
 
-    def create_mirror_meter_reading(self, mirror_usage_point_href: str,
-                                    mirror_meter_reading: m.MirrorMeterReading) -> Tuple[int, str]:
+    def create_mirror_meter_reading(
+        self, mirror_usage_point_href: str, mirror_meter_reading: m.MirrorMeterReading
+    ) -> tuple[int, str]:
         data = utils.dataclass_to_xml(mirror_meter_reading)
         resp = self.__post__(mirror_usage_point_href, data=data)
-        return resp.status, resp.headers['Location']
+        return resp.status, resp.headers["Location"]
 
-    def post(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
+    def post(self, url: str, data: Any, headers: dict[str, str] | None = None):
         response = self.__post__(url, data, headers=headers)
 
-    def __post__(self, url: str, data=None, headers: Optional[Dict[str, str]] = None):
+    def __post__(self, url: str, data=None, headers: dict[str, str] | None = None):
         if not headers:
-            headers = {'Content-Type': 'text/xml'}
+            headers = {"Content-Type": "text/xml"}
 
         self.http_conn.request(method="POST", headers=headers, url=url, body=data)
         response = self._http_conn.getresponse()
@@ -237,7 +229,7 @@ class IEEE2030_5_Client:
             headers = {"Connection": "keep-alive", "keep-alive": "timeout=30, max=1000"}
 
         if self._debug:
-            print(f"----> GET REQUEST")
+            print("----> GET REQUEST")
             print(f"url: {url} body: {body}")
         self.http_conn.request(method="GET", url=url, body=body, headers=headers)
         response = self._http_conn.getresponse()
@@ -249,12 +241,12 @@ class IEEE2030_5_Client:
             response_obj = utils.xml_to_dataclass(response_data)
             resp_xml = xml.dom.minidom.parseString(response_data)
             if resp_xml and self._debug:
-                print(f"<---- GET RESPONSE")
-                print(f"{response_data}")    # toprettyxml()}")
+                print("<---- GET RESPONSE")
+                print(f"{response_data}")  # toprettyxml()}")
 
-        except xsdata.exceptions.ParserError as ex:
+        except xsdata.exceptions.ParserError:
             if self._debug:
-                print(f"<---- GET RESPONSE")
+                print("<---- GET RESPONSE")
                 print(f"{response_data}")
             response_obj = response_data
 
@@ -265,19 +257,19 @@ class IEEE2030_5_Client:
         self._ssl_context = None
         self._http_conn = None
 
-    def put(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
+    def put(self, url: str, data: Any, headers: dict[str, str] | None = None):
         response = self.__put__(url, data, headers=headers)
 
-    def __put__(self, url: str, data: Any, headers: Optional[Dict[str, str]] = None):
+    def __put__(self, url: str, data: Any, headers: dict[str, str] | None = None):
         if not headers:
-            headers = {'Content-Type': 'text/xml'}
+            headers = {"Content-Type": "text/xml"}
 
         if self._debug:
             _log_req_resp.debug(f"----> PUT REQUEST\nurl: {url}\nbody: {data}")
 
         try:
             self.http_conn.request(method="PUT", headers=headers, url=url, body=data)
-        except http.client.CannotSendRequest as ex:
+        except http.client.CannotSendRequest:
             self.http_conn.close()
             _log.debug("Reconnecting to server")
             self.http_conn.request(method="PUT", headers=headers, url=url, body=data)
@@ -285,9 +277,9 @@ class IEEE2030_5_Client:
         response = self._http_conn.getresponse()
         return response
 
-    def __post__(self, url: str, data=None, headers: Optional[Dict[str, str]] = None):
+    def __post__(self, url: str, data=None, headers: dict[str, str] | None = None):
         if not headers:
-            headers = {'Content-Type': 'text/xml'}
+            headers = {"Content-Type": "text/xml"}
 
         if self._debug:
             _log_req_resp.debug(f"----> POST REQUEST\nurl: {url}\nbody: {data}")
@@ -323,19 +315,21 @@ atexit.register(__release_clients__)
 # print(con.getresponse().read())
 # con.close()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     SERVER_CA_CERT = Path("~/tls/certs/ca.pem").expanduser().resolve()
     KEY_FILE = Path("~/tls/private/dev1.pem").expanduser().resolve()
     CERT_FILE = Path("~/tls/certs/dev1.pem").expanduser().resolve()
 
-    headers = {'Connection': 'Keep-Alive', 'Keep-Alive': "max=1000,timeout=30"}
+    headers = {"Connection": "Keep-Alive", "Keep-Alive": "max=1000,timeout=30"}
 
-    h = IEEE2030_5_Client(cafile=SERVER_CA_CERT,
-                          server_hostname="127.0.0.1",
-                          server_ssl_port=8443,
-                          keyfile=KEY_FILE,
-                          certfile=CERT_FILE,
-                          debug=True)
+    h = IEEE2030_5_Client(
+        cafile=SERVER_CA_CERT,
+        server_hostname="127.0.0.1",
+        server_ssl_port=8443,
+        keyfile=KEY_FILE,
+        certfile=CERT_FILE,
+        debug=True,
+    )
     # h2 = IEEE2030_5_Client(cafile=SERVER_CA_CERT, server_hostname="me.com", ssl_port=8000,
     #                        keyfile=KEY_FILE, certfile=KEY_FILE)
     dcap = h.device_capability()
@@ -353,16 +347,16 @@ if __name__ == '__main__':
     # print(resp)
     # resp = h.request("/dcap", headers=headers)
     # print(resp)
-    #dcap = h.device_capability()
+    # dcap = h.device_capability()
     # get device list
-    #dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice
+    # dev_list = h.request(dcap.EndDeviceListLink.href).EndDevice
 
-    #ed = h.request(dev_list[0].href)
-    #print(ed)
+    # ed = h.request(dev_list[0].href)
+    # print(ed)
     #
     # print(dcap.mirror_usage_point_list_link)
     # # print(h.request(dcap.mirror_usage_point_list_link.href))
     # print(h.request("/dcap", method="post"))
 
     # tl = h.timelink()
-    #print(IEEE2030_5_Client.clients)
+    # print(IEEE2030_5_Client.clients)

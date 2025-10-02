@@ -1,11 +1,10 @@
 """
 This module handles MirrorUsagePoint and UsagePoint constructs for a server.
 """
+
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from flask import Response, request
 from werkzeug.exceptions import BadRequest
@@ -15,8 +14,7 @@ import ieee_2030_5.models as m
 from ieee_2030_5 import hrefs
 from ieee_2030_5.data.indexer import get_href
 from ieee_2030_5.server.base_request import RequestOp
-from ieee_2030_5.server.uuid_handler import UUIDHandler
-from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
+from ieee_2030_5.utils import xml_to_dataclass
 
 
 class Error(Exception):
@@ -30,17 +28,15 @@ class ResponseStatus:
 
 
 class UsagePointsContainer:
-    __upt__: Dict[bytes, m.UsagePoint] = {}
-    __mup__: Dict[bytes, m.MirrorUsagePoint] = {}
-    __sorted_mrid__: List = []
-    __mup_href__: Dict[str, m.MirrorUsagePoint] = {}
-    __mup_readings__: Dict[bytes, m.MirrorReadingSet] = {}
+    __upt__: dict[bytes, m.UsagePoint] = {}
+    __mup__: dict[bytes, m.MirrorUsagePoint] = {}
+    __sorted_mrid__: list = []
+    __mup_href__: dict[str, m.MirrorUsagePoint] = {}
+    __mup_readings__: dict[bytes, m.MirrorReadingSet] = {}
 
-    def get_mup_list(self,
-                     start: Optional[int] = None,
-                     after: Optional[int] = None,
-                     length: Optional[int] = None) -> m.MirrorUsagePointList:
-
+    def get_mup_list(
+        self, start: int | None = None, after: int | None = None, length: int | None = None
+    ) -> m.MirrorUsagePointList:
         if start is not None and after is not None:
             # after takes precedence
             index = after + 1 + start
@@ -54,10 +50,10 @@ class UsagePointsContainer:
         mup_list = m.MirrorUsagePointList(all=len(self.__sorted_mrid__))
 
         if length is None:
-            for x in self.__sorted_mrid__[index:len(self.__sorted_mrid__)]:
+            for x in self.__sorted_mrid__[index : len(self.__sorted_mrid__)]:
                 mup_list.MirrorUsagePoint.append(self.__mup__[x])
         elif length - index < len(self.__sorted_mrid__):
-            for x in self.__sorted_mrid__[index:index + length]:
+            for x in self.__sorted_mrid__[index : index + length]:
                 mup_list.MirrorUsagePoint.append(self.__mup__[x])
         else:
             for x in self.__sorted_mrid__[index:]:
@@ -70,7 +66,7 @@ class UsagePointsContainer:
     def get_upt_list(self) -> m.UsagePointList:
         pass
 
-    def get_mup_href(self, href: str) -> Optional[m.MirrorUsagePoint]:
+    def get_mup_href(self, href: str) -> m.MirrorUsagePoint | None:
         return self.__mup_href__.get(href)
 
     def create_reading_set(self, mup_href: str, mrs: m.MirrorReadingSet) -> ResponseStatus | Error:
@@ -111,7 +107,7 @@ class UsagePointsContainer:
                 item_in_list = indx
                 break
         mup.href = hrefs.build_link(hrefs.DEFAULT_MUP_ROOT, item_in_list)
-        return ResponseStatus(mup.href, '201 Created' if created else '204 Updated')
+        return ResponseStatus(mup.href, "201 Created" if created else "204 Updated")
 
 
 point_container = UsagePointsContainer()
@@ -126,18 +122,17 @@ class UTP(RequestOp):
     def get(self) -> Response:
         pass
 
-    def create(self, mrid: Optional[str] = None) -> m.UsagePoint:
+    def create(self, mrid: str | None = None) -> m.UsagePoint:
         up = m.UsagePoint(href=f"{hrefs.build_link(hrefs.upt, UTP.__next_index__)}", mRID=mrid)
         UTP.__next_index__ += 1
 
 
 class MUP(RequestOp):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def get(self, path) -> Response:
-        pth_info = request.environ['PATH_INFO']
+        pth_info = request.environ["PATH_INFO"]
 
         if not pth_info.startswith(hrefs.DEFAULT_MUP_ROOT):
             raise ValueError(f"Invalid path for {self.__class__} {request.path}")
@@ -151,18 +146,18 @@ class MUP(RequestOp):
             # after = request.args.get("a")
             # length = request.args.get("l")
             # ret_value = adpt.MirrorUsagePointAdapter.get_list(start, after, length)
-            #ret_value = point_container.get_mup_list(start, after, length)
+            # ret_value = point_container.get_mup_list(start, after, length)
         else:
             ret_value = get_href(pth_info)
-            #ret_value = point_container.get_mup_href(pth_info)
+            # ret_value = point_container.get_mup_href(pth_info)
         if ret_value:
             return self.build_response_from_dataclass(ret_value)
 
         return Response("Not Found", status=404)
 
     def post(self, path) -> Response:
-        xml = request.data.decode('utf-8')
-        data = xml_to_dataclass(request.data.decode('utf-8'))
+        xml = request.data.decode("utf-8")
+        data = xml_to_dataclass(request.data.decode("utf-8"))
         data_type = type(data)
         if data_type not in (m.MirrorUsagePoint, m.MirrorReadingSet, m.MirrorMeterReading):
             raise BadRequest()
@@ -184,9 +179,9 @@ class MUP(RequestOp):
         else:
             result = adpt.MirrorUsagePointAdapter.create_reading(href=pth_info, data=data)
             # MirrorReadingSet
-            #result = point_container.create_reading_set(mup_href=pth_info, mrs=data)
+            # result = point_container.create_reading_set(mup_href=pth_info, mrs=data)
 
         if isinstance(result, Error):
             return Response(result.args[1], status=500)
         # Note response to the post is different due to added endpoint.
-        return Response(headers={'Location': result.location}, status=result.status)
+        return Response(headers={"Location": result.location}, status=result.status)

@@ -6,18 +6,16 @@ from typing import Optional, Type
 
 from xsdata.formats.dataclass.context import XmlContext
 from xsdata.formats.dataclass.parsers.config import ParserConfig
+from xsdata.formats.dataclass.parsers.handlers import LxmlEventHandler
 from xsdata.formats.dataclass.parsers.xml import XmlParser
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
-from xsdata.formats.dataclass.parsers.handlers import LxmlEventHandler
 
 from ieee_2030_5.models.sep import EndDevice, EndDeviceList
 
 __xml_context__ = XmlContext()
 __parser_config__ = ParserConfig(fail_on_unknown_attributes=True, fail_on_unknown_properties=True)
-__xml_parser__ = XmlParser(config=__parser_config__,
-                           context=__xml_context__,
-                           handler=LxmlEventHandler)
+__xml_parser__ = XmlParser(config=__parser_config__, context=__xml_context__, handler=LxmlEventHandler)
 __config__ = SerializerConfig(xml_declaration=False, pretty_print=True)
 __serializer__ = XmlSerializer(config=__config__)
 __ns_map__ = {None: "urn:ieee:std:2030.5:ns"}
@@ -27,7 +25,6 @@ import ieee_2030_5.utils as tls
 
 
 class PrivateKeyDeosntExist(Exception):
-
     def __init__(self, private_key_path: Path):
         super().__init__()
         self.pk_path = private_key_path
@@ -37,7 +34,6 @@ class PrivateKeyDeosntExist(Exception):
 
 
 class CertExistsError(Exception):
-
     def __init__(self, cert_path: Path):
         super().__init__()
         self.cert_path = cert_path
@@ -47,7 +43,6 @@ class CertExistsError(Exception):
 
 
 class CADoesNotExist(Exception):
-
     def __str__(self) -> str:
         return "The CA certificate does not exist!"
 
@@ -55,12 +50,23 @@ class CADoesNotExist(Exception):
 def serialize_dataclass(obj: dataclass) -> str:
     """
     Serializes a dataclass that was created via xsdata to an xml string for
-    returning to a client.
+    returning to a client. Ensures mRID fields are lowercase.
     """
-    return __serializer__.render(obj, ns_map=__ns_map__)
+    xml = __serializer__.render(obj, ns_map=__ns_map__)
+
+    # Replace any uppercase hex in mRID tags with lowercase
+    import re
+
+    # Match mRID tags with hex content and convert to lowercase
+    def lowercase_mrid(match):
+        return f"<mRID>{match.group(1).lower()}</mRID>"
+
+    xml = re.sub(r"<mRID>([0-9A-Fa-f]+)</mRID>", lowercase_mrid, xml)
+
+    return xml
 
 
-def xml_to_dataclass(xml: str, type: Optional[Type] = None) -> dataclass:
+def xml_to_dataclass(xml: str, type: type | None = None) -> dataclass:
     """
     Parse the xml passed and return result from loaded classes.
     """
@@ -97,7 +103,7 @@ def get_lfdi_from_cert(path: Path) -> t.Lfdi:
 
     # 160 / 4 == 40
     fp = tls.OpensslWrapper.tls_get_fingerprint_from_cert(path)
-    fp = fp.replace(":", "")
+    fp = fp.replace(":", "").lower()
     lfdi = t.Lfdi(fp[:40])
     return lfdi
 
@@ -112,15 +118,15 @@ def get_sfdi_from_lfdi(lfdi: t.Lfdi) -> int:
 
     """
     from ieee_2030_5.certs import sfdi_from_lfdi
+
     return sfdi_from_lfdi(lfdi)
 
 
 def uuid_2030_5() -> str:
-    return str(uuid.uuid4()).replace('-', '').upper()
+    return str(uuid.uuid4()).replace("-", "").upper()
 
 
 class TLSWrap:
-
     @staticmethod
     def tls_create_private_key(file_path: Path):
         """
@@ -165,12 +171,14 @@ class TLSWrap:
         raise NotImplementedError()
 
     @staticmethod
-    def tls_create_signed_certificate(common_name: str,
-                                      ca_key_file: Path,
-                                      ca_cert_file: Path,
-                                      private_key_file: Path,
-                                      cert_file: Path,
-                                      as_server: bool = False):
+    def tls_create_signed_certificate(
+        common_name: str,
+        ca_key_file: Path,
+        ca_cert_file: Path,
+        private_key_file: Path,
+        cert_file: Path,
+        as_server: bool = False,
+    ):
         """
 
         Args:
@@ -199,8 +207,7 @@ class TLSWrap:
         """
 
     @staticmethod
-    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path,
-                                       combined_file: Path):
+    def tls_create_pkcs23_pem_and_cert(private_key_file: Path, cert_file: Path, combined_file: Path):
         """
 
         Args:
@@ -214,7 +221,35 @@ class TLSWrap:
         raise NotImplementedError()
 
 
-from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
-from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
+import logging
 
-__all__ = ['OpensslWrapper', 'CryptographyWrapper', 'uuid_2030_5']
+
+class ColorizedFormatter(logging.Formatter):
+    """A colorized log formatter that adds ANSI color codes based on log level."""
+
+    # ANSI color codes
+    COLORS = {
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[35m",  # Magenta
+    }
+    RESET = "\033[0m"  # Reset to normal
+
+    def format(self, record):
+        # Get the original formatted message
+        msg = super().format(record)
+
+        # Add color based on log level
+        level_color = self.COLORS.get(record.levelname, "")
+        if level_color:
+            # Color the entire message
+            return f"{level_color}{msg}{self.RESET}"
+        return msg
+
+
+from ieee_2030_5.utils.cryptography_wrapper import CryptographyWrapper
+from ieee_2030_5.utils.tls_wrapper import OpensslWrapper
+
+__all__ = ["OpensslWrapper", "CryptographyWrapper", "uuid_2030_5", "ColorizedFormatter"]

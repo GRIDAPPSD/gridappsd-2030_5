@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import logging
 import pickle
 from copy import deepcopy
 from dataclasses import dataclass, field
-import logging
-
 from datetime import datetime
 from email.utils import format_datetime
-from typing import Dict, Optional, List
-from ieee_2030_5.models.sep import Link
-from ieee_2030_5.persistance.points import set_point, get_point
 
-__all__: List[str] = ["get_href", "add_href", "get_href_all_names", "get_href_filtered"]
+from ieee_2030_5.models.sep import Link
+from ieee_2030_5.persistance.points import get_point, set_point
+
+__all__: list[str] = ["get_href", "add_href", "get_href_all_names", "get_href_filtered"]
 
 _log = logging.getLogger(__name__)
 
@@ -20,14 +19,14 @@ _log = logging.getLogger(__name__)
 class Index:
     href: str
     item: object
-    added: str    # Optional[Union[datetime | str]]
-    last_written: str    # Optional[Union[datetime | str]]
-    last_hash: Optional[int]
+    added: str  # Optional[Union[datetime | str]]
+    last_written: str  # Optional[Union[datetime | str]]
+    last_hash: int | None
 
 
 @dataclass
 class Indexer:
-    __items__: Dict = field(default=None)
+    __items__: dict = field(default=None)
 
     def init(self):
         if self.__items__ is None:
@@ -50,14 +49,12 @@ class Indexer:
         #     _log.debug(f"Item already cached {href}")
         # else:
         added = format_datetime(datetime.utcnow())
-        serialized_item = pickle.dumps(
-            item)    # serialize_dataclass(item, serialization_type=SerializeType.JSON)
+        serialized_item = pickle.dumps(item)  # serialize_dataclass(item, serialization_type=SerializeType.JSON)
         obj = Index(href, item, added=added, last_written=added, last_hash=hash(serialized_item))
         # serialized_obj = serialize_dataclass(obj, serialization_type=SerializeType.JSON)
 
         # note storing Index object.
-        set_point(href, pickle.dumps(
-            obj))    # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
+        set_point(href, pickle.dumps(obj))  # serialize_dataclass(obj, serialization_type=SerializeType.JSON))
         self.__items__[href] = obj
 
     def get(self, href) -> dataclass:
@@ -65,17 +62,44 @@ class Indexer:
         # If using a link, we need the true href to cache the object.
         if isinstance(href, Link):
             href = href.href
+
+        # First check in-memory cache
         if href in self.__items__:
-            index = pickle.loads(get_point(href))    # pickle.loads(get_point(href))
-            # index = pickle.loads(self.__items__.get(href))
-            # index = deserialize_dataclass(data, SerializeType.JSON)
-            data = index.item
+            data = self.__items__[href].item
         else:
-            data = None
+            # If not in cache, check the database
+            try:
+                point_data = get_point(href)
+                if point_data:
+                    index = pickle.loads(point_data)
+                    # Check if it's an Index object or raw data
+                    if hasattr(index, "item"):
+                        data = index.item
+                        # Update in-memory cache
+                        self.__items__[href] = index
+                    else:
+                        # Raw data - wrap it in an Index for consistency
+                        data = index
+                        from datetime import datetime
+                        from email.utils import format_datetime
+
+                        wrapped_index = Index(
+                            href=href,
+                            item=data,
+                            added=format_datetime(datetime.utcnow()),
+                            last_written=format_datetime(datetime.utcnow()),
+                            last_hash=None,
+                        )
+                        self.__items__[href] = wrapped_index
+                else:
+                    data = None
+            except Exception as e:
+                _log.debug(f"Failed to get href {href} from database: {e}")
+                data = None
 
         return data
 
-    def get_all(self) -> List:
+    def get_all(self) -> list:
         return deepcopy([x.item for x in self.__items__.values()])
 
 
@@ -90,14 +114,11 @@ def get_href(href: str) -> dataclass:
     return __indexer__.get(href)
 
 
-def get_href_filtered(href_prefix: str) -> List[dataclass] | []:
+def get_href_filtered(href_prefix: str) -> list[dataclass] | []:
     if __indexer__.__items__ is None:
         return []
 
-    return [
-        v.item for k, v in __indexer__.__items__.items()
-        if k.startswith(href_prefix) and v.item is not None
-    ]
+    return [v.item for k, v in __indexer__.__items__.items() if k.startswith(href_prefix) and v.item is not None]
 
 
 def get_href_all_names():

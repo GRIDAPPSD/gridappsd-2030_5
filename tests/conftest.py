@@ -1,24 +1,22 @@
-from dataclasses import dataclass
 import os
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Tuple
 
 import pytest
+
 # should now be at root
 import yaml
 
-from ieee_2030_5.__main__ import ServerThread, get_tls_repository
 import ieee_2030_5.models as m
-import ieee_2030_5.adapters as adpt
+from ieee_2030_5.__main__ import ServerThread, get_tls_repository
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.client import IEEE2030_5_Client
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.flask_server import build_server
 from ieee_2030_5.server.server_constructs import initialize_2030_5
-import os
 
 parent_path = Path(__file__).parent.parent
 
@@ -44,7 +42,7 @@ class ClientData:
 
 @pytest.fixture
 def ignore_adapter_load():
-    os.environ['IEEE_ADAPTER_IGNORE_INITIAL_LOAD'] = '1'
+    os.environ["IEEE_ADAPTER_IGNORE_INITIAL_LOAD"] = "1"
 
 
 @pytest.fixture(scope="function")
@@ -65,7 +63,7 @@ def create_project_dir() -> Path:
 
 
 @pytest.fixture(scope="function")
-def server_startup(create_project_dir: Path) -> Tuple[TLSRepository, ServerConfiguration]:
+def server_startup(create_project_dir: Path) -> tuple[TLSRepository, ServerConfiguration]:
     """
     Start up the server for testing. This fixture uses the `create_project_dir` fixture to create a temporary directory
     for the server to use. It then loads a YAML configuration file located at `fixtures/server-config.yml`, modifies it
@@ -129,7 +127,7 @@ def first_client_data(first_client: IEEE2030_5_Client) -> ClientData:
 
 
 @pytest.fixture
-def first_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> IEEE2030_5_Client:
+def first_client(server_startup: tuple[TLSRepository, ServerConfiguration]) -> IEEE2030_5_Client:
     """
     Fixture that creates an instance of `IEEE2030_5_Client` for the first device specified in the server configuration.
     The `server_startup` fixture is used to start up the server for testing, and the `TLSRepository` and
@@ -147,11 +145,13 @@ def first_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
 
     host, port = servercfg.server_hostname.split(":")
     certfile, keyfile = repo.get_file_pair(servercfg.devices[0].id)
-    client = IEEE2030_5_Client(server_hostname=host,
-                               server_ssl_port=int(port),
-                               cafile=repo.ca_cert_file,
-                               keyfile=Path(keyfile),
-                               certfile=Path(certfile))
+    client = IEEE2030_5_Client(
+        server_hostname=host,
+        server_ssl_port=int(port),
+        cafile=repo.ca_cert_file,
+        keyfile=Path(keyfile),
+        certfile=Path(certfile),
+    )
 
     yield client
 
@@ -159,7 +159,7 @@ def first_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
 
 
 @pytest.fixture
-def admin_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> IEEE2030_5_Client:
+def admin_client(server_startup: tuple[TLSRepository, ServerConfiguration]) -> IEEE2030_5_Client:
     """
     Fixture that creates an instance of `IEEE2030_5_Client` for the admin device. The `server_startup` fixture is used
     to start up the server for testing, and the `TLSRepository` and `ServerConfiguration` objects are unpacked from the
@@ -176,11 +176,13 @@ def admin_client(server_startup: Tuple[TLSRepository, ServerConfiguration]) -> I
 
     host, port = servercfg.server_hostname.split(":")
     certfile, keyfile = repo.get_file_pair("admin")
-    client = IEEE2030_5_Client(server_hostname=host,
-                               server_ssl_port=port,
-                               cafile=repo.ca_cert_file,
-                               keyfile=Path(keyfile),
-                               certfile=Path(certfile))
+    client = IEEE2030_5_Client(
+        server_hostname=host,
+        server_ssl_port=port,
+        cafile=repo.ca_cert_file,
+        keyfile=Path(keyfile),
+        certfile=Path(certfile),
+    )
 
     yield client
 
@@ -208,7 +210,8 @@ def new_tls_repository() -> TLSRepository:
         tls = TLSRepository(
             repo_dir=tmp,
             openssl_cnffile_template=Path(__file__).parent.parent.joinpath("openssl.cnf"),
-            serverhost="serverhostname")
+            serverhost="serverhostname",
+        )
 
         yield tls
     except Exception as e:

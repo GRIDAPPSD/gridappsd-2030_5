@@ -1,9 +1,13 @@
-#file: noinspection SpellCheckingInspection
 ---
-server: WE48687
-port: 8090
+server: 172.29.10.192
+port: 5000
 service_name: IEEE_2030_5
 proxy_hostname: 0.0.0.0:8443
+proxy_enabled: True
+
+# Dual server configuration for HTTP admin access
+dual_server_enabled: true
+admin_http_port: 5001
 
 tls_repository: "~/tls"
 openssl_cnf: "openssl.cnf"
@@ -11,7 +15,7 @@ openssl_cnf: "openssl.cnf"
 # enddevices_register_access_only
 # enddevices_create_on_start
 # enddevices_allow_all_access
-server_mode: enddevices_register_access_only
+server_mode: enddevices_create_on_start
 
 # lfdi_mode: Determines what piece of information is used to calculate the lfdi
 #
@@ -22,6 +26,7 @@ server_mode: enddevices_register_access_only
 # default: lfdi_mode_from_cert_fingerprint
 lfdi_mode: lfdi_mode_from_file
 #lfdi_mode: lfdi_mode_from_cert_fingerprint
+#lfdi_mode: lfdi_mode_from_cert_fingerprint
 
 # Create an administrator certificate that can be used from
 # browser/api to connect to the platform.
@@ -29,22 +34,56 @@ lfdi_mode: lfdi_mode_from_file
 # this is important for the demo
 generate_admin_cert: True
 
-log_event_list_poll_rate: 60
-device_capability_poll_rate: 60
-mirror_usage_point_post_rate: 15
+#log_event_list_poll_rate: 60
+#device_capability_poll_rate: 60
+#mirror_usage_point_post_rate: 15
+
+# These are all optional and default to 120 seconds.
+log_event_list_poll_rate: 30
+device_capability_poll_rate: 30
+mirror_usage_point_post_rate: 30
+
+device_capability: 30
+end_device_list: 30
+der_list: 30
+der_program_list: 30
+# Note: 'der_control_list' removed - DERControlList does not have pollRate per IEEE 2030.5
+fsa_list: 30
+mirror_usage_point: 30
+usage_point: 30
+registration: 30
+log_event_list: 30
+# Note: 'meter_reading' removed - MeterReadingList does not have pollRate per IEEE 2030.5
+reading_set: 30
+time: 30
+
+#post_rate: 60
+poll_rate: 30
 
 # Reset storage so no memory when server restarts.
-cleanse_storage: true
+cleanse_storage: false
 
 # Directory containing data files for the platform.
 # This directory will be created if it does not exist.
 storage_path: data_store
 
+# Database backend configuration for point storage
+# Options: "zodb" (default) or "sqlite"
+# ZODB: File-based object database with MVCC
+# SQLite: Lightweight SQL database with better concurrency
+database_backend: sqlite
+# Optional: Custom path for database file
+database_path: "~/.ieee_2030_5_data/custom_points.db"
+
+# Enable debug logging of all client requests/responses to individual files
+# When enabled, creates a debug_client_traffic/ directory with per-client logs
+debug_client_traffic: true
+
 # Should every device have a der associated by default?
-include_default_der_on_all_devices: true
+include_default_der_on_all_devices: True
 
 # Make sure that all ders have a default program associated with it
-include_default_der_program_on_ders: true
+include_default_der_program_on_ders: True
 
 # The default program to use for all ders.
 default_program:
@@ -59,15 +98,13 @@ default_program:
       opModConnect: true
       opModEnergize: true
 
-
 gridappsd:
   # GridAPPS-D API endpoint
   address: 'localhost'
   port: 61613
-  model_name: 'imp_base_reduced_southern_withpv'
-  #model_name: 'ieee13nodeckt'
-
-  #simulation_id: 5023
+  #model_name: 'imp_base_reduced_southern_withpv'
+  model_name: 'final_9_20_2024_reduced_southern'
+  #model_name: 'ieee123pv'
 
 
   # Configure the field bus for publishing/subscribing
@@ -75,23 +112,23 @@ gridappsd:
     id: substation
     connection_type: CONNECTION_TYPE_GRIDAPPSD
     is_ot_bus: True
-#    connection_args:
-#      GRIDAPPSD_ADDRESS: tcp://gridappsd:61613
-#      GRIDAPPSD_USER: system
-#      GRIDAPPSD_PASSWORD: manager
 
   # How often should the aggregates for the houses be published.
-  publish_interval_seconds: 15
+  publish_interval_seconds: 30
+
+  # The topic the aggregate houses should publish to the goss bus.
+
+  publish_topic: '/topic/goss.gridappsd.IEEE_2030_5.output'
+  #publish_topic: '/topic/goss.gridappsd.simulation.ochre.output'
 
   # An alternate to using the gridappsd house models for named inverters.
   # This is a regex that will be used to match the name of the inverters for
   # both houses as well as utilities.  When utiliities are found there will
   # be 3 named inverters for each utility (utility_bat1_a, utility_bat1_b,
   # utility_bat1_c, etc)
-#  house_named_inverters_regex: '646'
-#  utility_named_inverters_regex: '652'
-  house_named_inverters_regex: '.*house_\d+_\d+v'
-  utility_named_inverters_regex: '.*utility_bat\d+'
+
+  house_named_inverters_regex: '.*tl_house_\d+_\d+v'
+  utility_named_inverters_regex: '.*utility_bat\d+_[a-zA-Z\d]+'
 
   # Model dictionary file to use rather than querying the gridappsd server.
   # model_dict_file: 'model_dict.json'
@@ -104,17 +141,18 @@ gridappsd:
   # Default pin to use for gridappsd power electronic devices
   default_pin: 111115
 
-# End Device
-devices:
-  # SolarEdge SE6000H HD-Wave SetApp Enabled Inverter
-  - id: dev1
-    # DeviceCategoryType from ieee_2030_5.models.DeviceCategoryType
-    device_categories:
-      - OTHER_STORAGE_SYSTEMS
-    #   - OTHER_GENERATION_SYSTEMS
-    pin: 111115
-    programs:
-      - Default Program
+# End Device - GridAPPS-D will automatically create devices
+# Manual device configuration is commented out to use GridAPPS-D discovery
+# devices:
+#   # SolarEdge SE6000H HD-Wave SetApp Enabled Inverter
+#   - id: dev1
+#     # DeviceCategoryType from ieee_2030_5.models.DeviceCategoryType
+#     device_categories:
+#       - OTHER_STORAGE_SYSTEMS
+#     #   - OTHER_GENERATION_SYSTEMS
+#     pin: 111115
+#     programs:
+#       - Default Program
     # fsas:
     #   - fsa1
     #   - fsa2
@@ -142,16 +180,16 @@ devices:
 
 
 
-# programs:
-#   - description: Default Program
-#     primacy: 0
-#     DefaultDERControl:
-#       setESDelay: 30
-#       setGradW: 1000
+programs:
+  - description: Default Program
+    primacy: 0
+    DefaultDERControl:
+      setESDelay: 30
+      setGradW: 1000
 
-#       DERControlBase:
-#         opModConnect: true
-#         opModEnergize: true
+      DERControlBase:
+        opModConnect: true
+        opModEnergize: true
 
 # curves:
 #   - description: Curve 1
