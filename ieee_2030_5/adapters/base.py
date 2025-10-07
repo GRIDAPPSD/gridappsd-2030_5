@@ -56,7 +56,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, Union
 
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
@@ -64,6 +64,7 @@ from ieee_2030_5.persistance.points import atomic_operation, get_db
 
 _log = logging.getLogger(__name__)
 T = TypeVar("T")
+LockType = Union["ReadWriteLock", threading.RLock]
 
 
 @dataclass
@@ -412,7 +413,7 @@ class ThreadSafeAdapter(Generic[T], ABC):
         >>> result = adapter.fetch_by_href("/my/resource/123")
     """
 
-    _lock: ReadWriteLock | threading.RLock
+    _lock: LockType
 
     def __init__(self, model_class: type[T], concurrency_mode: str = ConcurrencyMode.READ_WRITE_LOCK):
         """Initialize the thread-safe adapter.
@@ -1987,7 +1988,6 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                     if self._db.exists(device_key):
                         existing_data = self._db.get_point(device_key)
                         if existing_data:
-                            existing_device = pickle.loads(existing_data)
                             _log.info(f"Device already exists at index {device_index}, updating: {device.href}")
 
                     self._db.set_point(device_key, pickle.dumps(device))
@@ -2162,10 +2162,7 @@ class ThreadSafeEndDeviceAdapter(ThreadSafeAdapter[m.EndDevice]):
                 if after > 0:
                     start = after + 1
 
-                if limit > 0:
-                    end = min(start + limit, device_count)
-                else:
-                    end = device_count
+                end = min(start + limit, device_count) if limit > 0 else device_count
 
                 # Collect devices
                 devices = []
@@ -2560,10 +2557,7 @@ class ThreadSafeGlobalMRIDs:
                 normalized_mrid = self._normalize_mrid_to_string(mrid)
 
                 # Create value with type prefix if provided
-                if obj_type:
-                    value = f"{obj_type}:{db_key}"
-                else:
-                    value = f"db:{db_key}"
+                value = f"{obj_type}:{db_key}" if obj_type else f"db:{db_key}"
 
                 # Store mRID as individual database key with prefixed value
                 mrid_key = f"{self._mrid_prefix}{normalized_mrid}"
