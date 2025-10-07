@@ -211,18 +211,22 @@ class IEEE2030_5_Client:
         resp = self.__post__(mirror_usage_point_href, data=data)
         return resp.status, resp.headers["Location"]
 
+    def update_mirror_usage_point(self, mirror_usage_point_href: str, mirror_usage_point: m.MirrorUsagePoint) -> int:
+        """Update an existing MirrorUsagePoint via PUT request.
+        
+        Args:
+            mirror_usage_point_href: The href/location of the MirrorUsagePoint to update
+            mirror_usage_point: The updated MirrorUsagePoint object
+            
+        Returns:
+            HTTP status code
+        """
+        data = utils.dataclass_to_xml(mirror_usage_point)
+        resp = self.__put__(mirror_usage_point_href, data=data)
+        return resp.status
+
     def post(self, url: str, data: Any, headers: dict[str, str] | None = None):
         response = self.__post__(url, data, headers=headers)
-
-    def __post__(self, url: str, data=None, headers: dict[str, str] | None = None):
-        if not headers:
-            headers = {"Content-Type": "text/xml"}
-
-        self.http_conn.request(method="POST", headers=headers, url=url, body=data)
-        response = self._http_conn.getresponse()
-        # response_data = response.read().decode("utf-8")
-
-        return response
 
     def __get_request__(self, url: str, body=None, headers: dict = None):
         if headers is None:
