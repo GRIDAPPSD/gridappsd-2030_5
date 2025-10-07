@@ -49,6 +49,7 @@ from argparse import ArgumentParser
 from dataclasses import asdict
 from pathlib import Path
 
+import yaml
 from werkzeug.serving import BaseWSGIServer
 
 import ieee_2030_5.hrefs as hrefs
@@ -152,7 +153,7 @@ def should_stop() -> bool:
 
 def make_stop_file():
     """Create a file to signal server stop."""
-    with open("server.stop", "w") as w:
+    with open("server.stop", "w", encoding="ascii"):
         pass
 
 
@@ -408,7 +409,6 @@ def _main():
     # Check if external logging config file exists
     logging_config_path = Path("logging_config.yml")
     if logging_config_path.exists():
-        import yaml
 
         try:
             with open(logging_config_path) as f:
@@ -456,7 +456,7 @@ def _main():
         config = ServerConfiguration(**cfg_dict)
     except Exception as e:
         _log.error(f"Failed to load configuration: {e}")
-        raise InvalidConfigFile(f"Failed to load configuration: {e}")
+        raise InvalidConfigFile(f"Failed to load configuration: {e}") from e
 
     if opts.with_proxy:
         config.proxy_enabled = True
