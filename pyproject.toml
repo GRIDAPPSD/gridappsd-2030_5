@@ -29,7 +29,7 @@ flask-session = "^0.5.0"
 pyyaml = "^6.0.1"
 #gridappsd-field-bus = {version = "^2024.4.1a0", allow-prereleases = true}
 #gridappsd-python = {version = "^2024.4.1a0", allow-prereleases = true}
-xsdata = {extras = ["lxml"], version = "^22.5"}
+xsdata = {extras = ["lxml"], version = "^25.7"}
 # Fixes issue with pypi.org not serving the correct version of docutils
 docutils = "!=0.21"
 gridappsd-field-bus = "2024.8.1a1"
