@@ -262,7 +262,6 @@ class TestDERStatusIntegrationFlow:
 class TestGridAPPSDAdapterIntegration:
     """Integration tests for GridAPPSD adapter with real data."""
 
-    @pytest.mark.skip(reason="Requires GridAPPSD environment variables (GRIDAPPSD_APPLICATION_ID, GRIDAPPSD_SIMULATION_ID)")
     def test_adapter_with_real_database(self, integration_database):
         """Test GridAPPSD adapter retrieval from real database."""
 
@@ -297,29 +296,34 @@ class TestGridAPPSDAdapterIntegration:
             "default_pin": "12345",
         }
 
-        adapter = GridAPPSDAdapter(gapps=mock_gapps, gridappsd_configuration=mock_config, tls=Mock())
+        # Set required environment variables for GridAPPSD adapter
+        import os
+        with patch.dict(os.environ, {
+            "GRIDAPPSD_SERVICE_NAME": "test_service_name",
+            "GRIDAPPSD_SIMULATION_ID": "test_sim_id"
+        }):
+            adapter = GridAPPSDAdapter(gapps=mock_gapps, gridappsd_configuration=mock_config, tls=Mock())
 
-        # Set up inverter mappings
-        adapter._inverters = [
-            HouseLookup(mRID="house_001", name="House1", lfdi="lfdi_house_001"),
-            HouseLookup(mRID="house_002", name="House2", lfdi="lfdi_house_002"),
-        ]
+            # Set up inverter mappings
+            adapter._inverters = [
+                HouseLookup(mRID="house_001", name="House1", lfdi="lfdi_house_001"),
+                HouseLookup(mRID="house_002", name="House2", lfdi="lfdi_house_002"),
+            ]
 
-        # Test message generation
-        with adapter._lock:
-            message = adapter.get_message_for_bus()
+            # Test message generation
+            with adapter._lock:
+                message = adapter.get_message_for_bus()
 
-        # Verify adapter processed the data
-        assert isinstance(message, dict)
+            # Verify adapter processed the data
+            assert isinstance(message, dict)
 
-        # Check if houses with matching LFDIs appear in message
-        for house_mrid in ["house_001", "house_002"]:
-            if house_mrid in message:
-                house_data = message[house_mrid]
-                assert "mRID" in house_data
-                assert house_data["mRID"] == house_mrid
+            # Check if houses with matching LFDIs appear in message
+            for house_mrid in ["house_001", "house_002"]:
+                if house_mrid in message:
+                    house_data = message[house_mrid]
+                    assert "mRID" in house_data
+                    assert house_data["mRID"] == house_mrid
 
-    @pytest.mark.skip(reason="Requires GridAPPSD environment variables (GRIDAPPSD_APPLICATION_ID, GRIDAPPSD_SIMULATION_ID)")
     def test_complete_integration_flow(self, integration_database):
         """Test the complete flow from PUT to GridAPPSD message."""
 
@@ -349,35 +353,41 @@ class TestGridAPPSDAdapterIntegration:
         mock_gapps = Mock()
         mock_gapps.connected = True
 
-        adapter = GridAPPSDAdapter(
-            gapps=mock_gapps,
-            gridappsd_configuration={
-                "field_bus_def": {"id": "complete_flow_bus"},
-                "publish_interval_seconds": 3,
-                "house_named_inverters_regex": None,
-                "utility_named_inverters_regex": None,
-                "model_name": "test_model",
-                "default_pin": "12345",
-            },
-            tls=Mock(),
-        )
+        # Set required environment variables for GridAPPSD adapter
+        import os
+        with patch.dict(os.environ, {
+            "GRIDAPPSD_SERVICE_NAME": "test_service_name",
+            "GRIDAPPSD_SIMULATION_ID": "test_sim_id"
+        }):
+            adapter = GridAPPSDAdapter(
+                gapps=mock_gapps,
+                gridappsd_configuration={
+                    "field_bus_def": {"id": "complete_flow_bus"},
+                    "publish_interval_seconds": 3,
+                    "house_named_inverters_regex": None,
+                    "utility_named_inverters_regex": None,
+                    "model_name": "test_model",
+                    "default_pin": "12345",
+                },
+                tls=Mock(),
+            )
 
-        adapter._inverters = [HouseLookup(mRID=test_house, name="CompleteFlowHouse", lfdi=test_lfdi)]
+            adapter._inverters = [HouseLookup(mRID=test_house, name="CompleteFlowHouse", lfdi=test_lfdi)]
 
-        # 4. Generate message for bus
-        with adapter._lock:
-            message = adapter.get_message_for_bus()
+            # 4. Generate message for bus
+            with adapter._lock:
+                message = adapter.get_message_for_bus()
 
-        # 5. Verify complete flow worked
-        assert isinstance(message, dict)
+            # 5. Verify complete flow worked
+            assert isinstance(message, dict)
 
-        # If our house appears in the message, verify the data
-        if test_house in message:
-            house_data = message[test_house]
-            assert house_data["mRID"] == test_house
-            # Value should come from our DERStatus
-            if "value" in house_data:
-                assert house_data["value"] == 78
+            # If our house appears in the message, verify the data
+            if test_house in message:
+                house_data = message[test_house]
+                assert house_data["mRID"] == test_house
+                # Value should come from our DERStatus
+                if "value" in house_data:
+                    assert house_data["value"] == 78
 
 
 if __name__ == "__main__":
