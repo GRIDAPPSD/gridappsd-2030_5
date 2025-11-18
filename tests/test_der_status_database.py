@@ -37,10 +37,10 @@ def temp_db_module():
     """Create a temporary database for the entire test module."""
     tmpdir = tempfile.mkdtemp()
     try:
-        db_path = Path(tmpdir) / "test.fs"
+        db_path = Path(tmpdir) / "test.db"
 
         # Configure the point store with the test database path
-        configure_point_store("zodb", db_path)
+        configure_point_store("sqlite", db_path)
 
         # Initialize adapters (this will use the configured database)
         adpt.initialize_adapters()

@@ -19,7 +19,7 @@ import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.persistance.points import ZODBPointStore
+from ieee_2030_5.persistance.sqlite_store import SQLitePointStore
 from ieee_2030_5.server.derfs import DERRequests
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
@@ -37,7 +37,7 @@ def integration_database():
     """Set up a real database for integration testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "integration_test.fs"
-        db = ZODBPointStore(db_path)
+        db = SQLitePointStore(db_path)
 
         # Replace the global database reference for testing
         original_db = getattr(adpt.ListAdapter, "_db", None)

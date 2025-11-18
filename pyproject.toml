@@ -37,7 +37,8 @@ gridappsd-certificate-store = "^0.3.0"
 cachetools = "^6.1.0"
 pyopenssl = "^25.0.0"
 pandas = "^2.2.3"
-zodb = "^6.0.1"
+# SQLite is built-in to Python, no additional dependency needed
+# Future: Add psycopg2 or asyncpg for PostgreSQL support
 
 
 [tool.poetry.group.dev.dependencies]

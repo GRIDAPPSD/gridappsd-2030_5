@@ -17,7 +17,7 @@ import pytest
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
-from ieee_2030_5.persistance.points import ZODBPointStore
+from ieee_2030_5.persistance.sqlite_store import SQLitePointStore
 
 # Only import GridAPPSD if available
 try:
@@ -33,7 +33,7 @@ def high_traffic_database():
     """Set up database for high traffic testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "high_traffic_test.fs"
-        db = ZODBPointStore(db_path)
+        db = SQLitePointStore(db_path)
 
         # Replace global database
         original_db = getattr(adpt.ListAdapter, "_db", None)

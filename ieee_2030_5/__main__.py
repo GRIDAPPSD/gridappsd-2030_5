@@ -253,7 +253,7 @@ def clear_all_data(config: ServerConfiguration | None = None):
             except Exception as e:
                 _log.warning(f"Failed to remove {storage_path}: {e}")
 
-    # User data directory (contains ZODB and SQLite databases)
+    # User data directory (contains SQLite databases)
     data_store_userdir = Path("~/.ieee_2030_5_data").expanduser()
     if data_store_userdir.exists():
         _log.info(f"Removing user data directory: {data_store_userdir}")

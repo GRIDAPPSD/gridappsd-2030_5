@@ -23,7 +23,7 @@ import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.persistance.points import ZODBPointStore
+from ieee_2030_5.persistance.sqlite_store import SQLitePointStore
 from ieee_2030_5.server.derfs import DERRequests
 from ieee_2030_5.utils import xml_to_dataclass
 
@@ -33,7 +33,7 @@ def exact_flow_database():
     """Set up database for exact flow testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "exact_flow_test.fs"
-        db = ZODBPointStore(db_path)
+        db = SQLitePointStore(db_path)
 
         # Replace global database
         original_db = getattr(adpt.ListAdapter, "_db", None)

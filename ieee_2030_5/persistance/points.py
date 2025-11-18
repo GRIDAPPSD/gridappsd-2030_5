@@ -1,7 +1,7 @@
 # ieee_2030_5/persistance/points.py
 """
 Provides a configurable key/value store interface for setting retrieving points from a datastore.
-Supports both ZODB and SQLite backends, configurable via configuration.
+Supports SQLite backend by default, with abstraction for future backends (PostgreSQL, etc).
 """
 
 import logging
@@ -11,17 +11,16 @@ from pathlib import Path
 
 from .base import PointStoreBase
 from .sqlite_store import SQLitePointStore
-from .zodb_store import ZODBPointStore
 
 _log = logging.getLogger(__name__)
 
 
-def create_point_store(backend: str = "zodb", db_path: Path | None = None) -> PointStoreBase:
+def create_point_store(backend: str = "sqlite", db_path: Path | None = None) -> PointStoreBase:
     """
     Factory function to create a point store based on backend type.
 
     Args:
-        backend: Backend type ("zodb" or "sqlite")
+        backend: Backend type ("sqlite" default, "postgresql" future)
         db_path: Optional path to database file
 
     Returns:
@@ -32,28 +31,29 @@ def create_point_store(backend: str = "zodb", db_path: Path | None = None) -> Po
     """
     backend = backend.lower()
 
-    if backend == "zodb":
-        return ZODBPointStore(db_path)
-    elif backend == "sqlite":
+    if backend == "sqlite":
         return SQLitePointStore(db_path)
+    elif backend == "postgresql":
+        # Future implementation
+        raise NotImplementedError("PostgreSQL backend not yet implemented. Use 'sqlite' for now.")
     else:
-        raise ValueError(f"Unsupported point store backend: {backend}")
+        raise ValueError(f"Unsupported point store backend: {backend}. Supported: sqlite, postgresql (future)")
 
 
 # Global instance and configuration
 _db_instance = None
 _db_lock = threading.Lock()
-_backend_type = "zodb"  # Default backend
+_backend_type = "sqlite"  # Default backend
 _db_path = None
 
 
-def configure_point_store(backend: str = "zodb", db_path: Path | None = None) -> None:
+def configure_point_store(backend: str = "sqlite", db_path: Path | None = None) -> None:
     """
     Configure the global point store backend.
     Must be called before first use of get_db().
 
     Args:
-        backend: Backend type ("zodb" or "sqlite")
+        backend: Backend type ("sqlite" default, "postgresql" future)
         db_path: Optional path to database file
     """
     global _backend_type, _db_path, _db_instance
@@ -164,10 +164,10 @@ def atomic_operation():
 
 
 if __name__ == "__main__":
-    # Test both implementations
-    print("Testing configurable point store...")
+    # Test SQLite implementation
+    print("Testing SQLite point store...")
 
-    # Test SQLite
+    # Test SQLite (default)
     print("\n=== Testing SQLite Backend ===")
     configure_point_store("sqlite")
 
@@ -175,14 +175,16 @@ if __name__ == "__main__":
     print(f"sqlite_test = {get_point('sqlite_test')}")
     print(f"Count: {point_count()}")
 
-    reset_db()  # Clear for next test
+    # Test bulk operations
+    bulk_set_points({
+        "key1": b"value1",
+        "key2": b"value2",
+        "key3": b"value3"
+    })
+    print(f"After bulk set, count: {point_count()}")
 
-    # Test ZODB
-    print("\n=== Testing ZODB Backend ===")
-    configure_point_store("zodb")
+    results = bulk_get_points(["key1", "key2", "key3"])
+    print(f"Bulk get results: {len(results)} items")
 
-    set_point("zodb_test", b"zodb_value")
-    print(f"zodb_test = {get_point('zodb_test')}")
-    print(f"Count: {point_count()}")
-
-    print("\nConfigurable point store test completed.")
+    reset_db()
+    print("\nSQLite point store test completed.")

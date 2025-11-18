@@ -23,7 +23,7 @@ import pytest
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
-from ieee_2030_5.persistance.points import ZODBPointStore
+from ieee_2030_5.persistance.sqlite_store import SQLitePointStore
 
 # Only import GridAPPSD if available
 try:
@@ -40,7 +40,7 @@ def adapter_test_database():
     """Set up a dedicated database for GridAPPSD adapter testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "gridappsd_adapter_test.fs"
-        db = ZODBPointStore(db_path)
+        db = SQLitePointStore(db_path)
 
         # Replace the global database reference for testing
         original_db = getattr(adpt.ListAdapter, "_db", None)

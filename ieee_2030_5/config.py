@@ -277,14 +277,15 @@ class ServerConfiguration:
     # DERControlList: Optional[DERControl] = field(default=list)
 
     # Database backend configuration
-    database_backend: str = "zodb"  # Options: "zodb" or "sqlite"
+    database_backend: str = "sqlite"  # Options: "sqlite" (default) or "postgresql" (future)
     database_path: Path | None = None  # Optional custom path for database file
 
-    # ZODB configuration (used when database_backend = "zodb")
-    zodb_path: Path | None = None
-    zodb_pool_size: int = 7
-    zodb_cache_size: int = 10000
-    zodb_pack_interval_hours: int = 24
+    # Database connection settings (for future PostgreSQL support)
+    database_host: str | None = None
+    database_port: int | None = None
+    database_name: str | None = None
+    database_user: str | None = None
+    database_password: str | None = None
 
     @property
     def server_hostname(self) -> str:
@@ -305,11 +306,9 @@ class ServerConfiguration:
         return cls.from_dict(yaml.safe_load(file.read_text()))
 
     def __post_init__(self):
-        # self.curves = [DERCurveConfiguration.from_dict(x) for x in self.curves]
-        # self.controls = [DERControlConfiguration.from_dict(x) for x in self.controls]
-        # self.programs = [DERProgramConfiguration.from_dict(x) for x in self.programs]
-        if self.zodb_path is None:
-            self.zodb_path = Path("~/.ieee_2030_5_data/main.fs").expanduser()
+        # Set default database path if not specified
+        if self.database_path is None:
+            self.database_path = Path("~/.ieee_2030_5_data/points.db").expanduser()
 
         if self.devices is None:
             self.devices = []
