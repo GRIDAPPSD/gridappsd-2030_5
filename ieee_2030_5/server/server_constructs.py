@@ -417,33 +417,67 @@ def initialize_2030_5(config: ServerConfiguration, tlsrepo: TLSRepository):
                 existing_device.sFDI = tlsrepo.sfdi(cfg_device.id)
                 existing_device.postRate = cfg_device.post_rate
 
-                # Link existing device to default FSA if available
-                if default_fsa:
-                    ed_href = hrefs.EndDeviceHref(device_index)
-                    # Initialize FSA list if needed
-                    # Create device-specific FSA
-                    fsa = create_device_fsa_with_program(existing_device.href, config)
-                    if fsa:
-                        list_size = adpt.ListAdapter.get_list_size(ed_href.function_set_assignments)
-                        existing_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
-                            href=ed_href.function_set_assignments,
-                            all=list_size,
-                        )
-                        _log.info(
-                            "Created device-specific FSA for device %s at %s (count=%d)",
-                            cfg_device.id,
-                            fsa.href,
-                            list_size,
+                # Handle FSAs for existing device (matching new device path logic)
+                ed_href = hrefs.EndDeviceHref(device_index)
+
+                # Initialize DER and FSA lists (critical for devices created before FSA refactoring)
+                adpt.ListAdapter.initialize_uri(ed_href.der_list, m.DER)
+                adpt.ListAdapter.initialize_uri(ed_href.function_set_assignments, m.FunctionSetAssignments)
+
+                fsa_linked = False
+
+                # Create device-specific FSA for this device
+                fsa = create_device_fsa_with_program(existing_device.href, config)
+                device_specific_program_href = None
+                if fsa:
+                    fsa_linked = True
+                    # The device-specific program is at {fsa_href}/derp/0
+                    device_specific_program_href = hrefs.SEP.join((fsa.href, "derp", "0"))
+                    _log.info(
+                        "Device %s updated with device-specific FSA at %s with program at %s (%d FSA(s))",
+                        cfg_device.id,
+                        fsa.href,
+                        device_specific_program_href,
+                        adpt.ListAdapter.get_list_size(ed_href.function_set_assignments),
+                    )
+
+                # Handle additional device-specific FSAs from config if specified
+                if cfg_device.fsas:
+                    for fsa_name in cfg_device.fsas:
+                        fsa_index = adpt.ListAdapter.get_list_size(ed_href.function_set_assignments)
+                        fsa = m.FunctionSetAssignments(
+                            href=hrefs.SEP.join((ed_href.function_set_assignments, str(fsa_index))),
+                            mRID=adpt.get_global_mrids().new_mrid(),
+                            description=fsa_name,
                         )
 
-                        # Persist the updated device with FSA link using direct database access
-                        device_key = f"enddevice:{device_index}"
-                        import pickle
+                        result = adpt.ListAdapter.append(ed_href.function_set_assignments, fsa)
+                        if not result.success:
+                            raise Exception(f"Failed to add FSA {fsa_name}: {result.error}")
+                        fsa_linked = True
+                        _log.info(f"Added device-specific FSA '{fsa_name}' for existing device {cfg_device.id}")
 
-                        with atomic_operation():
-                            adpt.EndDeviceAdapter._db.set_point(device_key, pickle.dumps(existing_device))
-                            add_href(existing_device.href, existing_device)
-                        _log.debug("Persisted existing device %s with FSA link", existing_device.href)
+                # Update link to FSA list if any FSAs were added
+                if fsa_linked:
+                    list_size = adpt.ListAdapter.get_list_size(ed_href.function_set_assignments)
+                    existing_device.FunctionSetAssignmentsListLink = m.FunctionSetAssignmentsListLink(
+                        href=ed_href.function_set_assignments,
+                        all=list_size,
+                    )
+                    _log.debug(
+                        "Updated existing EndDevice FSA link: href=%s, all=%d",
+                        ed_href.function_set_assignments,
+                        list_size,
+                    )
+
+                    # Persist the updated device with FSA link using direct database access
+                    device_key = f"enddevice:{device_index}"
+                    import pickle
+
+                    with atomic_operation():
+                        adpt.EndDeviceAdapter._db.set_point(device_key, pickle.dumps(existing_device))
+                        add_href(existing_device.href, existing_device)
+                    _log.debug("Persisted existing device %s with FSA link count=%d", existing_device.href, list_size)
 
                 # Ensure device is registered in GlobalMRIDs even for existing devices
                 _log.debug("Registering existing device %s in GlobalMRIDs", cfg_device.id)

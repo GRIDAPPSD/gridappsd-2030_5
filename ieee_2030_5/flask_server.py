@@ -901,7 +901,10 @@ def __build_ssl_context__old(tlsrepo: TLSRepository) -> ssl.SSLContext:
 
 
 def __build_http_app__(config: ServerConfiguration) -> Flask:
-    app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath("templates")))
+    app = Flask(__name__,
+                template_folder=str(Path(".").resolve().joinpath("templates")),
+                static_folder=str(Path(".").resolve().joinpath("static")),
+                static_url_path="/static")
     # Debug headers path and request arguments
     app.before_request(before_request)
     # Allows for larger data to be sent through because of chunking types.
@@ -915,7 +918,10 @@ def __build_http_app__(config: ServerConfiguration) -> Flask:
 
 
 def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
-    app = Flask(__name__, template_folder=str(Path(".").resolve().joinpath("templates")))
+    app = Flask(__name__,
+                template_folder=str(Path(".").resolve().joinpath("templates")),
+                static_folder=str(Path(".").resolve().joinpath("static")),
+                static_url_path="/static")
 
     app.config["PRESERVE_CONTEXT_ON_EXCEPTION"] = False
 
@@ -1026,6 +1032,95 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             return redirect(url_for("admin_home"))
 
         return render_template("admin/update-default-der-control.html", dderc=dderc)
+
+    # DER Management Routes
+    @app.route("/admin/der/list")
+    def admin_der_list():
+        """List all DERs."""
+        start = int(request.args.get("s", 0))
+        limit = int(request.args.get("l", 100))
+        ders = adpt.DERAdapter.fetch_all(m.DERList(), start=start, limit=limit)
+        return render_template("admin/der-list.html", ders=ders)
+
+    @app.route("/admin/der/add", methods=["GET", "POST"])
+    def admin_der_add():
+        """Add a new DER."""
+        if request.method == "POST":
+            # Create DER from form data
+            der = m.DER()
+
+            # Set current program if provided
+            current_program = request.form.get("current_program")
+            if current_program:
+                der.CurrentDERProgramLink = m.CurrentDERProgramLink(href=current_program)
+
+            # Add the DER
+            der = adpt.DERAdapter.add(der)
+
+            return redirect(url_for("admin_der_list"))
+
+        # GET: Show form
+        end_devices = adpt.EndDeviceAdapter.fetch_all(m.EndDeviceList())
+        programs = adpt.DERProgramAdapter.fetch_all(m.DERProgramList())
+        return render_template(
+            "admin/der-form.html",
+            der=None,
+            end_devices=end_devices.EndDevice if end_devices.EndDevice else [],
+            programs=programs.DERProgram if programs.DERProgram else [],
+            capability=None,
+            settings=None
+        )
+
+    @app.route("/admin/der/<int:der_id>")
+    def admin_der_detail(der_id: int):
+        """View DER details."""
+        der = adpt.DERAdapter.fetch(der_id)
+        return render_template("admin/der-detail.html", der=der, der_id=der_id)
+
+    @app.route("/admin/der/<int:der_id>/edit", methods=["GET", "POST"])
+    def admin_der_edit(der_id: int):
+        """Edit an existing DER."""
+        if request.method == "POST":
+            # Get existing DER
+            der = adpt.DERAdapter.fetch(der_id)
+
+            # Update current program if provided
+            current_program = request.form.get("current_program")
+            if current_program:
+                der.CurrentDERProgramLink = m.CurrentDERProgramLink(href=current_program)
+            else:
+                der.CurrentDERProgramLink = None
+
+            # Save the DER
+            adpt.DERAdapter.put(der_id, der)
+
+            return redirect(url_for("admin_der_list"))
+
+        # GET: Show form with existing data
+        der = adpt.DERAdapter.fetch(der_id)
+        end_devices = adpt.EndDeviceAdapter.fetch_all(m.EndDeviceList())
+        programs = adpt.DERProgramAdapter.fetch_all(m.DERProgramList())
+        return render_template(
+            "admin/der-form.html",
+            der=der,
+            end_devices=end_devices.EndDevice if end_devices.EndDevice else [],
+            programs=programs.DERProgram if programs.DERProgram else [],
+            capability=None,
+            settings=None
+        )
+
+    @app.route("/admin/der/save", methods=["POST"])
+    def admin_der_save():
+        """Save DER (redirect target for form)."""
+        href = request.form.get("href")
+
+        if href:
+            # Update existing
+            der_id = int(href.rsplit("/", 1)[-1])
+            return redirect(url_for("admin_der_edit", der_id=der_id), code=307)
+        else:
+            # Create new
+            return redirect(url_for("admin_der_add"), code=307)
 
     @app.route("/admin/resources")
     def admin_resource_list():
@@ -1297,7 +1392,7 @@ class HTTP11WSGIServer(BaseWSGIServer):
 
 
 def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
-    exclude_patterns = ["data_store/**", "docs/**", "examples/**", "ieee_2030_5_gui/**", "logs/**"]
+    exclude_patterns = ["data_store/**", "docs/**", "examples/**", "logs/**"]
     app.run(
         host=host,
         ssl_context=ssl_context,
