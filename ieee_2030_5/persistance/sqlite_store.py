@@ -756,9 +756,19 @@ class SQLitePointStore(PointStoreBase):
                 # Exact match
                 cursor = conn.execute("SELECT key FROM points WHERE key = ?", (pattern,))
 
-            keys = [row[0] for row in cursor.fetchall()]
-            _log.debug(f"Pattern '{pattern}' matched {len(keys)} keys")
-            return keys
+            keys = set(row[0] for row in cursor.fetchall())
+
+            # Also check pending writes for keys that match
+            # This ensures consistency with get_point() which checks pending writes
+            import fnmatch
+            with self._pending_writes_lock:
+                for key in self._pending_writes.keys():
+                    if fnmatch.fnmatch(key, pattern):
+                        keys.add(key)
+
+            result = sorted(keys)
+            _log.debug(f"Pattern '{pattern}' matched {len(result)} keys")
+            return result
         except Exception as e:
             _log.error(f"Failed to get keys matching '{pattern}': {e}")
             return []

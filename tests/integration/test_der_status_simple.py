@@ -19,7 +19,7 @@ import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
-from ieee_2030_5.persistance.sqlite_store import SQLitePointStore
+from ieee_2030_5.persistance.points import configure_point_store, get_db, reset_db
 from ieee_2030_5.server.derfs import DERRequests
 from ieee_2030_5.utils import dataclass_to_xml, xml_to_dataclass
 
@@ -36,26 +36,29 @@ except ImportError:
 def integration_database():
     """Set up a real database for integration testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "integration_test.fs"
-        db = SQLitePointStore(db_path)
+        db_path = Path(tmpdir) / "integration_test.db"
 
-        # Replace the global database reference for testing
-        original_db = getattr(adpt.ListAdapter, "_db", None)
-        adpt.get_list_adapter()._db = db
+        # Reset any existing database and adapters
+        reset_db()
 
-        # Initialize adapters
+        # Reset adapter initialization flag to allow re-initialization with new database
+        import ieee_2030_5.adapters.base as adpt_base
+        adpt_base._initialized = False
+
+        # Configure the global database to use our test path
+        configure_point_store("sqlite", db_path)
+
+        # Initialize adapters - this will use the configured database
         adpt.initialize_adapters()
+
+        # Get the database that was created
+        db = get_db()
 
         yield db
 
-        # Restore original database
-        if original_db:
-            adpt.get_list_adapter()._db = original_db
-
-        try:
-            db.close()
-        except:
-            pass
+        # Reset for cleanup
+        reset_db()
+        adpt_base._initialized = False
 
 
 @pytest.fixture

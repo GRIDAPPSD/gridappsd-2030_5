@@ -23,7 +23,7 @@ import pytest
 
 import ieee_2030_5.adapters as adpt
 import ieee_2030_5.models as m
-from ieee_2030_5.persistance.sqlite_store import SQLitePointStore
+from ieee_2030_5.persistance.points import configure_point_store, get_db, reset_db
 
 # Only import GridAPPSD if available
 try:
@@ -39,30 +39,29 @@ except ImportError:
 def adapter_test_database():
     """Set up a dedicated database for GridAPPSD adapter testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "gridappsd_adapter_test.fs"
-        db = SQLitePointStore(db_path)
+        db_path = Path(tmpdir) / "gridappsd_adapter_test.db"
 
-        # Replace the global database reference for testing
-        original_db = getattr(adpt.ListAdapter, "_db", None)
-        adpt.get_list_adapter()._db = db
+        # Reset any existing database and adapters
+        reset_db()
 
-        # Initialize adapters
+        # Reset adapter initialization flag to allow re-initialization with new database
+        import ieee_2030_5.adapters.base as adpt_base
+        adpt_base._initialized = False
+
+        # Configure the global database to use our test path
+        configure_point_store("sqlite", db_path)
+
+        # Initialize adapters - this will use the configured database
         adpt.initialize_adapters()
+
+        # Get the database that was created
+        db = get_db()
 
         yield db
 
-        # Restore original database
-        if original_db:
-            adpt.get_list_adapter()._db = original_db
-
-        # Clean close without index saving to avoid temp directory issues
-        try:
-            if hasattr(db, "_storage"):
-                db._storage.close()
-            if hasattr(db, "_db"):
-                db._db.close()
-        except Exception:
-            pass
+        # Reset for cleanup
+        reset_db()
+        adpt_base._initialized = False
 
 
 @pytest.fixture
