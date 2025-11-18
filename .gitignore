@@ -146,3 +146,64 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# PDF documents
+*.pdf
+
+# Debug and examination scripts
+check_*.py
+debug_*.py
+examine_*.py
+deep_examine_*.py
+extract_*.py
+get_*.py
+listen-*.py
+recover_*.py
+scoop-*.py
+test_*.py
+!tests/test_*.py
+
+# Data and config files
+*.csv
+*.csv:Zone.Identifier
+cim_dict.json
+model_dict.json
+output.json
+debuglog.json
+server.yml
+logging_config.yml
+config\ copy.yml
+
+# Log files
+*.log.old
+logfile_*.log
+
+# Text dumps
+ieee_2030_5*.txt
+
+# XML data files
+Master_*.xml
+
+# Misc generated files
+=22.1
+=22.1,
+
+# Local scripts
+conducting_equipment_mapping.py
+house_certificate_mapping_analysis.py
+manage_logging.py
+publish.py
+run_integration_tests.py
+
+# Project documentation (local only)
+CUSTOM_URL_STANDARD.md
+FINAL_CERTIFICATE_MAPPING_STRATEGY.md
+INTEGRATION_TESTS.md
+LFDI_MAPPING_ENHANCEMENT.md
+
+# Local adapter additions
+ieee_2030_5/adapters/send_request.py
+ieee_2030_5/client/test_client.py
+
+# Debug client traffic
+debug_client_traffic/

@@ -491,19 +491,33 @@ class IEEE2030_5_Server(BaseWSGIServer):
     """Custom WSGI server with optimizations for IEEE 2030.5"""
 
     def __init__(self, host, port, app, **kwargs):
-        super().__init__(host, port, app, **kwargs)
+        # Extract custom parameters before passing to parent
+        request_handler = kwargs.pop("request_handler", None)
+        threaded = kwargs.pop("threaded", True)
+        passthrough_errors = kwargs.pop("passthrough_errors", False)
+
+        # BaseWSGIServer expects handler, passthrough_errors as positional/keyword args
+        super().__init__(host, port, app, handler=request_handler, passthrough_errors=passthrough_errors, **kwargs)
+
+        # Set threading mode
+        self.multithread = threaded
+        self.multiprocess = False
         self.protocol_version = "HTTP/1.1"
 
     def server_bind(self):
         """Set socket options when binding the server socket"""
-        # Set socket options for performance
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-
-        # Set TCP keep-alive options if available
-        # These are platform-specific, so use try/except
+        # Set SO_REUSEADDR BEFORE binding to allow immediate reuse
         try:
-            # Linux-specific options
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        except (AttributeError, OSError):
+            pass
+
+        # Complete the binding process
+        super().server_bind()
+
+        # Set additional socket options for performance after bind
+        try:
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             if hasattr(socket, "TCP_KEEPIDLE"):
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
             if hasattr(socket, "TCP_KEEPINTVL"):
@@ -512,9 +526,6 @@ class IEEE2030_5_Server(BaseWSGIServer):
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
         except (AttributeError, OSError):
             pass
-
-        # Complete the binding process
-        super().server_bind()
 
 
 def set_socket_options(socket):
