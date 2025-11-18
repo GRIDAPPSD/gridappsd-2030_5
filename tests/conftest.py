@@ -1,5 +1,6 @@
 import os
 import shutil
+import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,15 @@ import pytest
 
 # should now be at root
 import yaml
+
+
+def find_free_port():
+    """Find a free port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
 
 import ieee_2030_5.models as m
 from ieee_2030_5.__main__ import ServerThread, get_tls_repository
@@ -81,6 +91,10 @@ def server_startup(create_project_dir: Path) -> tuple[TLSRepository, ServerConfi
     cfg_out = yaml.safe_load(SERVER_CONFIG_FILE.read_text())
     cfg_out["tls_repository"] = str(create_project_dir.joinpath("tls"))
     cfg_out["storage_path"] = str(create_project_dir.joinpath("storage"))
+
+    # Use a dynamic free port to avoid conflicts between parallel tests
+    free_port = find_free_port()
+    cfg_out["port"] = free_port
 
     cwd = os.getcwd()
     root = Path(__file__).parent.parent
