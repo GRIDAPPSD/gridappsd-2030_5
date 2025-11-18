@@ -2,162 +2,260 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Add Function Set Assignment</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .nav-header {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            color: white;
-            padding: 15px 25px;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .nav-header a {
-            color: #fff;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        .nav-header a:hover {
-            color: #4CAF50;
-            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
-        }
-        .page-header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
-            text-align: center;
-        }
-        .page-header h1 {
-            margin: 0 0 10px 0;
-            color: #333;
-            font-size: 2.2em;
-            font-weight: 300;
-        }
-        .form-container {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-        }
-        .form-group {
-            margin-bottom: 25px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-        .form-group input[type="text"], .form-group textarea, .form-group select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-        .form-group input[type="text"]:focus, .form-group textarea:focus, .form-group select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        .checkbox-group {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 10px;
-        }
-        .checkbox-item {
-            margin-bottom: 10px;
-        }
-        .checkbox-item input[type="checkbox"] {
-            margin-right: 10px;
-        }
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 14px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-        }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-        .note {
-            background: #e3f2fd;
-            color: #1565c0;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid #2196f3;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Function Set Assignment - IEEE 2030.5 Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 </head>
 <body>
-    <div class="container">
+    <div class="container-narrow">
         <div class="nav-header">
-            <a href="/admin/">� Back to Admin Home</a>
+            <a href="/admin/">← Back to Admin Home</a>
         </div>
-        
+
         <div class="page-header">
-            <h1>= Add Function Set Assignment</h1>
+            <h1>Add Function Set Assignment</h1>
             <p>Create a new Function Set Assignment (FSA) for device management</p>
         </div>
 
         <div class="form-container">
             <div class="note">
-                <strong>Note:</strong> Function Set Assignments (FSAs) define the capabilities and programs available to end devices.
+                <strong>Note:</strong> Function Set Assignments (FSAs) define the capabilities and programs available to end devices. Each FSA is associated with a specific end device.
             </div>
 
-            <form action="{{ url_for('admin_fsa') }}" method="post">
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form id="fsaForm" action="{{ url_for('admin_fsa') }}" method="post">
                 <div class="form-group">
-                    <label for="description">Description</label>
-                    <input type="text" id="description" name="description" placeholder="Enter FSA description" required>
+                    <label for="end_device_id">End Device *</label>
+                    <select id="end_device_id" name="end_device_id" required>
+                        <option value="">Select an End Device...</option>
+                        {% for edev in end_devices %}
+                        <option value="{{ loop.index0 }}">
+                            {{ edev.description or edev.href or 'Device ' + loop.index0|string }}
+                            {% if edev.lFDI %} (LFDI: {{ edev.lFDI[:16] }}...){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small>The end device this FSA will be assigned to</small>
                 </div>
 
                 <div class="form-group">
-                    <label>Available Programs</label>
+                    <label for="description">Description *</label>
+                    <input type="text" id="description" name="description" placeholder="Enter FSA description" required>
+                    <small>A descriptive name for this FSA</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Available DER Programs</label>
                     <div class="checkbox-group">
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="default_program" name="programs" value="Default Program">
-                            <label for="default_program">Default Program</label>
-                        </div>
-                        <!-- Additional programs can be added here dynamically -->
-                        <p><em>Additional programs will be listed here based on server configuration</em></p>
+                        {% if programs %}
+                            {% for program in programs %}
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="program_{{ loop.index0 }}" name="programs" value="{{ program.href }}">
+                                <label for="program_{{ loop.index0 }}">
+                                    {{ program.description or program.href }}
+                                    {% if program.primacy is defined %}(Primacy: {{ program.primacy }}){% endif %}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p><em>No DER programs available. Create programs first in DER Resources section.</em></p>
+                        {% endif %}
                     </div>
+                    <small>Select programs to associate with this FSA</small>
                 </div>
 
                 <div class="form-group">
                     <label for="primacy">Primacy</label>
                     <input type="number" id="primacy" name="primacy" value="0" min="0" max="255">
-                    <small style="color: #666;">Lower numbers have higher priority (0 = highest priority)</small>
+                    <small>Lower numbers have higher priority (0 = highest priority)</small>
                 </div>
 
-                <button type="submit" class="btn">Create FSA</button>
+                <div class="btn-group mt-20">
+                    <button type="submit" class="btn">Create FSA</button>
+                    <a href="/admin/" class="btn btn-outline">Cancel</a>
+                </div>
             </form>
         </div>
+
+        <!-- Show Code Section -->
+        <div class="card mt-20">
+            <div class="show-code-section">
+                <button class="show-code-toggle" onclick="toggleShowCode(this)">
+                    <span>Show API Code (httpx)</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="show-code-content">
+                    <div class="code-options">
+                        <label>
+                            <input type="checkbox" id="useAuth" onchange="updateGeneratedCode()">
+                            Use TLS Authentication
+                        </label>
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre id="generatedCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        function toggleShowCode(button) {
+            const content = button.nextElementSibling;
+            button.classList.toggle('active');
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                updateGeneratedCode();
+            }
+        }
+
+        function updateGeneratedCode() {
+            const form = document.getElementById('fsaForm');
+            const formData = new FormData(form);
+            const useAuth = document.getElementById('useAuth')?.checked ?? false;
+
+            const xmlContent = generateXmlFromForm(formData);
+
+            let code = `import httpx
+
+# Create Function Set Assignment via IEEE 2030.5 Admin API
+# Note: FSAs are created per end device
+url = "${window.location.origin}/admin/add-fsa"
+
+`;
+
+            if (useAuth) {
+                code += `# TLS Client Certificate Authentication
+cert = ("path/to/client.crt", "path/to/client.key")
+ca_cert = "path/to/ca.crt"
+
+`;
+            }
+
+            code += `# Form data for FSA creation
+form_data = {
+    "description": "${escapeString(formData.get('description') || '')}",
+    "primacy": "${formData.get('primacy') || '0'}",
+    "end_device_id": "${formData.get('end_device_id') || ''}"
+}
+
+# Add selected programs
+programs = []
+`;
+            // Get selected programs
+            const selectedPrograms = formData.getAll('programs');
+            selectedPrograms.forEach(prog => {
+                code += `programs.append("${escapeString(prog)}")\n`;
+            });
+
+            code += `
+# The admin endpoint accepts form data
+`;
+
+            if (useAuth) {
+                code += `with httpx.Client(cert=cert, verify=ca_cert) as client:
+    response = client.post(
+        url,
+        data={**form_data, "programs": programs}
+    )
+`;
+            } else {
+                code += `with httpx.Client(verify=False) as client:
+    response = client.post(
+        url,
+        data={**form_data, "programs": programs}
+    )
+`;
+            }
+
+            code += `
+# Check response
+print(f"Status: {response.status_code}")
+if response.status_code in [200, 302]:
+    print("FSA created successfully!")
+else:
+    print(f"Error: {response.text}")
+
+# Alternative: Create FSA directly via IEEE 2030.5 API
+# Using XML format for device-specific FSA endpoint
+xml_payload = """${xmlContent}"""
+`;
+
+            const codeElement = document.getElementById('generatedCode');
+            if (codeElement) {
+                codeElement.textContent = code;
+            }
+        }
+
+        function generateXmlFromForm(formData) {
+            const description = formData.get('description') || '';
+            const programs = formData.getAll('programs');
+
+            let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<FunctionSetAssignments xmlns="urn:ieee:std:2030.5:ns">
+  <description>${escapeXml(description)}</description>
+  <subscribable>1</subscribable>`;
+
+            if (programs.length > 0) {
+                xml += `
+  <DERProgramListLink href="/derp" all="${programs.length}"/>`;
+            }
+
+            xml += `
+</FunctionSetAssignments>`;
+
+            return xml;
+        }
+
+        function escapeXml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function escapeString(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"');
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.parentElement.querySelector('pre');
+            navigator.clipboard.writeText(codeBlock.textContent).then(() => {
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                    button.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Update code when form fields change
+        document.querySelectorAll('#fsaForm input, #fsaForm select').forEach(el => {
+            el.addEventListener('change', updateGeneratedCode);
+            el.addEventListener('input', updateGeneratedCode);
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const content = document.querySelector('.show-code-content');
+            if (content && content.classList.contains('active')) {
+                updateGeneratedCode();
+            }
+        });
+    </script>
 </body>
 </html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DER Curves - IEEE 2030.5 Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
+        </div>
+
+        <div class="page-header">
+            <h1>📈 DER Curves</h1>
+            <p>Manage Volt-Var, Volt-Watt, and other DER curves</p>
+        </div>
+
+        <div class="card">
+            <div class="btn-group mb-20">
+                <a href="{{ url_for('admin_curve_add') }}" class="btn btn-success">+ Add New Curve</a>
+                <button class="btn btn-secondary" onclick="refreshList()">Refresh</button>
+            </div>
+
+            {% if curves and curves.DERCurve %}
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Index</th>
+                            <th>Description</th>
+                            <th>Curve Type</th>
+                            <th>Data Points</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for curve in curves.DERCurve %}
+                        <tr>
+                            <td>{{ loop.index0 }}</td>
+                            <td>{{ curve.description or 'N/A' }}</td>
+                            <td>
+                                {% if curve.curveType == 0 %}
+                                    <span class="badge badge-info">opModVoltVar</span>
+                                {% elif curve.curveType == 1 %}
+                                    <span class="badge badge-info">opModFreqWatt</span>
+                                {% elif curve.curveType == 2 %}
+                                    <span class="badge badge-info">opModFreqDroop</span>
+                                {% elif curve.curveType == 3 %}
+                                    <span class="badge badge-info">opModWattPF</span>
+                                {% elif curve.curveType == 4 %}
+                                    <span class="badge badge-info">opModVoltWatt</span>
+                                {% elif curve.curveType == 5 %}
+                                    <span class="badge badge-info">opModLVRTMomentaryCessation</span>
+                                {% elif curve.curveType == 6 %}
+                                    <span class="badge badge-info">opModHVRTMomentaryCessation</span>
+                                {% elif curve.curveType == 7 %}
+                                    <span class="badge badge-info">opModLVRTMustTrip</span>
+                                {% elif curve.curveType == 8 %}
+                                    <span class="badge badge-info">opModHVRTMustTrip</span>
+                                {% elif curve.curveType == 9 %}
+                                    <span class="badge badge-info">opModLFRTMustTrip</span>
+                                {% elif curve.curveType == 10 %}
+                                    <span class="badge badge-info">opModHFRTMustTrip</span>
+                                {% else %}
+                                    <span class="badge">{{ curve.curveType or 'Unknown' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if curve.CurveData %}
+                                    {{ curve.CurveData|length }} points
+                                {% else %}
+                                    0 points
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if curve.creationTime %}
+                                    {{ curve.creationTime }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <a href="{{ url_for('admin_curve_edit', curve_id=loop.index0) }}" class="btn btn-sm">Edit</a>
+                                <button class="btn btn-sm btn-danger" onclick="deleteCurve({{ loop.index0 }})">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="text-right">
+                <small>Total: {{ curves.all or curves.DERCurve|length }} Curve(s)</small>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>No DER Curves Found</h3>
+                <p>There are no DER curves configured yet.</p>
+                <a href="{{ url_for('admin_curve_add') }}" class="btn btn-success">+ Add First Curve</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Show Code Section -->
+        <div class="card">
+            <div class="show-code-section">
+                <button class="show-code-toggle" onclick="toggleShowCode(this)">
+                    <span>Show API Code (httpx)</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="show-code-content">
+                    <div class="code-options">
+                        <label>
+                            <input type="checkbox" id="useAuth" onchange="updateListCode()">
+                            Use TLS Authentication
+                        </label>
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre id="generatedCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        function refreshList() {
+            window.location.reload();
+        }
+
+        function deleteCurve(index) {
+            if (confirm('Are you sure you want to delete this curve?')) {
+                // TODO: Implement delete via API
+                alert('Delete functionality will be implemented');
+            }
+        }
+
+        function toggleShowCode(button) {
+            const content = button.nextElementSibling;
+            button.classList.toggle('active');
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                updateListCode();
+            }
+        }
+
+        function updateListCode() {
+            const useAuth = document.getElementById('useAuth').checked;
+            const code = generateListCode(useAuth);
+            document.getElementById('generatedCode').textContent = code;
+        }
+
+        function generateListCode(useAuth) {
+            let code = `import httpx
+
+# Get DER Curve List from IEEE 2030.5 Server
+url = "${window.location.origin}/admin/curves"
+
+headers = {
+    "Accept": "application/sep+xml"
+}
+
+`;
+            if (useAuth) {
+                code += `# TLS Client Certificate Authentication
+cert = ("path/to/client.crt", "path/to/client.key")
+ca_cert = "path/to/ca.crt"
+
+with httpx.Client(cert=cert, verify=ca_cert) as client:
+    response = client.get(url, headers=headers)
+`;
+            } else {
+                code += `# No authentication (admin endpoint)
+with httpx.Client(verify=False) as client:
+    response = client.get(url, headers=headers)
+`;
+            }
+
+            code += `
+print(f"Status: {response.status_code}")
+print(f"DER Curve List:\\n{response.text}")
+`;
+            return code;
+        }
+
+        // Initialize code on page load
+        document.addEventListener('DOMContentLoaded', updateListCode);
+    </script>
+</body>
+</html>

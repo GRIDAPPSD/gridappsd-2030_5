@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DER Details - IEEE 2030.5 Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="nav-header">
+            <a href="{{ url_for('admin_der_list') }}">← Back to DER List</a>
+        </div>
+
+        <div class="page-header">
+            <h1>⚡ DER Details</h1>
+            <p>View Distributed Energy Resource information</p>
+        </div>
+
+        {% if der %}
+        <div class="card">
+            <div class="btn-group mb-20">
+                <a href="{{ url_for('admin_der_edit', der_id=der_id) }}" class="btn">Edit DER</a>
+                <button class="btn btn-danger" onclick="deleteDER({{ der_id }})">Delete DER</button>
+            </div>
+
+            <div class="section-title">Basic Information</div>
+            <table>
+                <tr>
+                    <th>HREF</th>
+                    <td><code>{{ der.href or 'N/A' }}</code></td>
+                </tr>
+                <tr>
+                    <th>Index</th>
+                    <td>{{ der_id }}</td>
+                </tr>
+            </table>
+
+            <div class="section-title">Program Links</div>
+            <table>
+                <tr>
+                    <th>Current DER Program</th>
+                    <td>
+                        {% if der.CurrentDERProgramLink %}
+                            <a href="{{ der.CurrentDERProgramLink.href }}">{{ der.CurrentDERProgramLink.href }}</a>
+                        {% else %}
+                            <span class="badge badge-warning">None assigned</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Associated Programs</th>
+                    <td>
+                        {% if der.AssociatedDERProgramListLink %}
+                            <a href="{{ der.AssociatedDERProgramListLink.href }}">View Programs</a>
+                        {% else %}
+                            <span class="badge badge-info">Not configured</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+
+            <div class="section-title">DER Sub-Resources</div>
+            <table>
+                <tr>
+                    <th>Settings</th>
+                    <td>
+                        {% if der.DERSettingsLink %}
+                            <a href="{{ der.DERSettingsLink.href }}" class="btn btn-sm">View Settings</a>
+                        {% else %}
+                            <span class="badge badge-info">Not configured</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Status</th>
+                    <td>
+                        {% if der.DERStatusLink %}
+                            <a href="{{ der.DERStatusLink.href }}" class="btn btn-sm">View Status</a>
+                        {% else %}
+                            <span class="badge badge-info">Not available</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Capability</th>
+                    <td>
+                        {% if der.DERCapabilityLink %}
+                            <a href="{{ der.DERCapabilityLink.href }}" class="btn btn-sm">View Capability</a>
+                        {% else %}
+                            <span class="badge badge-info">Not configured</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Availability</th>
+                    <td>
+                        {% if der.DERAvailabilityLink %}
+                            <a href="{{ der.DERAvailabilityLink.href }}" class="btn btn-sm">View Availability</a>
+                        {% else %}
+                            <span class="badge badge-info">Not available</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+
+            {% if der.AssociatedUsagePointLink %}
+            <div class="section-title">Metering</div>
+            <table>
+                <tr>
+                    <th>Associated Usage Point</th>
+                    <td><a href="{{ der.AssociatedUsagePointLink.href }}">{{ der.AssociatedUsagePointLink.href }}</a></td>
+                </tr>
+            </table>
+            {% endif %}
+        </div>
+
+        <!-- Show Code Section -->
+        <div class="card">
+            <div class="show-code-section">
+                <button class="show-code-toggle" onclick="toggleShowCode(this)">
+                    <span>Show API Code (httpx)</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="show-code-content">
+                    <div class="code-options">
+                        <label>
+                            <input type="checkbox" id="useAuth" onchange="updateDetailCode()">
+                            Use TLS Authentication
+                        </label>
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre id="generatedCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <div class="card">
+            <div class="empty-state">
+                <h3>DER Not Found</h3>
+                <p>The requested DER could not be found.</p>
+                <a href="{{ url_for('admin_der_list') }}" class="btn">Back to DER List</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        function deleteDER(index) {
+            if (confirm('Are you sure you want to delete this DER? This action cannot be undone.')) {
+                // TODO: Implement delete via API
+                alert('Delete functionality will be implemented');
+            }
+        }
+
+        function toggleShowCode(button) {
+            const content = button.nextElementSibling;
+            button.classList.toggle('active');
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                updateDetailCode();
+            }
+        }
+
+        function updateDetailCode() {
+            const useAuth = document.getElementById('useAuth').checked;
+            const code = generateDetailCode(useAuth);
+            document.getElementById('generatedCode').textContent = code;
+        }
+
+        function generateDetailCode(useAuth) {
+            let code = `import httpx
+
+# Get DER Details from IEEE 2030.5 Server
+url = "${window.location.origin}{{ der.href if der else '/admin/der/' + der_id|string }}"
+
+headers = {
+    "Accept": "application/sep+xml"
+}
+
+`;
+            if (useAuth) {
+                code += `# TLS Client Certificate Authentication
+cert = ("path/to/client.crt", "path/to/client.key")
+ca_cert = "path/to/ca.crt"
+
+with httpx.Client(cert=cert, verify=ca_cert) as client:
+    response = client.get(url, headers=headers)
+`;
+            } else {
+                code += `# No authentication (admin endpoint)
+with httpx.Client(verify=False) as client:
+    response = client.get(url, headers=headers)
+`;
+            }
+
+            code += `
+print(f"Status: {response.status_code}")
+print(f"DER Details:\\n{response.text}")
+
+# Parse the XML response
+from ieee_2030_5.utils import xml_to_dataclass
+der = xml_to_dataclass(response.text)
+print(f"Current Program: {der.CurrentDERProgramLink.href if der.CurrentDERProgramLink else 'None'}")
+`;
+            return code;
+        }
+
+        // Initialize code on page load
+        document.addEventListener('DOMContentLoaded', updateDetailCode);
+    </script>
+</body>
+</html>

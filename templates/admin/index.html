@@ -83,6 +83,7 @@
             box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
         }
         .monitoring { border-left-color: #e74c3c; }
+        .der-resources { border-left-color: #3498db; }
         .device-management { border-left-color: #f39c12; }
         .system-tools { border-left-color: #27ae60; }
         .development { border-left-color: #9b59b6; }
@@ -127,18 +128,34 @@
                     </div>
                 </div>
 
-                <!-- Device & Resource Management -->
-                <div class="admin-section device-management">
-                    <h3>⚡ Device & Resource Management</h3>
+                <!-- DER Resources -->
+                <div class="admin-section der-resources">
+                    <h3>⚡ DER Resources</h3>
                     <div class="links">
+                        <a href="{{ url_for('admin_der_list') }}" class="admin-link">
+                            🔋 DER List
+                        </a>
+                        <a href="{{ url_for('admin_control_list') }}" class="admin-link">
+                            🎛️ DER Controls
+                        </a>
+                        <a href="{{ url_for('admin_curve_list') }}" class="admin-link">
+                            📈 DER Curves
+                        </a>
                         <a href="{{ url_for('admin_default_der_control') }}" class="admin-link">
                             🔧 Default DER Control
                         </a>
                         <a href="{{ url_for('admin_der_program') }}" class="admin-link">
                             📋 Add DER Program
                         </a>
+                    </div>
+                </div>
+
+                <!-- Device & Resource Management -->
+                <div class="admin-section device-management">
+                    <h3>📱 Device Management</h3>
+                    <div class="links">
                         <a href="{{ url_for('admin_end_device') }}" class="admin-link">
-                            📱 Add End Device
+                            ➕ Add End Device
                         </a>
                         <a href="{{ url_for('admin_fsa') }}" class="admin-link">
                             🔌 Add FSA

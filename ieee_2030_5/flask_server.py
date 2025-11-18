@@ -1,11 +1,15 @@
 import hashlib
 import json
 import logging
+import queue
+import random
+import re
 import socket
 import ssl
 import threading
 import time
 import uuid
+import xml.dom.minidom
 from dataclasses import fields
 from datetime import datetime
 from functools import lru_cache
@@ -16,7 +20,7 @@ import werkzeug.exceptions
 from flask import Flask, Response, g, redirect, render_template, request, url_for
 
 # from flask_socketio import SocketIO, send
-from werkzeug.serving import BaseWSGIServer
+from werkzeug.serving import BaseWSGIServer, run_simple
 
 from ieee_2030_5.utils import dataclass_to_xml
 
@@ -557,8 +561,6 @@ def log_client_request(lfdi: str, request_id: str, cn: str = None):
     formatted_body = ""
     if body_data:
         try:
-            import xml.dom.minidom
-
             dom = xml.dom.minidom.parseString(body_data)
             formatted_body = dom.toprettyxml(indent="  ")
             # Remove the XML declaration line if present and empty lines
@@ -618,8 +620,6 @@ def log_client_response(lfdi: str, request_id: str, response: Response, duration
     formatted_body = ""
     if response_body:
         try:
-            import xml.dom.minidom
-
             dom = xml.dom.minidom.parseString(response_body)
             formatted_body = dom.toprettyxml(indent="  ")
             # Remove the XML declaration line if present and empty lines
@@ -713,8 +713,6 @@ def before_request():
 
         if should_delay:
             # Add larger randomized delay to handle severe contention (100-500ms for high-risk operations)
-            import random
-
             if "/mup" in path and recent_mup_posts > 0:
                 # MUP operations get longer delays due to high contention
                 delay = random.uniform(0.1, 0.5)  # 100-500ms
@@ -973,15 +971,199 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     @app.route("/admin/add-fsa", methods=["get", "post"])
     def admin_fsa():
         if request.method == "POST":
-            return redirect("admin/index.html")
+            # Get form data
+            description = request.form.get("description", "").strip()
+            primacy = request.form.get("primacy", "0").strip()
+            end_device_id = request.form.get("end_device_id", "").strip()
+            selected_programs = request.form.getlist("programs")
 
-        controls, default_control = adpt.DERControlAdapter.get_all()
-        return render_template("admin/add-fsa.html")
+            # Validation
+            if not description:
+                end_devices = adpt.EndDeviceAdapter.get_all()
+                programs = adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
+                return render_template(
+                    "admin/add-fsa.html",
+                    end_devices=end_devices,
+                    programs=programs.DERProgram if programs and hasattr(programs, 'DERProgram') else [],
+                    error="Description is required"
+                )
+
+            if not end_device_id:
+                end_devices = adpt.EndDeviceAdapter.get_all()
+                programs = adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
+                return render_template(
+                    "admin/add-fsa.html",
+                    end_devices=end_devices,
+                    programs=programs.DERProgram if programs and hasattr(programs, 'DERProgram') else [],
+                    error="End device is required"
+                )
+
+            try:
+                device_index = int(end_device_id)
+                end_device = adpt.EndDeviceAdapter.get(device_index)
+                if not end_device:
+                    raise ValueError("Device not found")
+            except (ValueError, TypeError) as e:
+                end_devices = adpt.EndDeviceAdapter.get_all()
+                programs = adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
+                return render_template(
+                    "admin/add-fsa.html",
+                    end_devices=end_devices,
+                    programs=programs.DERProgram if programs and hasattr(programs, 'DERProgram') else [],
+                    error=f"Invalid end device: {e}"
+                )
+
+            # Get the device's FSA list href
+            ed_href = hrefs.EndDeviceHref(device_index)
+            fsa_list_href = ed_href.function_set_assignments
+
+            # Initialize FSA list if needed
+            adpt.ListAdapter.initialize_uri(fsa_list_href, m.FunctionSetAssignments)
+
+            # Get next FSA index
+            fsa_index = adpt.ListAdapter.get_list_size(fsa_list_href)
+
+            # Create FSA
+            fsa_href = hrefs.SEP.join((fsa_list_href, str(fsa_index)))
+            fsa = m.FunctionSetAssignments(
+                href=fsa_href,
+                mRID=adpt.get_global_mrids().new_mrid(),
+                description=description,
+                subscribable=1,
+            )
+
+            # Set primacy if provided
+            try:
+                primacy_value = int(primacy)
+                # Note: FunctionSetAssignments has a primacy field in IEEE 2030.5
+                # but it may not be directly settable here - it's typically in DERProgram
+            except (ValueError, TypeError):
+                pass
+
+            # Create DER program list for this FSA if programs selected
+            if selected_programs:
+                derp_list_href = hrefs.SEP.join((fsa_href, "derp"))
+                adpt.ListAdapter.initialize_uri(derp_list_href, m.DERProgram)
+
+                fsa.DERProgramListLink = m.DERProgramListLink(
+                    href=derp_list_href,
+                    all=len(selected_programs),
+                )
+
+                # Note: In a full implementation, we'd copy selected programs
+                # For now, just set up the link
+
+            # Add FSA to the device's FSA list
+            from ieee_2030_5.data.indexer import add_href
+            result = adpt.ListAdapter.append(fsa_list_href, fsa)
+            if result.success:
+                add_href(fsa.href, fsa)
+                adpt.get_global_mrids().add_item_with_mrid(fsa.href, fsa)
+                _log.info("Created FSA '%s' at %s for device %d", description, fsa_href, device_index)
+            else:
+                end_devices = adpt.EndDeviceAdapter.get_all()
+                programs = adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
+                return render_template(
+                    "admin/add-fsa.html",
+                    end_devices=end_devices,
+                    programs=programs.DERProgram if programs and hasattr(programs, 'DERProgram') else [],
+                    error=f"Failed to create FSA: {result.error}"
+                )
+
+            return redirect(url_for("admin_home"))
+
+        # GET request - show form
+        end_devices = adpt.EndDeviceAdapter.get_all()
+        programs = adpt.ListAdapter.get_list(hrefs.DEFAULT_DERP_ROOT, m.DERProgram)
+
+        return render_template(
+            "admin/add-fsa.html",
+            end_devices=end_devices,
+            programs=programs.DERProgram if programs and hasattr(programs, 'DERProgram') else []
+        )
 
     @app.route("/admin/add-end-device", methods=["get", "post"])
     def admin_end_device():
         if request.method == "POST":
-            return redirect(url_for("admin_home"))
+            # Get form data
+            cert_name = request.form.get("cert_name", "").strip()
+            pin = request.form.get("pin", "").strip()
+
+            # Validation
+            if not cert_name:
+                return render_template(
+                    "admin/add-end-device.html",
+                    device_categories=DeviceCategoryType,
+                    error="Certificate name is required"
+                )
+
+            # Validate certificate name format (alphanumeric, underscores, hyphens)
+            if not re.match(r'^[a-zA-Z0-9_-]+$', cert_name):
+                return render_template(
+                    "admin/add-end-device.html",
+                    device_categories=DeviceCategoryType,
+                    error="Certificate name can only contain letters, numbers, underscores, and hyphens"
+                )
+
+            # Validate PIN if provided (numeric only)
+            if pin and not pin.isdigit():
+                return render_template(
+                    "admin/add-end-device.html",
+                    device_categories=DeviceCategoryType,
+                    error="PIN must contain only numbers"
+                )
+
+            # Build device category from checkboxes
+            device_category = 0
+            for category in DeviceCategoryType:
+                if request.form.get(category.name):
+                    device_category |= category.value
+
+            try:
+                # Create EndDevice
+                end_device = m.EndDevice()
+                end_device.deviceCategory = device_category if device_category else None
+
+                # Set PIN for registration
+                if pin:
+                    end_device.Registration = m.Registration(pIN=int(pin))
+
+                # Add the device to get href
+                end_device = adpt.EndDeviceAdapter.add(end_device)
+
+                # Normalize certificate name
+                if cert_name.startswith("/"):
+                    cert_name = cert_name[1:]
+                cert_name = cert_name.replace("/", "-")
+
+                # Create certificate
+                cert_file, key_file = tlsrepo.get_file_pair(cert_name)
+                Path(cert_file).unlink(missing_ok=True)
+                Path(key_file).unlink(missing_ok=True)
+                tlsrepo.create_cert(cert_name)
+
+                # Set LFDI and SFDI from certificate
+                end_device.lFDI = get_lfdi_from_cert(cert_file)
+                end_device.sFDI = get_sfdi_from_lfdi(end_device.lFDI)
+
+                # Update the device with LFDI/SFDI
+                index = int(end_device.href.rsplit(hrefs.SEP)[-1])
+                adpt.EndDeviceAdapter.put(index, end_device)
+
+                # Create device capability
+                create_device_capability(index, None, config)
+
+                _log.info(f"Created end device: {end_device.href} with cert: {cert_name}")
+
+                return redirect(url_for("admin_home"))
+
+            except Exception as e:
+                _log.error(f"Failed to create end device: {e}")
+                return render_template(
+                    "admin/add-end-device.html",
+                    device_categories=DeviceCategoryType,
+                    error=f"Failed to create end device: {str(e)}"
+                )
 
         return render_template("admin/add-end-device.html", device_categories=DeviceCategoryType)
 
@@ -1122,6 +1304,266 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             # Create new
             return redirect(url_for("admin_der_add"), code=307)
 
+    # DER Control Management Routes
+    @app.route("/admin/controls/list")
+    def admin_control_list():
+        """List all DER Controls."""
+        start = int(request.args.get("s", 0))
+        limit = int(request.args.get("l", 100))
+        controls = adpt.DERControlAdapter.fetch_all(m.DERControlList(), start=start, limit=limit)
+        return render_template("admin/controls-list.html", controls=controls)
+
+    @app.route("/admin/controls/add", methods=["GET", "POST"])
+    def admin_control_add():
+        """Add a new DER Control."""
+        if request.method == "POST":
+            # Build DERControl from form data
+            control = m.DERControl()
+            control.description = request.form.get("description", "")
+
+            mrid = request.form.get("mRID")
+            if mrid:
+                control.mRID = mrid
+
+            # Set interval
+            start_time = request.form.get("startTime")
+            duration = request.form.get("duration")
+            if start_time or duration:
+                control.interval = m.DateTimeInterval()
+                if start_time:
+                    dt = datetime.fromisoformat(start_time)
+                    control.interval.start = int(dt.timestamp())
+                if duration:
+                    control.interval.duration = int(duration)
+
+            # Set randomization
+            randomize_start = request.form.get("randomizeStart")
+            if randomize_start:
+                control.randomizeStart = int(randomize_start)
+
+            randomize_duration = request.form.get("randomizeDuration")
+            if randomize_duration:
+                control.randomizeDuration = int(randomize_duration)
+
+            # Set DERControlBase
+            control.DERControlBase = m.DERControlBase()
+
+            set_max_w = request.form.get("setMaxW")
+            if set_max_w:
+                control.DERControlBase.setMaxW = m.ActivePower(multiplier=0, value=int(set_max_w))
+
+            set_max_var = request.form.get("setMaxVar")
+            if set_max_var:
+                control.DERControlBase.setMaxVar = m.ReactivePower(multiplier=0, value=int(set_max_var))
+
+            set_grad_w = request.form.get("setGradW")
+            if set_grad_w:
+                control.DERControlBase.setGradW = int(float(set_grad_w))
+
+            op_mod_connect = request.form.get("opModConnect")
+            if op_mod_connect:
+                control.DERControlBase.opModConnect = op_mod_connect == "true"
+
+            op_mod_energize = request.form.get("opModEnergize")
+            if op_mod_energize:
+                control.DERControlBase.opModEnergize = op_mod_energize == "true"
+
+            # Add the control
+            control = adpt.DERControlAdapter.add(control)
+
+            return redirect(url_for("admin_control_list"))
+
+        # GET: Show form
+        return render_template("admin/control-form.html", control=None, start_time=None)
+
+    @app.route("/admin/controls/<int:control_id>/edit", methods=["GET", "POST"])
+    def admin_control_edit(control_id: int):
+        """Edit an existing DER Control."""
+        if request.method == "POST":
+            # Get existing control
+            control = adpt.DERControlAdapter.fetch(control_id)
+
+            # Update fields
+            control.description = request.form.get("description", control.description)
+
+            # Update interval
+            start_time = request.form.get("startTime")
+            duration = request.form.get("duration")
+            if start_time or duration:
+                if not control.interval:
+                    control.interval = m.DateTimeInterval()
+                if start_time:
+                    dt = datetime.fromisoformat(start_time)
+                    control.interval.start = int(dt.timestamp())
+                if duration:
+                    control.interval.duration = int(duration)
+
+            # Update DERControlBase
+            if not control.DERControlBase:
+                control.DERControlBase = m.DERControlBase()
+
+            set_max_w = request.form.get("setMaxW")
+            if set_max_w:
+                control.DERControlBase.setMaxW = m.ActivePower(multiplier=0, value=int(set_max_w))
+
+            set_max_var = request.form.get("setMaxVar")
+            if set_max_var:
+                control.DERControlBase.setMaxVar = m.ReactivePower(multiplier=0, value=int(set_max_var))
+
+            # Save
+            adpt.DERControlAdapter.put(control_id, control)
+
+            return redirect(url_for("admin_control_list"))
+
+        # GET: Show form with existing data
+        control = adpt.DERControlAdapter.fetch(control_id)
+
+        # Convert timestamp to datetime string for form
+        start_time = None
+        if control and control.interval and control.interval.start:
+            start_time = datetime.fromtimestamp(control.interval.start).strftime("%Y-%m-%dT%H:%M")
+
+        return render_template("admin/control-form.html", control=control, start_time=start_time)
+
+    @app.route("/admin/controls/save", methods=["POST"])
+    def admin_control_save():
+        """Save DER Control (redirect target for form)."""
+        href = request.form.get("href")
+
+        if href:
+            control_id = int(href.rsplit("/", 1)[-1])
+            return redirect(url_for("admin_control_edit", control_id=control_id), code=307)
+        else:
+            return redirect(url_for("admin_control_add"), code=307)
+
+    # DER Curve Management Routes
+    @app.route("/admin/curves/list")
+    def admin_curve_list():
+        """List all DER Curves."""
+        start = int(request.args.get("s", 0))
+        limit = int(request.args.get("l", 100))
+        curves = adpt.DERCurveAdapter.fetch_all(m.DERCurveList(), start=start, limit=limit)
+        return render_template("admin/curves-list.html", curves=curves)
+
+    @app.route("/admin/curves/add", methods=["GET", "POST"])
+    def admin_curve_add():
+        """Add a new DER Curve."""
+        if request.method == "POST":
+            # Build DERCurve from form data
+            curve = m.DERCurve()
+            curve.description = request.form.get("description", "")
+
+            curve_type = request.form.get("curveType")
+            if curve_type:
+                curve.curveType = int(curve_type)
+
+            # Collect curve data points
+            curve.CurveData = []
+            i = 0
+            while True:
+                x_val = request.form.get(f"x_{i}")
+                y_val = request.form.get(f"y_{i}")
+                if x_val is None and y_val is None:
+                    break
+                if x_val or y_val:
+                    curve_data = m.CurveData()
+                    curve_data.xvalue = int(float(x_val)) if x_val else 0
+                    curve_data.yvalue = int(float(y_val)) if y_val else 0
+                    curve.CurveData.append(curve_data)
+                i += 1
+
+            # Timing parameters
+            open_loop = request.form.get("openLoopTms")
+            if open_loop:
+                curve.openLoopTms = int(open_loop)
+
+            ramp_dec = request.form.get("rampDecTms")
+            if ramp_dec:
+                curve.rampDecTms = int(ramp_dec)
+
+            ramp_inc = request.form.get("rampIncTms")
+            if ramp_inc:
+                curve.rampIncTms = int(ramp_inc)
+
+            ramp_pt1 = request.form.get("rampPT1Tms")
+            if ramp_pt1:
+                curve.rampPT1Tms = int(ramp_pt1)
+
+            # Multipliers
+            x_mult = request.form.get("xMultiplier")
+            if x_mult:
+                curve.xMultiplier = int(x_mult)
+
+            y_mult = request.form.get("yMultiplier")
+            if y_mult:
+                curve.yMultiplier = int(y_mult)
+
+            # Add the curve
+            curve = adpt.DERCurveAdapter.add(curve)
+
+            return redirect(url_for("admin_curve_list"))
+
+        # GET: Show form
+        return render_template("admin/curve-form.html", curve=None)
+
+    @app.route("/admin/curves/<int:curve_id>/edit", methods=["GET", "POST"])
+    def admin_curve_edit(curve_id: int):
+        """Edit an existing DER Curve."""
+        if request.method == "POST":
+            # Get existing curve
+            curve = adpt.DERCurveAdapter.fetch(curve_id)
+
+            # Update fields
+            curve.description = request.form.get("description", curve.description)
+
+            curve_type = request.form.get("curveType")
+            if curve_type:
+                curve.curveType = int(curve_type)
+
+            # Update curve data points
+            curve.CurveData = []
+            i = 0
+            while True:
+                x_val = request.form.get(f"x_{i}")
+                y_val = request.form.get(f"y_{i}")
+                if x_val is None and y_val is None:
+                    break
+                if x_val or y_val:
+                    curve_data = m.CurveData()
+                    curve_data.xvalue = int(float(x_val)) if x_val else 0
+                    curve_data.yvalue = int(float(y_val)) if y_val else 0
+                    curve.CurveData.append(curve_data)
+                i += 1
+
+            # Update timing parameters
+            open_loop = request.form.get("openLoopTms")
+            if open_loop:
+                curve.openLoopTms = int(open_loop)
+
+            ramp_dec = request.form.get("rampDecTms")
+            if ramp_dec:
+                curve.rampDecTms = int(ramp_dec)
+
+            # Save
+            adpt.DERCurveAdapter.put(curve_id, curve)
+
+            return redirect(url_for("admin_curve_list"))
+
+        # GET: Show form with existing data
+        curve = adpt.DERCurveAdapter.fetch(curve_id)
+        return render_template("admin/curve-form.html", curve=curve)
+
+    @app.route("/admin/curves/save", methods=["POST"])
+    def admin_curve_save():
+        """Save DER Curve (redirect target for form)."""
+        href = request.form.get("href")
+
+        if href:
+            curve_id = int(href.rsplit("/", 1)[-1])
+            return redirect(url_for("admin_curve_edit", curve_id=curve_id), code=307)
+        else:
+            return redirect(url_for("admin_curve_add"), code=307)
+
     @app.route("/admin/resources")
     def admin_resource_list():
         resource = request.args.get("rurl")
@@ -1256,8 +1698,6 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                 yield f"data: {json.dumps(msg.to_dict())}\n\n"
 
             # Set up real-time subscription
-            import queue
-
             message_queue = queue.Queue(maxsize=100)
 
             def message_callback(event):
@@ -1405,10 +1845,6 @@ def run_app(app: Flask, host, ssl_context, request_handler, port, **kwargs):
 
 def run_dual_server(config: ServerConfiguration, tlsrepo: TLSRepository, admin_http_port: int = 5001, **kwargs):
     """Run both HTTPS server (for IEEE 2030.5 API) and HTTP server (for admin only)"""
-    import threading
-
-    from werkzeug.serving import run_simple
-
     global server_config, tls_repository
     server_config = config
     tls_repository = tlsrepo

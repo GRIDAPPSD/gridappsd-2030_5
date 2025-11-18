@@ -2,50 +2,279 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Add End Device</title>
-    <style>
-        .nav-header {
-            background: #333;
-            color: white;
-            padding: 10px 20px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-        }
-        .nav-header a {
-            color: #4CAF50;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .nav-header a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add End Device - IEEE 2030.5 Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 </head>
 <body>
-    <div class="nav-header">
-        <a href="/admin/">← Back to Admin Home</a>
-    </div>
-    <h1>New End Device</h1>
-    <form action="{{ url_for("admin_end_device") }}" method="post">
-    <input type="hidden" name="mRID" value="{{ mRID }}" />
-    <div>
-        <div><label for="cert_name">CERT Name:
-            <input name="cert_name" type="text" value="{{ cert_name }}" />
-        </label></div>
-        <div><label for="pin">PIN:
-            <input name="pin" type="text" size="6" value="{{ pin }}"/>
-        </label></div>
-        <div>
-            <h3>Device Category</h3>
-            <ul>
-                {! Check to see if we can figure out the device category already plotted !}
-                {% for category in device_categories %}
-                <li><label for="{{ category.name }}"><input type="checkbox" name="{{ category.name }}" />{{ category.name }}</label></li>
-                {% endfor %}
-            </ul>
+    <div class="container-narrow">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
         </div>
-        <input type="submit" value="Save" />
+
+        <div class="page-header">
+            <h1>Add End Device</h1>
+            <p>Register a new end device with TLS certificate</p>
+        </div>
+
+        <div class="form-container">
+            <div class="note">
+                <strong>Note:</strong> End devices are identified by their TLS certificate. A certificate will be generated with the specified name, and the LFDI/SFDI will be calculated from the certificate fingerprint.
+            </div>
+
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form id="endDeviceForm" action="{{ url_for('admin_end_device') }}" method="post">
+                <input type="hidden" name="mRID" value="{{ mRID }}" />
+
+                <div class="form-group">
+                    <label for="cert_name">Certificate Name *</label>
+                    <input type="text" id="cert_name" name="cert_name" value="{{ cert_name }}" placeholder="e.g., device_001" required>
+                    <small>Name for the device's TLS certificate (alphanumeric, underscores, hyphens)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="pin">PIN</label>
+                    <input type="text" id="pin" name="pin" size="6" value="{{ pin }}" placeholder="e.g., 123456">
+                    <small>Optional PIN for device registration (numeric)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Device Category</label>
+                    <div class="checkbox-group">
+                        {% for category in device_categories %}
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="{{ category.name }}" name="{{ category.name }}">
+                            <label for="{{ category.name }}">{{ category.name }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <small>Select applicable device categories (can select multiple)</small>
+                </div>
+
+                <div class="btn-group mt-20">
+                    <button type="submit" class="btn">Create End Device</button>
+                    <a href="/admin/" class="btn btn-outline">Cancel</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Show Code Section -->
+        <div class="card mt-20">
+            <div class="show-code-section">
+                <button class="show-code-toggle" onclick="toggleShowCode(this)">
+                    <span>Show API Code (httpx)</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="show-code-content">
+                    <div class="code-options">
+                        <label>
+                            <input type="checkbox" id="useAuth" onchange="updateGeneratedCode()">
+                            Use TLS Authentication
+                        </label>
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre id="generatedCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    </form>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        function toggleShowCode(button) {
+            const content = button.nextElementSibling;
+            button.classList.toggle('active');
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                updateGeneratedCode();
+            }
+        }
+
+        function updateGeneratedCode() {
+            const form = document.getElementById('endDeviceForm');
+            const formData = new FormData(form);
+            const useAuth = document.getElementById('useAuth')?.checked ?? false;
+
+            const xmlContent = generateEndDeviceXml(formData);
+
+            let code = `import httpx
+
+# Create End Device via IEEE 2030.5 Admin API
+url = "${window.location.origin}/admin/add-end-device"
+
+`;
+
+            if (useAuth) {
+                code += `# TLS Client Certificate Authentication
+cert = ("path/to/client.crt", "path/to/client.key")
+ca_cert = "path/to/ca.crt"
+
+`;
+            }
+
+            // Collect device categories
+            const categories = [];
+            const categoryCheckboxes = document.querySelectorAll('input[type="checkbox"]:not(#useAuth)');
+            categoryCheckboxes.forEach(cb => {
+                if (cb.checked) {
+                    categories.push(cb.name);
+                }
+            });
+
+            code += `# Form data for End Device creation
+form_data = {
+    "cert_name": "${escapeString(formData.get('cert_name') || '')}",
+    "pin": "${formData.get('pin') || ''}"
+}
+
+# Add device categories
+`;
+            categories.forEach(cat => {
+                code += `form_data["${cat}"] = "on"\n`;
+            });
+
+            if (useAuth) {
+                code += `
+with httpx.Client(cert=cert, verify=ca_cert) as client:
+    response = client.post(url, data=form_data)
+`;
+            } else {
+                code += `
+with httpx.Client(verify=False) as client:
+    response = client.post(url, data=form_data)
+`;
+            }
+
+            code += `
+# Check response
+print(f"Status: {response.status_code}")
+if response.status_code in [200, 302]:
+    print("End Device created successfully!")
+    # Certificate files will be created in the TLS repository
+else:
+    print(f"Error: {response.text}")
+
+# Alternative: Create EndDevice directly via IEEE 2030.5 API
+# POST to /edev with XML payload
+xml_payload = """${xmlContent}"""
+`;
+
+            const codeElement = document.getElementById('generatedCode');
+            if (codeElement) {
+                codeElement.textContent = code;
+            }
+        }
+
+        function generateEndDeviceXml(formData) {
+            const pin = formData.get('pin') || '';
+
+            // Calculate device category value
+            let deviceCategory = 0;
+            const categoryCheckboxes = document.querySelectorAll('input[type="checkbox"]:not(#useAuth)');
+            const categoryValues = {
+                'PROGRAMMABLE_COMMUNICATION_THERMOSTAT': 1,
+                'STRIP_HEATERS': 2,
+                'BASEBOARD_HEATERS': 4,
+                'WATER_HEATER': 8,
+                'POOL_PUMP': 16,
+                'SAUNA': 32,
+                'HOT_TUB': 64,
+                'SMART_APPLIANCE': 128,
+                'IRRIGATION_PUMP': 256,
+                'MANAGED_COMMERCIAL_AND_INDUSTRIAL_LOADS': 512,
+                'SIMPLE_MISC_LOADS': 1024,
+                'EXTERIOR_LIGHTING': 2048,
+                'INTERIOR_LIGHTING': 4096,
+                'LOAD_CONTROL_SWITCH': 8192,
+                'ENERGY_MANAGEMENT_SYSTEM': 16384,
+                'SMART_ENERGY_MODULE': 32768,
+                'ELECTRIC_VEHICLE': 65536,
+                'EVSE': 131072,
+                'VIRTUAL_OR_MIXED_DER': 262144,
+                'RECIPROCATING_ENGINE': 524288,
+                'FUEL_CELL': 1048576,
+                'PHOTOVOLTAIC_SYSTEM': 2097152,
+                'COMBINED_HEAT_AND_POWER': 4194304,
+                'COMBINED_PV_AND_STORAGE': 8388608,
+                'OTHER_GENERATION_SYSTEM': 16777216,
+                'OTHER_STORAGE_SYSTEM': 33554432
+            };
+            categoryCheckboxes.forEach(cb => {
+                if (cb.checked && categoryValues[cb.name]) {
+                    deviceCategory |= categoryValues[cb.name];
+                }
+            });
+
+            let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<EndDevice xmlns="urn:ieee:std:2030.5:ns">`;
+
+            if (deviceCategory > 0) {
+                xml += `
+  <deviceCategory>${deviceCategory}</deviceCategory>`;
+            }
+
+            if (pin) {
+                xml += `
+  <Registration>
+    <pIN>${escapeXml(pin)}</pIN>
+  </Registration>`;
+            }
+
+            xml += `
+</EndDevice>`;
+
+            return xml;
+        }
+
+        function escapeXml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function escapeString(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"');
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.parentElement.querySelector('pre');
+            navigator.clipboard.writeText(codeBlock.textContent).then(() => {
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                    button.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Update code when form fields change
+        document.querySelectorAll('#endDeviceForm input').forEach(el => {
+            el.addEventListener('change', updateGeneratedCode);
+            el.addEventListener('input', updateGeneratedCode);
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const content = document.querySelector('.show-code-content');
+            if (content && content.classList.contains('active')) {
+                updateGeneratedCode();
+            }
+        });
+    </script>
 </body>
 </html>

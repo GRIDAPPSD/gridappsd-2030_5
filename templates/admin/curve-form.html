@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Edit' if curve else 'Add' }} DER Curve - IEEE 2030.5 Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <div class="container-narrow">
+        <div class="nav-header">
+            <a href="{{ url_for('admin_curve_list') }}">← Back to Curves List</a>
+        </div>
+
+        <div class="page-header">
+            <h1>📈 {{ 'Edit' if curve else 'Add New' }} DER Curve</h1>
+            <p>{{ 'Update existing' if curve else 'Create a new' }} Volt-Var or other DER curve</p>
+        </div>
+
+        <div class="form-container">
+            <div class="note">
+                <strong>DER Curves</strong> define relationships between independent (X-axis) and dependent (Y-axis) variables for control modes like Volt-Var, Volt-Watt, and Frequency-Watt.
+            </div>
+
+            <form id="curveForm" action="{{ url_for('admin_curve_save') }}" method="post">
+                {% if curve and curve.href %}
+                <input type="hidden" name="href" value="{{ curve.href }}">
+                {% endif %}
+
+                <div class="form-group">
+                    <label for="description">Description *</label>
+                    <input type="text" id="description" name="description"
+                           value="{{ curve.description if curve else '' }}"
+                           placeholder="e.g., Volt-Var Curve 1" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="curveType">Curve Type *</label>
+                    <select id="curveType" name="curveType" required>
+                        <option value="">Select curve type...</option>
+                        <option value="0" {% if curve and curve.curveType == 0 %}selected{% endif %}>opModVoltVar (Volt-Var)</option>
+                        <option value="1" {% if curve and curve.curveType == 1 %}selected{% endif %}>opModFreqWatt (Frequency-Watt)</option>
+                        <option value="2" {% if curve and curve.curveType == 2 %}selected{% endif %}>opModFreqDroop</option>
+                        <option value="3" {% if curve and curve.curveType == 3 %}selected{% endif %}>opModWattPF (Watt-PF)</option>
+                        <option value="4" {% if curve and curve.curveType == 4 %}selected{% endif %}>opModVoltWatt (Volt-Watt)</option>
+                        <option value="5" {% if curve and curve.curveType == 5 %}selected{% endif %}>opModLVRTMomentaryCessation</option>
+                        <option value="6" {% if curve and curve.curveType == 6 %}selected{% endif %}>opModHVRTMomentaryCessation</option>
+                        <option value="7" {% if curve and curve.curveType == 7 %}selected{% endif %}>opModLVRTMustTrip</option>
+                        <option value="8" {% if curve and curve.curveType == 8 %}selected{% endif %}>opModHVRTMustTrip</option>
+                        <option value="9" {% if curve and curve.curveType == 9 %}selected{% endif %}>opModLFRTMustTrip</option>
+                        <option value="10" {% if curve and curve.curveType == 10 %}selected{% endif %}>opModHFRTMustTrip</option>
+                    </select>
+                </div>
+
+                <div class="section-title">Curve Data Points</div>
+                <p><small>Define X-Y pairs for the curve. X values typically represent voltage (% of nominal) and Y values represent reactive power (% of max VAr).</small></p>
+
+                <div id="curveDataContainer" class="dynamic-fields">
+                    {% if curve and curve.CurveData %}
+                        {% for point in curve.CurveData %}
+                        <div class="dynamic-field-row">
+                            <input type="number" name="x_{{ loop.index0 }}" value="{{ point.xvalue }}" placeholder="X value" step="0.01">
+                            <input type="number" name="y_{{ loop.index0 }}" value="{{ point.yvalue }}" placeholder="Y value" step="0.01">
+                            <button type="button" class="remove-btn" onclick="removeDynamicField(this)">×</button>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="dynamic-field-row">
+                            <input type="number" name="x_0" placeholder="X value (e.g., 92)" step="0.01">
+                            <input type="number" name="y_0" placeholder="Y value (e.g., 100)" step="0.01">
+                            <button type="button" class="remove-btn" onclick="removeDynamicField(this)">×</button>
+                        </div>
+                    {% endif %}
+                </div>
+                <button type="button" class="add-field-btn" onclick="addCurvePoint()">+ Add Point</button>
+
+                <div class="section-title">Timing Parameters</div>
+
+                <div class="form-group">
+                    <label for="openLoopTms">Open Loop Response Time (hundredths of second)</label>
+                    <input type="number" id="openLoopTms" name="openLoopTms" min="0"
+                           value="{{ curve.openLoopTms if curve else '' }}"
+                           placeholder="e.g., 500">
+                    <small>Time to ramp to 90% of new target (0 = no limit)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rampDecTms">Ramp Decrease Rate (hundredths of %/sec)</label>
+                    <input type="number" id="rampDecTms" name="rampDecTms" min="0"
+                           value="{{ curve.rampDecTms if curve else '' }}"
+                           placeholder="e.g., 100">
+                    <small>Decreasing ramp rate (0 = no limit)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rampIncTms">Ramp Increase Rate (hundredths of %/sec)</label>
+                    <input type="number" id="rampIncTms" name="rampIncTms" min="0"
+                           value="{{ curve.rampIncTms if curve else '' }}"
+                           placeholder="e.g., 100">
+                    <small>Increasing ramp rate (defaults to rampDecTms if absent)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rampPT1Tms">PT1 Filter Time Constant (hundredths of second)</label>
+                    <input type="number" id="rampPT1Tms" name="rampPT1Tms" min="0"
+                           value="{{ curve.rampPT1Tms if curve else '' }}"
+                           placeholder="e.g., 1000">
+                    <small>Low-pass filter settling time to 95%</small>
+                </div>
+
+                <div class="section-title">Axis Multipliers</div>
+
+                <div class="form-group">
+                    <label for="xMultiplier">X-Axis Multiplier (power of 10)</label>
+                    <input type="number" id="xMultiplier" name="xMultiplier"
+                           value="{{ curve.xMultiplier if curve else '0' }}"
+                           placeholder="0">
+                    <small>Exponent for X-axis values (e.g., 0 for units, -2 for centi)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="yMultiplier">Y-Axis Multiplier (power of 10)</label>
+                    <input type="number" id="yMultiplier" name="yMultiplier"
+                           value="{{ curve.yMultiplier if curve else '0' }}"
+                           placeholder="0">
+                    <small>Exponent for Y-axis values</small>
+                </div>
+
+                <div class="btn-group mt-20">
+                    <button type="submit" class="btn">{{ 'Update' if curve else 'Create' }} Curve</button>
+                    <a href="{{ url_for('admin_curve_list') }}" class="btn btn-outline">Cancel</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Show Code Section -->
+        <div class="card mt-20">
+            <div class="show-code-section">
+                <button class="show-code-toggle" onclick="toggleShowCode(this)">
+                    <span>Show API Code (httpx)</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="show-code-content">
+                    <div class="code-options">
+                        <label>
+                            <input type="checkbox" id="useAuth" onchange="updateGeneratedCode()">
+                            Use TLS Authentication
+                        </label>
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre id="generatedCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        let pointIndex = {{ curve.CurveData|length if curve and curve.CurveData else 1 }};
+
+        function addCurvePoint() {
+            const container = document.getElementById('curveDataContainer');
+            const newRow = document.createElement('div');
+            newRow.className = 'dynamic-field-row';
+            newRow.innerHTML = `
+                <input type="number" name="x_${pointIndex}" placeholder="X value" step="0.01">
+                <input type="number" name="y_${pointIndex}" placeholder="Y value" step="0.01">
+                <button type="button" class="remove-btn" onclick="removeDynamicField(this)">×</button>
+            `;
+            container.appendChild(newRow);
+            pointIndex++;
+            updateGeneratedCode();
+        }
+
+        function removeDynamicField(button) {
+            const row = button.closest('.dynamic-field-row');
+            if (row) {
+                row.remove();
+                updateGeneratedCode();
+            }
+        }
+
+        function generateXmlFromForm(formData) {
+            const href = formData.get('href') || '';
+            const description = formData.get('description') || '';
+            const curveType = formData.get('curveType') || '';
+            const openLoopTms = formData.get('openLoopTms') || '';
+            const rampDecTms = formData.get('rampDecTms') || '';
+            const rampIncTms = formData.get('rampIncTms') || '';
+            const rampPT1Tms = formData.get('rampPT1Tms') || '';
+            const xMultiplier = formData.get('xMultiplier') || '0';
+            const yMultiplier = formData.get('yMultiplier') || '0';
+
+            // Collect curve data points
+            const curveData = [];
+            let i = 0;
+            while (true) {
+                const x = formData.get(`x_${i}`);
+                const y = formData.get(`y_${i}`);
+                if (x === null && y === null) break;
+                if (x || y) {
+                    curveData.push({ x: x || '0', y: y || '0' });
+                }
+                i++;
+            }
+
+            let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<DERCurve xmlns="urn:ieee:std:2030.5:ns"`;
+
+            if (href) {
+                xml += ` href="${escapeXml(href)}"`;
+            }
+
+            xml += `>`;
+
+            if (description) {
+                xml += `
+  <description>${escapeXml(description)}</description>`;
+            }
+
+            // Curve data points
+            curveData.forEach(point => {
+                xml += `
+  <CurveData>
+    <xvalue>${point.x}</xvalue>
+    <yvalue>${point.y}</yvalue>
+  </CurveData>`;
+            });
+
+            if (curveType) {
+                xml += `
+  <curveType>${curveType}</curveType>`;
+            }
+
+            if (openLoopTms) {
+                xml += `
+  <openLoopTms>${openLoopTms}</openLoopTms>`;
+            }
+
+            if (rampDecTms) {
+                xml += `
+  <rampDecTms>${rampDecTms}</rampDecTms>`;
+            }
+
+            if (rampIncTms) {
+                xml += `
+  <rampIncTms>${rampIncTms}</rampIncTms>`;
+            }
+
+            if (rampPT1Tms) {
+                xml += `
+  <rampPT1Tms>${rampPT1Tms}</rampPT1Tms>`;
+            }
+
+            xml += `
+  <xMultiplier>${xMultiplier}</xMultiplier>
+  <yMultiplier>${yMultiplier}</yMultiplier>
+</DERCurve>`;
+
+            return xml;
+        }
+
+        function updateGeneratedCode() {
+            const form = document.getElementById('curveForm');
+            const formData = new FormData(form);
+            const useAuth = document.getElementById('useAuth')?.checked ?? false;
+            const isEdit = formData.get('href') ? true : false;
+
+            const xmlContent = generateXmlFromForm(formData);
+            const method = isEdit ? 'PUT' : 'POST';
+
+            let code = `import httpx
+
+# ${isEdit ? 'Update' : 'Create'} DER Curve via IEEE 2030.5 Admin API
+url = "${window.location.origin}/admin/curves"
+
+`;
+
+            if (useAuth) {
+                code += `# TLS Client Certificate Authentication
+cert = ("path/to/client.crt", "path/to/client.key")
+ca_cert = "path/to/ca.crt"
+
+`;
+            }
+
+            code += `# XML Payload
+xml_data = """${xmlContent}"""
+
+headers = {
+    "Content-Type": "application/sep+xml",
+    "Accept": "application/sep+xml"
+}
+
+`;
+
+            if (useAuth) {
+                code += `# Create client with TLS authentication
+with httpx.Client(cert=cert, verify=ca_cert) as client:
+    response = client.${method.toLowerCase()}(
+        url,
+        content=xml_data.encode('utf-8'),
+        headers=headers
+    )
+`;
+            } else {
+                code += `# Create client (no authentication for admin)
+with httpx.Client(verify=False) as client:
+    response = client.${method.toLowerCase()}(
+        url,
+        content=xml_data.encode('utf-8'),
+        headers=headers
+    )
+`;
+            }
+
+            code += `
+# Check response
+print(f"Status: {response.status_code}")
+print(f"Response: {response.text}")
+
+if response.status_code in [200, 201, 204]:
+    print("Success!")
+else:
+    print(f"Error: {response.status_code}")
+`;
+
+            const codeElement = document.getElementById('generatedCode');
+            if (codeElement) {
+                codeElement.textContent = code;
+            }
+        }
+
+        function escapeXml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function toggleShowCode(button) {
+            const content = button.nextElementSibling;
+            button.classList.toggle('active');
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                updateGeneratedCode();
+            }
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.parentElement.querySelector('pre');
+            navigator.clipboard.writeText(codeBlock.textContent).then(() => {
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                    button.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Update code when form fields change
+        document.querySelectorAll('#curveForm input, #curveForm select').forEach(el => {
+            el.addEventListener('change', updateGeneratedCode);
+            el.addEventListener('input', updateGeneratedCode);
+        });
+    </script>
+</body>
+</html>

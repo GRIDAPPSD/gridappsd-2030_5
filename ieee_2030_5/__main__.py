@@ -446,7 +446,15 @@ def _main():
     _log.info("Starting IEEE 2030.5 server")
 
     # Set environment variables
-    config_path = Path(opts.config).expanduser().resolve(strict=True)
+    config_path = Path(opts.config).expanduser()
+    if not config_path.exists():
+        _log.error(f"Configuration file not found: {config_path}")
+        print(f"\nError: Configuration file not found: {config_path}\n", file=sys.stderr)
+        print("Please provide a valid configuration file path.", file=sys.stderr)
+        print("Example: 2030_5_server config.yml\n", file=sys.stderr)
+        sys.exit(1)
+
+    config_path = config_path.resolve()
     os.environ["IEEE_2030_5_CONFIG_FILE"] = str(config_path)
 
     # Load configuration

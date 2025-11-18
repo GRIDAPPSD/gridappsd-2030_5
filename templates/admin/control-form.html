@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Edit' if control else 'Add' }} DER Control - IEEE 2030.5 Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <div class="container-narrow">
+        <div class="nav-header">
+            <a href="{{ url_for('admin_control_list') }}">← Back to Controls List</a>
+        </div>
+
+        <div class="page-header">
+            <h1>🎛️ {{ 'Edit' if control else 'Add New' }} DER Control</h1>
+            <p>{{ 'Update existing' if control else 'Create a new' }} DER control event</p>
+        </div>
+
+        <div class="form-container">
+            <div class="note">
+                <strong>DER Controls</strong> define time-based control events that can modify DER behavior. Each control specifies setpoints for power, voltage, and other parameters.
+            </div>
+
+            <form id="controlForm" action="{{ url_for('admin_control_save') }}" method="post">
+                {% if control and control.href %}
+                <input type="hidden" name="href" value="{{ control.href }}">
+                {% endif %}
+
+                <div class="form-group">
+                    <label for="description">Description *</label>
+                    <input type="text" id="description" name="description"
+                           value="{{ control.description if control else '' }}"
+                           placeholder="e.g., Peak Demand Response Event" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="mRID">mRID (UUID)</label>
+                    <input type="text" id="mRID" name="mRID"
+                           value="{{ control.mRID if control else '' }}"
+                           placeholder="Leave blank to auto-generate"
+                           pattern="[A-Fa-f0-9]{32}">
+                    <small>32-character hex identifier (auto-generated if empty)</small>
+                </div>
+
+                <div class="section-title">Event Timing</div>
+
+                <div class="form-group">
+                    <label for="startTime">Start Time</label>
+                    <input type="datetime-local" id="startTime" name="startTime"
+                           value="{{ start_time if start_time else '' }}">
+                    <small>When the control event should begin</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration (seconds)</label>
+                    <input type="number" id="duration" name="duration" min="0"
+                           value="{{ control.interval.duration if control and control.interval else '' }}"
+                           placeholder="e.g., 3600">
+                    <small>How long the control should be active</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="randomizeStart">Randomize Start (seconds)</label>
+                    <input type="number" id="randomizeStart" name="randomizeStart" min="0"
+                           value="{{ control.randomizeStart if control else '0' }}"
+                           placeholder="0">
+                    <small>Random delay to avoid synchronized response</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="randomizeDuration">Randomize Duration (seconds)</label>
+                    <input type="number" id="randomizeDuration" name="randomizeDuration" min="0"
+                           value="{{ control.randomizeDuration if control else '0' }}"
+                           placeholder="0">
+                    <small>Random extension of duration</small>
+                </div>
+
+                <div class="section-title">DER Control Base Settings</div>
+
+                <div class="form-group">
+                    <label for="setMaxW">Max Active Power (setMaxW) - Watts</label>
+                    <input type="number" id="setMaxW" name="setMaxW"
+                           value="{{ control.DERControlBase.setMaxW.value if control and control.DERControlBase and control.DERControlBase.setMaxW else '' }}"
+                           placeholder="e.g., 5000">
+                    <small>Requested maximum active power output</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="setMaxVar">Max Reactive Power (setMaxVar) - VAr</label>
+                    <input type="number" id="setMaxVar" name="setMaxVar"
+                           value="{{ control.DERControlBase.setMaxVar.value if control and control.DERControlBase and control.DERControlBase.setMaxVar else '' }}"
+                           placeholder="e.g., 2500">
+                    <small>Requested maximum reactive power</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="setGradW">Active Power Ramp Rate (setGradW) - %/second</label>
+                    <input type="number" id="setGradW" name="setGradW" step="0.01"
+                           value="{{ control.DERControlBase.setGradW if control and control.DERControlBase else '' }}"
+                           placeholder="e.g., 10">
+                    <small>Rate of change for active power adjustments</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="opModConnect">Connect Mode</label>
+                    <select id="opModConnect" name="opModConnect">
+                        <option value="">Not specified</option>
+                        <option value="true" {% if control and control.DERControlBase and control.DERControlBase.opModConnect %}selected{% endif %}>Connected</option>
+                        <option value="false" {% if control and control.DERControlBase and control.DERControlBase.opModConnect == False %}selected{% endif %}>Disconnected</option>
+                    </select>
+                    <small>DER connection state</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="opModEnergize">Energize Mode</label>
+                    <select id="opModEnergize" name="opModEnergize">
+                        <option value="">Not specified</option>
+                        <option value="true" {% if control and control.DERControlBase and control.DERControlBase.opModEnergize %}selected{% endif %}>Energized</option>
+                        <option value="false" {% if control and control.DERControlBase and control.DERControlBase.opModEnergize == False %}selected{% endif %}>De-energized</option>
+                    </select>
+                    <small>DER energize state</small>
+                </div>
+
+                <div class="btn-group mt-20">
+                    <button type="submit" class="btn">{{ 'Update' if control else 'Create' }} Control</button>
+                    <a href="{{ url_for('admin_control_list') }}" class="btn btn-outline">Cancel</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Show Code Section -->
+        <div class="card mt-20">
+            <div class="show-code-section">
+                <button class="show-code-toggle" onclick="toggleShowCode(this)">
+                    <span>Show API Code (httpx)</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="show-code-content">
+                    <div class="code-options">
+                        <label>
+                            <input type="checkbox" id="useAuth" onchange="updateGeneratedCode()">
+                            Use TLS Authentication
+                        </label>
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre id="generatedCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        function generateXmlFromForm(formData) {
+            const href = formData.get('href') || '';
+            const description = formData.get('description') || '';
+            const mRID = formData.get('mRID') || '';
+            const startTime = formData.get('startTime') || '';
+            const duration = formData.get('duration') || '';
+            const randomizeStart = formData.get('randomizeStart') || '0';
+            const randomizeDuration = formData.get('randomizeDuration') || '0';
+            const setMaxW = formData.get('setMaxW') || '';
+            const setMaxVar = formData.get('setMaxVar') || '';
+            const setGradW = formData.get('setGradW') || '';
+            const opModConnect = formData.get('opModConnect') || '';
+            const opModEnergize = formData.get('opModEnergize') || '';
+
+            // Convert datetime to Unix timestamp
+            let startTimestamp = '';
+            if (startTime) {
+                startTimestamp = Math.floor(new Date(startTime).getTime() / 1000);
+            }
+
+            let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<DERControl xmlns="urn:ieee:std:2030.5:ns"`;
+
+            if (href) {
+                xml += ` href="${escapeXml(href)}"`;
+            }
+
+            xml += `>`;
+
+            if (description) {
+                xml += `
+  <description>${escapeXml(description)}</description>`;
+            }
+
+            if (mRID) {
+                xml += `
+  <mRID>${escapeXml(mRID)}</mRID>`;
+            }
+
+            if (startTimestamp || duration) {
+                xml += `
+  <interval>`;
+                if (duration) {
+                    xml += `
+    <duration>${duration}</duration>`;
+                }
+                if (startTimestamp) {
+                    xml += `
+    <start>${startTimestamp}</start>`;
+                }
+                xml += `
+  </interval>`;
+            }
+
+            if (randomizeStart && randomizeStart !== '0') {
+                xml += `
+  <randomizeStart>${randomizeStart}</randomizeStart>`;
+            }
+
+            if (randomizeDuration && randomizeDuration !== '0') {
+                xml += `
+  <randomizeDuration>${randomizeDuration}</randomizeDuration>`;
+            }
+
+            // DERControlBase
+            if (setMaxW || setMaxVar || setGradW || opModConnect || opModEnergize) {
+                xml += `
+  <DERControlBase>`;
+
+                if (opModConnect) {
+                    xml += `
+    <opModConnect>${opModConnect}</opModConnect>`;
+                }
+
+                if (opModEnergize) {
+                    xml += `
+    <opModEnergize>${opModEnergize}</opModEnergize>`;
+                }
+
+                if (setGradW) {
+                    xml += `
+    <setGradW>${setGradW}</setGradW>`;
+                }
+
+                if (setMaxW) {
+                    xml += `
+    <setMaxW>
+      <multiplier>0</multiplier>
+      <value>${setMaxW}</value>
+    </setMaxW>`;
+                }
+
+                if (setMaxVar) {
+                    xml += `
+    <setMaxVar>
+      <multiplier>0</multiplier>
+      <value>${setMaxVar}</value>
+    </setMaxVar>`;
+                }
+
+                xml += `
+  </DERControlBase>`;
+            }
+
+            xml += `
+</DERControl>`;
+
+            return xml;
+        }
+
+        function updateGeneratedCode() {
+            const form = document.getElementById('controlForm');
+            const formData = new FormData(form);
+            const useAuth = document.getElementById('useAuth')?.checked ?? false;
+            const isEdit = formData.get('href') ? true : false;
+
+            const xmlContent = generateXmlFromForm(formData);
+            const method = isEdit ? 'PUT' : 'POST';
+
+            let code = `import httpx
+
+# ${isEdit ? 'Update' : 'Create'} DER Control via IEEE 2030.5 Admin API
+url = "${window.location.origin}/admin/controls"
+
+`;
+
+            if (useAuth) {
+                code += `# TLS Client Certificate Authentication
+cert = ("path/to/client.crt", "path/to/client.key")
+ca_cert = "path/to/ca.crt"
+
+`;
+            }
+
+            code += `# XML Payload
+xml_data = """${xmlContent}"""
+
+headers = {
+    "Content-Type": "application/sep+xml",
+    "Accept": "application/sep+xml"
+}
+
+`;
+
+            if (useAuth) {
+                code += `# Create client with TLS authentication
+with httpx.Client(cert=cert, verify=ca_cert) as client:
+    response = client.${method.toLowerCase()}(
+        url,
+        content=xml_data.encode('utf-8'),
+        headers=headers
+    )
+`;
+            } else {
+                code += `# Create client (no authentication for admin)
+with httpx.Client(verify=False) as client:
+    response = client.${method.toLowerCase()}(
+        url,
+        content=xml_data.encode('utf-8'),
+        headers=headers
+    )
+`;
+            }
+
+            code += `
+# Check response
+print(f"Status: {response.status_code}")
+print(f"Response: {response.text}")
+
+if response.status_code in [200, 201, 204]:
+    print("Success!")
+else:
+    print(f"Error: {response.status_code}")
+`;
+
+            const codeElement = document.getElementById('generatedCode');
+            if (codeElement) {
+                codeElement.textContent = code;
+            }
+        }
+
+        function escapeXml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function toggleShowCode(button) {
+            const content = button.nextElementSibling;
+            button.classList.toggle('active');
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                updateGeneratedCode();
+            }
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.parentElement.querySelector('pre');
+            navigator.clipboard.writeText(codeBlock.textContent).then(() => {
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                    button.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Update code when form fields change
+        document.querySelectorAll('#controlForm input, #controlForm select').forEach(el => {
+            el.addEventListener('change', updateGeneratedCode);
+            el.addEventListener('input', updateGeneratedCode);
+        });
+    </script>
+</body>
+</html>
