@@ -121,6 +121,10 @@ class ConnectionManager(threading.Thread):
             time.sleep(60)  # Check every minute
 
     def _clean_idle_connections(self):
+        # If idle_timeout is 0 or negative, never close idle connections
+        if self.idle_timeout <= 0:
+            return
+
         now = time.time()
         to_close = []
 
@@ -484,7 +488,7 @@ class IEEE2030_5_RequestHandler(werkzeug.serving.WSGIRequestHandler):
         # Add keep-alive headers unless we're closing the connection
         if not self.close_connection:
             self.send_header("Connection", "keep-alive")
-            self.send_header("Keep-Alive", "timeout=300, max=1000")
+            self.send_header("Keep-Alive", "timeout=86400, max=0")  # 24 hours timeout, unlimited requests - never disconnect active connections
 
 
 class IEEE2030_5_Server(BaseWSGIServer):
@@ -518,12 +522,15 @@ class IEEE2030_5_Server(BaseWSGIServer):
         # Set additional socket options for performance after bind
         try:
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            # Extended keepalive settings to support long-lived client connections (2+ hours)
+            # Start probing after 10 minutes idle, probe every minute, up to 10 attempts
+            # Total detection time: 600s + (60s × 10) = 1200s (20 minutes to detect dead connection)
             if hasattr(socket, "TCP_KEEPIDLE"):
-                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 600)  # 10 minutes (was 60s)
             if hasattr(socket, "TCP_KEEPINTVL"):
-                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)  # 1 minute (was 10s)
             if hasattr(socket, "TCP_KEEPCNT"):
-                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 10)  # 10 attempts (was 5)
         except (AttributeError, OSError):
             pass
 
@@ -534,11 +541,12 @@ def set_socket_options(socket):
     socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
     # Set keep-alive parameters if platform supports them
-    # Linux specific, may need to adjust for other platforms
+    # Extended settings to support long-lived client connections (2+ hours)
+    # Total detection time: 600s + (60s × 10) = 1200s (20 minutes to detect dead connection)
     if hasattr(socket, "TCP_KEEPIDLE") and hasattr(socket, "TCP_KEEPINTVL") and hasattr(socket, "TCP_KEEPCNT"):
-        socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)  # Start sending after 60 seconds of idle
-        socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)  # Send every 10 seconds
-        socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6)  # Consider dead after 6 failures
+        socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 600)  # Start sending after 10 minutes of idle (was 60s)
+        socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)  # Send every minute (was 10s)
+        socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 10)  # Consider dead after 10 failures (was 6)
 
 
 # based on
@@ -794,7 +802,7 @@ def after_request(response: Response) -> Response:
     # Force persistent connections for HTTP/1.1
     if request.environ.get("SERVER_PROTOCOL") == "HTTP/1.1":
         response.headers["Connection"] = "keep-alive"
-        response.headers["Keep-Alive"] = "timeout=300, max=1000"
+        response.headers["Keep-Alive"] = "timeout=86400, max=0"  # 24 hours timeout, unlimited requests - never disconnect active connections
 
     _log.debug(f"\nREQ: {request.path}")
     _log.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
@@ -837,7 +845,7 @@ def after_request(response: Response) -> Response:
     connection_header = request.headers.get("Connection", "").lower()
     if "keep-alive" in connection_header:
         response.headers["Connection"] = "keep-alive"
-        response.headers["Keep-Alive"] = "timeout=60, max=1000"
+        response.headers["Keep-Alive"] = "timeout=86400, max=0"  # 24 hours timeout, unlimited requests - never disconnect active connections
 
     _log.debug(f"\nREQ: {request.path}")
     _log.debug(f"\nRESP HEADER: {str(response.headers).strip()}")
@@ -849,7 +857,7 @@ def after_request(response: Response) -> Response:
         and "close" not in request.headers.get("Connection", "").lower()
     ):
         response.headers["Connection"] = "keep-alive"
-        response.headers["Keep-Alive"] = "timeout=60, max=1000"
+        response.headers["Keep-Alive"] = "timeout=86400, max=0"  # 24 hours timeout, unlimited requests - never disconnect active connections
         _log_http.info(f"[{g.request_id}] Forced keep-alive for HTTP/1.1 request")
 
     return response
@@ -865,12 +873,20 @@ def __build_ssl_context__(tlsrepo: TLSRepository) -> ssl.SSLContext:
     ssl_context.load_cert_chain(certfile=server_cert_file, keyfile=server_key_file)
     ssl_context.verify_mode = ssl.CERT_OPTIONAL
 
-    # Performance optimizations
-    ssl_context.options |= ssl.OP_NO_TICKET
+    # Performance optimizations for long-lived connections
+    # NOTE: Previously had ssl.OP_NO_TICKET which DISABLED session resumption
+    # Enabling session resumption (by NOT setting OP_NO_TICKET) allows faster reconnects
+    # and helps maintain long-lived connections without full handshakes
 
-    # Enable session caching if supported
+    # Enable server-side session caching to support session resumption
     if hasattr(ssl_context, "session_cache_mode"):
         ssl_context.session_cache_mode = ssl.SESS_CACHE_SERVER
+
+    # Python's ssl module doesn't expose SSL_CTX_set_timeout directly
+    # The default OpenSSL session timeout is 300 seconds (5 min) to 3600 seconds (1 hour)
+    # With session caching enabled and OP_NO_TICKET removed, sessions can persist longer
+    # and reconnections will use cached sessions instead of full handshakes
+    _log.info("SSL context configured with session caching and resumption for long-lived connections")
 
     return ssl_context
 

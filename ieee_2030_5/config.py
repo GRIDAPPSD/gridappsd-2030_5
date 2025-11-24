@@ -194,9 +194,9 @@ class ServerConfiguration:
     port: int
 
     # Handle keep-alive settings
-    connection_idle_timeout: int = 300  # 5 minutes default
-    max_keep_alive_requests: int = 1000
-    keep_alive_timeout: int = 60  # seconds
+    connection_idle_timeout: int = 0  # Disabled (was 300s/5 min) - never timeout idle connections
+    max_keep_alive_requests: int = 0  # Unlimited (was 1000) - no limit on requests per connection
+    keep_alive_timeout: int = 0  # Disabled (was 60s) - connections persist indefinitely
 
     service_name: str = "IEEE_2030_5"
     simulation_id: str | None = None

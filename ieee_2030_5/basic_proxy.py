@@ -35,6 +35,7 @@ import logging.handlers
 import os
 import socket
 import ssl
+import threading
 import time
 from dataclasses import dataclass
 from http.client import HTTPSConnection
@@ -84,7 +85,7 @@ class DetailedFormatter(logging.Formatter):
 
 
 # Setup root logger with the detailed formatter
-def setup_logging(debug=False, use_syslog=False, syslog_facility="local0"):
+def setup_logging(debug=False, use_syslog=False, syslog_facility="local0", log_file=None):
     """
     Configure the application logging system with enhanced formatting.
 
@@ -99,6 +100,8 @@ def setup_logging(debug=False, use_syslog=False, syslog_facility="local0"):
                                     Defaults to False.
         syslog_facility (str, optional): Syslog facility to use (e.g., 'local0', 'daemon').
                                         Defaults to 'local0'.
+        log_file (str, optional): Path to log file. If specified, logs will be written
+                                 to this file in addition to console. Defaults to None.
 
     Returns:
         logging.Logger: The configured root logger instance
@@ -109,7 +112,7 @@ def setup_logging(debug=False, use_syslog=False, syslog_facility="local0"):
         tools and centralized log management.
 
     Example:
-        >>> logger = setup_logging(debug=True, use_syslog=True)
+        >>> logger = setup_logging(debug=True, use_syslog=True, log_file="/var/log/proxy.log")
         >>> logger.info("Logging configured successfully")
     """
     level = logging.DEBUG if debug else logging.INFO
@@ -175,6 +178,23 @@ def setup_logging(debug=False, use_syslog=False, syslog_facility="local0"):
             # Fall back to console-only logging if syslog fails
             temp_log = logging.getLogger(__name__)
             temp_log.warning(f"Failed to setup syslog logging: {e}. Continuing with console logging only.")
+
+    # Add file handler if log file is specified
+    if log_file:
+        try:
+            # Use 'w' mode to overwrite the file on each restart instead of appending
+            file_handler = logging.FileHandler(log_file, mode='w')
+            file_handler.setLevel(level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+
+            # Log successful file logging setup
+            temp_log = logging.getLogger(__name__)
+            temp_log.info(f"File logging enabled: {log_file} (file will be overwritten on restart)")
+        except Exception as e:
+            # Fall back to console/syslog logging if file setup fails
+            temp_log = logging.getLogger(__name__)
+            temp_log.warning(f"Failed to setup file logging: {e}. Continuing without file logging.")
 
     return root_logger
 
@@ -243,12 +263,12 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
             *args: Positional arguments passed to HTTPSConnection
             **kwargs: Keyword arguments, with special handling for:
                 timeout_connect (int): Connection timeout in seconds (default: 30)
-                timeout_read (int): Read timeout in seconds (default: 30)
+                timeout_read (int): Read timeout in seconds (default: 0 = no timeout)
                 context (ssl.SSLContext): SSL context for the connection
         """
-        # Set reasonable timeouts
+        # Set timeouts - 0 means no timeout (indefinite)
         self.timeout_connect = kwargs.pop("timeout_connect", 30)
-        self.timeout_read = kwargs.pop("timeout_read", 30)
+        self.timeout_read = kwargs.pop("timeout_read", 0)  # Changed default from 30 to 0 (no timeout)
 
         # Save context explicitly as an instance attribute
         self.context = kwargs.get("context")
@@ -292,8 +312,10 @@ class HTTPSConnectionWithTimeout(HTTPSConnection):
                 _log.debug(f"Wrapping socket with default SSL (cert={self.cert_file}, key={self.key_file})")
                 self.sock = ssl.wrap_socket(self.sock, keyfile=self.key_file, certfile=self.cert_file)
 
-            # Set socket read timeout
-            self.sock.settimeout(self.timeout_read)
+            # Set socket read timeout (None = blocking/infinite, not 0)
+            # A timeout of 0 means non-blocking, which causes immediate read failures
+            timeout = None if self.timeout_read == 0 else self.timeout_read
+            self.sock.settimeout(timeout)
             _log.debug(f"Connection to {self.host}:{self.port} established successfully")
 
         except ssl.SSLError as e:
@@ -341,11 +363,17 @@ class RequestForwarder(BaseHTTPRequestHandler):
     # Use HTTP/1.1 to support persistent connections with clients
     protocol_version = "HTTP/1.1"
 
-    # Set reasonable timeouts for client connections
-    timeout = 300  # 5 minutes for client socket timeout
+    # Set timeout for client connections - 0 means no timeout (indefinite)
+    timeout = 0  # No timeout - never disconnect active connections
 
     # Type annotation for the server to ensure it has our required attributes
     server: ProxyServer
+
+    # Class-level connection tracking registries
+    _connection_lock = threading.Lock()  # Protect concurrent access to registries
+    _connections_by_lfdi = {}  # {lfdi: {"conn_id": id, "handler": handler, "last_activity": time}}
+    _backend_pool = {}  # {lfdi: backend_connection} - reuse backend connections per client
+    _connection_attempts = {}  # {ip_address: [timestamp1, timestamp2, ...]} - for rate limiting
 
     def setup(self):
         """
@@ -360,8 +388,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
         """
         super().setup()
         # Set client socket timeout to prevent hanging connections
+        # Convert timeout=0 to None (blocking/infinite) to avoid non-blocking mode
         if hasattr(self.connection, "settimeout"):
-            self.connection.settimeout(self.timeout)
+            timeout = None if self.timeout == 0 else self.timeout
+            self.connection.settimeout(timeout)
             _log.debug(f"Set client connection timeout to {self.timeout}s for {self.client_address}")
 
         # Verify server has required attributes
@@ -374,6 +404,157 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
         _log.debug(f"RequestForwarder setup complete for {self.client_address}")
 
+    def _extract_client_lfdi(self) -> str | None:
+        """
+        Extract LFDI (Long Form Device Identifier) from client TLS certificate.
+
+        Returns the SHA-256 hash of the client certificate as the LFDI, or None if
+        no certificate is available. Falls back to IP address if certificate unavailable.
+
+        Returns:
+            str: LFDI hex string, IP address, or None
+        """
+        try:
+            # Try to get peer certificate from TLS connection
+            if hasattr(self.connection, 'getpeercert') and callable(self.connection.getpeercert):
+                cert_binary = self.connection.getpeercert(binary_form=True)
+                if cert_binary:
+                    # Calculate SHA-256 hash of certificate (this is the LFDI)
+                    import hashlib
+                    lfdi = hashlib.sha256(cert_binary).hexdigest()
+                    _log.debug(f"Extracted LFDI from certificate: {lfdi[:16]}...")
+                    return lfdi
+
+            # Fallback: use IP address as identifier if no certificate
+            ip_address = self.client_address[0]
+            _log.debug(f"No certificate available, using IP as identifier: {ip_address}")
+            return f"ip_{ip_address}"
+
+        except Exception as e:
+            _log.warning(f"Error extracting client LFDI: {e}")
+            # Last resort: use IP address
+            return f"ip_{self.client_address[0]}"
+
+    def _check_rate_limit(self) -> bool:
+        """
+        Check if client IP has exceeded rate limit for connection attempts.
+
+        Uses sliding window approach: allows burst of connections, then rate limits.
+        Configured for 20 connections per minute per IP by default.
+
+        Returns:
+            bool: True if allowed, False if rate limit exceeded
+        """
+        max_per_minute = 20  # Allow 20 connections per minute
+        window = 60  # 60 second window
+
+        ip_address = self.client_address[0]
+        now = time.time()
+
+        with self._connection_lock:
+            # Get or create attempt list for this IP
+            if ip_address not in self._connection_attempts:
+                self._connection_attempts[ip_address] = []
+
+            attempts = self._connection_attempts[ip_address]
+
+            # Remove old attempts outside the time window
+            attempts[:] = [t for t in attempts if now - t < window]
+
+            # Check if limit exceeded
+            if len(attempts) >= max_per_minute:
+                _log.warning(f"Rate limit exceeded for {ip_address}: {len(attempts)} attempts in last {window}s")
+                return False
+
+            # Add this attempt
+            attempts.append(now)
+            return True
+
+    def _close_previous_connection(self, lfdi: str):
+        """
+        Close any existing connection from the same client (LFDI).
+
+        When a client reconnects, this ensures only one connection per client
+        is maintained by gracefully closing the old connection.
+
+        Args:
+            lfdi: Client identifier (LFDI or IP-based)
+        """
+        with self._connection_lock:
+            if lfdi in self._connections_by_lfdi:
+                old_info = self._connections_by_lfdi[lfdi]
+                old_handler = old_info.get("handler")
+
+                if old_handler and old_handler != self:
+                    try:
+                        _log.info(f"Client {lfdi[:16]}... reconnected, closing previous connection")
+                        old_handler.close_connection = True
+                        if hasattr(old_handler, 'connection'):
+                            old_handler.connection.close()
+                    except Exception as e:
+                        _log.warning(f"Error closing previous connection for {lfdi[:16]}...: {e}")
+
+                # Clean up backend connection for old connection
+                if lfdi in self._backend_pool:
+                    try:
+                        old_backend = self._backend_pool[lfdi]
+                        old_backend.close()
+                        del self._backend_pool[lfdi]
+                        _log.debug(f"Closed backend connection for replaced client {lfdi[:16]}...")
+                    except Exception as e:
+                        _log.warning(f"Error closing backend connection: {e}")
+
+    def _register_connection(self, lfdi: str):
+        """
+        Register this connection in the global registry.
+
+        Args:
+            lfdi: Client identifier (LFDI or IP-based)
+        """
+        conn_id = id(self.connection)
+        with self._connection_lock:
+            self._connections_by_lfdi[lfdi] = {
+                "conn_id": conn_id,
+                "handler": self,
+                "last_activity": time.time(),
+                "client_address": self.client_address,
+            }
+        _log.info(f"Registered connection for client {lfdi[:16]}... from {self.client_address}")
+
+    def _update_activity(self, lfdi: str):
+        """
+        Update last activity timestamp for this client connection.
+
+        Args:
+            lfdi: Client identifier (LFDI or IP-based)
+        """
+        with self._connection_lock:
+            if lfdi in self._connections_by_lfdi:
+                self._connections_by_lfdi[lfdi]["last_activity"] = time.time()
+
+    def _unregister_connection(self, lfdi: str):
+        """
+        Remove this connection from registries and clean up resources.
+
+        Args:
+            lfdi: Client identifier (LFDI or IP-based)
+        """
+        with self._connection_lock:
+            # Remove from connection registry
+            if lfdi in self._connections_by_lfdi:
+                del self._connections_by_lfdi[lfdi]
+                _log.info(f"Unregistered connection for client {lfdi[:16]}...")
+
+            # Close and remove backend connection
+            if lfdi in self._backend_pool:
+                try:
+                    backend = self._backend_pool[lfdi]
+                    backend.close()
+                    del self._backend_pool[lfdi]
+                    _log.debug(f"Closed backend connection for {lfdi[:16]}...")
+                except Exception as e:
+                    _log.warning(f"Error closing backend connection: {e}")
+
     def handle(self):
         """
         Handle multiple requests if keep-alive is enabled.
@@ -382,37 +563,73 @@ class RequestForwarder(BaseHTTPRequestHandler):
         requests over a single client connection. This improves performance by
         reducing connection overhead for clients making multiple requests.
 
+        Now includes:
+        - Rate limiting check on connection establishment
+        - Client identification via LFDI extraction
+        - Single connection per client enforcement
+        - Activity tracking for monitoring
+
         The method continues processing requests until:
         - Client requests connection close
-        - Connection timeout occurs
-        - Maximum requests per connection reached (1000)
+        - Connection timeout occurs (timeout=0, so never based on time)
         - An unrecoverable error occurs
         """
         self.close_connection = False
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
-        _log.debug(f"Starting connection handler for client {client_info}")
+        lfdi = None
+        connection_start = time.time()
 
         try:
+            # Check rate limit before accepting connection
+            if not self._check_rate_limit():
+                _log.warning(f"Rejecting connection from {client_info} due to rate limit")
+                # Send 429 Too Many Requests
+                self.send_error(429, "Too Many Requests - Rate limit exceeded")
+                return
+
+            # Extract client identifier (LFDI from certificate or IP-based)
+            lfdi = self._extract_client_lfdi()
+            if not lfdi:
+                _log.error(f"Could not determine client identifier for {client_info}")
+                return
+
+            _log.info(f"Client {lfdi[:16]}... connected from {client_info}")
+
+            # Close any previous connection from this client
+            self._close_previous_connection(lfdi)
+
+            # Register this connection
+            self._register_connection(lfdi)
+
             # Process requests until the connection should be closed
             request_count = 0
             while not self.close_connection:
                 request_count += 1
-                _log.debug(f"Handling request #{request_count} for client {client_info}")
+                _log.debug(f"Handling request #{request_count} for client {lfdi[:16]}... ({client_info})")
+
+                # Update activity before processing request
+                self._update_activity(lfdi)
 
                 if not self.handle_one_request():
                     break
 
-                # Limit number of requests per connection to prevent resource exhaustion
-                if request_count >= 1000:  # Same as Keep-Alive max
-                    _log.debug(f"Reached max requests ({request_count}) for client {client_info}")
-                    self.close_connection = True
-                    break
+                # Update activity after processing request
+                self._update_activity(lfdi)
+
+                # Never limit number of requests per connection
+                # Connections persist indefinitely regardless of request count
 
         except Exception as e:
-            _log.error(f"Error in persistent connection handler for {client_info}: {e}")
+            _log.error(f"Error in persistent connection handler for {client_info}: {e}", exc_info=True)
             self.close_connection = True
         finally:
-            _log.debug(f"Closing connection handler for client {client_info} after {request_count} requests")
+            connection_duration = time.time() - connection_start
+            if lfdi:
+                _log.info(f"Closing connection for client {lfdi[:16]}... from {client_info} after {connection_duration:.1f}s and {request_count} requests")
+                # Unregister and clean up
+                self._unregister_connection(lfdi)
+            else:
+                _log.debug(f"Closing connection for {client_info} after {request_count} requests")
 
     def handle_one_request(self):
         """
@@ -683,35 +900,79 @@ class RequestForwarder(BaseHTTPRequestHandler):
 
     def __create_server_connection__(self) -> HTTPSConnectionWithTimeout:
         """
-        Creates a new connection to the server with proper error handling.
+        Gets or creates a backend connection to the server with connection pooling.
 
-        Establishes a fresh HTTPS connection to the backend server for each client
-        request, using the appropriate SSL context based on the client's certificate.
-        This approach ensures isolation between client requests and enables proper
-        certificate-based authentication.
+        NEW BEHAVIOR: Maintains one persistent backend connection per client (LFDI).
+        This significantly reduces overhead by eliminating repeated TLS handshakes.
 
-        The method is optimized for concurrent client requests with:
-        - Reduced retry attempts for faster response under load
-        - Shorter timeouts for better responsiveness
-        - Comprehensive error handling and logging
+        Connection Pool Strategy:
+        - First request from client: Create and cache backend connection
+        - Subsequent requests: Reuse cached connection
+        - Connection health check before reuse
+        - Automatic reconnection if connection is broken
+        - Cleanup when client disconnects
 
         Returns:
             HTTPSConnectionWithTimeout: An established connection to the backend server
 
         Raises:
             RuntimeError: If SSL context creation fails or all connection attempts fail
+        """
+        # Extract client LFDI for connection pooling
+        lfdi = self._extract_client_lfdi()
+        if not lfdi:
+            _log.warning("Could not extract LFDI for backend connection pooling, creating new connection")
+            return self.__create_new_backend_connection__()
 
-        Connection Strategy:
-        - Creates SSL context once per request (cached for retries)
-        - Uses shorter timeouts for better concurrency
-        - Implements retry logic with exponential backoff
-        - Provides detailed logging for debugging connection issues
+        # Check if we have a cached backend connection for this client
+        with self._connection_lock:
+            if lfdi in self._backend_pool:
+                backend_conn = self._backend_pool[lfdi]
+                # Check if connection is still alive
+                try:
+                    if hasattr(backend_conn, 'sock') and backend_conn.sock:
+                        # Connection exists and appears healthy
+                        _log.debug(f"Reusing backend connection for client {lfdi[:16]}...")
+                        return backend_conn
+                    else:
+                        # Connection is broken, remove from pool
+                        _log.debug(f"Backend connection for {lfdi[:16]}... is broken, recreating")
+                        del self._backend_pool[lfdi]
+                except Exception as e:
+                    _log.debug(f"Error checking backend connection health for {lfdi[:16]}...: {e}")
+                    # Remove broken connection from pool
+                    if lfdi in self._backend_pool:
+                        del self._backend_pool[lfdi]
+
+        # Create new backend connection
+        _log.debug(f"Creating new backend connection for client {lfdi[:16]}...")
+        backend_conn = self.__create_new_backend_connection__()
+
+        # Cache it for future requests from this client
+        with self._connection_lock:
+            self._backend_pool[lfdi] = backend_conn
+
+        _log.info(f"Cached backend connection for client {lfdi[:16]}...")
+        return backend_conn
+
+    def __create_new_backend_connection__(self) -> HTTPSConnectionWithTimeout:
+        """
+        Creates a new backend connection (internal method for connection pooling).
+
+        This method handles the actual connection creation with retry logic.
+        Called by __create_server_connection__() when no cached connection exists.
+
+        Returns:
+            HTTPSConnectionWithTimeout: An established connection to the backend server
+
+        Raises:
+            RuntimeError: If SSL context creation fails or all connection attempts fail
         """
         max_retries = 2  # Reduced retries for faster response under load
         retry_delay = 0.5  # Shorter delay for better responsiveness
         host, port = self.server.proxy_target
         client_info = f"{self.client_address[0]}:{self.client_address[1]}"
-        _log.debug(f"Creating server connection to {host}:{port} for client {client_info}")
+        _log.debug(f"Creating new backend connection to {host}:{port} for client {client_info}")
 
         # Get SSL context once to avoid repeated expensive operations
         try:
@@ -730,8 +991,8 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     host=host,
                     port=port,
                     context=ccp.context,
-                    timeout_connect=30,  # Reasonable connect timeout
-                    timeout_read=60,  # Reasonable read timeout
+                    timeout_connect=30,  # Keep reasonable connect timeout for initial connection
+                    timeout_read=0,  # No read timeout - never disconnect active backend connections
                 )
 
                 _log.debug(f"Establishing connection for client {client_info}...")
@@ -833,10 +1094,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 # HTTP/1.1 defaults to keep-alive unless client requests close
                 if "close" not in client_connection:
                     self.send_header("Connection", "keep-alive")
-                    self.send_header("Keep-Alive", "timeout=300, max=1000")
+                    self.send_header("Keep-Alive", "timeout=86400, max=0")  # 24 hours, unlimited requests
                     _log.info("  Connection: keep-alive")
-                    _log.info("  Keep-Alive: timeout=300, max=1000")
-                    _log.debug("Maintaining keep-alive connection with client")
+                    _log.info("  Keep-Alive: timeout=86400, max=0")
+                    _log.debug("Maintaining keep-alive connection with client indefinitely")
                 else:
                     self.send_header("Connection", "close")
                     _log.info("  Connection: close")
@@ -844,10 +1105,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
             elif "keep-alive" in client_connection:
                 # HTTP/1.0 with explicit keep-alive
                 self.send_header("Connection", "keep-alive")
-                self.send_header("Keep-Alive", "timeout=300, max=1000")
+                self.send_header("Keep-Alive", "timeout=86400, max=0")  # 24 hours, unlimited requests
                 _log.info("  Connection: keep-alive")
-                _log.info("  Keep-Alive: timeout=300, max=1000")
-                _log.debug("HTTP/1.0 client requested keep-alive")
+                _log.info("  Keep-Alive: timeout=86400, max=0")
+                _log.debug("HTTP/1.0 client requested keep-alive - honoring indefinitely")
             else:
                 # HTTP/1.0 default or explicit close
                 self.send_header("Connection", "close")
@@ -908,12 +1169,10 @@ class RequestForwarder(BaseHTTPRequestHandler):
             return None
 
         finally:
-            # Always close the server connection
-            _log.debug("Closing server connection")
-            try:
-                conn.close()
-            except Exception as e:
-                _log.warning(f"Error closing server connection: {e}")
+            # DO NOT close backend connection - it's pooled and reused per client
+            # Backend connections are closed only when the client disconnects
+            # (handled in _unregister_connection method)
+            _log.debug("Backend connection kept alive for reuse (pooled)")
 
     def _read_request_body(self) -> bytes:
         """
@@ -1114,8 +1373,9 @@ class RequestForwarder(BaseHTTPRequestHandler):
             except Exception as e:
                 _log.warning(f"Could not extract client certificate info for client {client_info}: {e}")
 
-            # Add Connection: close to server request to ensure proper cleanup
-            headers["Connection"] = "close"
+            # Use Connection: keep-alive for backend to enable connection pooling and reuse
+            # This allows us to maintain persistent backend connections per client
+            headers["Connection"] = "keep-alive"
 
             _log.info(f"Forwarding {method} {self.path} to {host}:{port} for client {client_info}")
             if "SSL-Client-Cert" in headers:
@@ -1194,13 +1454,11 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 self.close_connection = True
 
         finally:
-            # Ensure server connection is closed if still open
+            # DO NOT close backend connection - it's pooled and reused per client
+            # Backend connections are closed only when the client disconnects
+            # (handled in _unregister_connection method)
             if conn:
-                _log.debug(f"Closing connection in finally block for client {client_info}")
-                try:
-                    conn.close()
-                except Exception as e:
-                    _log.warning(f"Error closing connection for client {client_info}: {e}")
+                _log.debug(f"Backend connection kept alive in pool for client {client_info}")
 
     def do_GET(self):
         """Handle HTTP GET requests by forwarding to backend server."""
@@ -1628,6 +1886,9 @@ def _main():
         "--syslog", action="store_true", default=False, help="Enable syslog logging in addition to console logging."
     )
     parser.add_argument(
+        "--log-file", type=str, default=None, help="Path to log file. Logs will be written to this file in addition to console."
+    )
+    parser.add_argument(
         "--syslog-facility",
         default="local0",
         choices=[
@@ -1659,8 +1920,13 @@ def _main():
     # If syslog facility is specified (and it's not the default), enable syslog automatically
     use_syslog = opts.syslog or opts.syslog_facility != "local0"
 
-    # Setup enhanced logging with optional syslog
-    logger = setup_logging(debug=opts.debug, use_syslog=use_syslog, syslog_facility=opts.syslog_facility)
+    # Setup enhanced logging with optional syslog and file logging
+    logger = setup_logging(
+        debug=opts.debug,
+        use_syslog=use_syslog,
+        syslog_facility=opts.syslog_facility,
+        log_file=opts.log_file
+    )
     _log.debug(f"Starting 2030.5 proxy server with config: {opts.config}")
 
     if use_syslog:
