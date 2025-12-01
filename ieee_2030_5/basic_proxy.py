@@ -918,42 +918,12 @@ class RequestForwarder(BaseHTTPRequestHandler):
         Raises:
             RuntimeError: If SSL context creation fails or all connection attempts fail
         """
-        # Extract client LFDI for connection pooling
-        lfdi = self._extract_client_lfdi()
-        if not lfdi:
-            _log.warning("Could not extract LFDI for backend connection pooling, creating new connection")
-            return self.__create_new_backend_connection__()
-
-        # Check if we have a cached backend connection for this client
-        with self._connection_lock:
-            if lfdi in self._backend_pool:
-                backend_conn = self._backend_pool[lfdi]
-                # Check if connection is still alive
-                try:
-                    if hasattr(backend_conn, 'sock') and backend_conn.sock:
-                        # Connection exists and appears healthy
-                        _log.debug(f"Reusing backend connection for client {lfdi[:16]}...")
-                        return backend_conn
-                    else:
-                        # Connection is broken, remove from pool
-                        _log.debug(f"Backend connection for {lfdi[:16]}... is broken, recreating")
-                        del self._backend_pool[lfdi]
-                except Exception as e:
-                    _log.debug(f"Error checking backend connection health for {lfdi[:16]}...: {e}")
-                    # Remove broken connection from pool
-                    if lfdi in self._backend_pool:
-                        del self._backend_pool[lfdi]
-
-        # Create new backend connection
-        _log.debug(f"Creating new backend connection for client {lfdi[:16]}...")
-        backend_conn = self.__create_new_backend_connection__()
-
-        # Cache it for future requests from this client
-        with self._connection_lock:
-            self._backend_pool[lfdi] = backend_conn
-
-        _log.info(f"Cached backend connection for client {lfdi[:16]}...")
-        return backend_conn
+        # DISABLED: Backend connection pooling causes lockups with Flask's dev server
+        # Flask/Werkzeug doesn't properly handle HTTP keep-alive, and reusing connections
+        # causes requests to hang when the server has closed its end of the connection.
+        # Always create a fresh connection for each request.
+        _log.debug("Creating new backend connection (pooling disabled)")
+        return self.__create_new_backend_connection__()
 
     def __create_new_backend_connection__(self) -> HTTPSConnectionWithTimeout:
         """
@@ -1169,10 +1139,15 @@ class RequestForwarder(BaseHTTPRequestHandler):
             return None
 
         finally:
-            # DO NOT close backend connection - it's pooled and reused per client
-            # Backend connections are closed only when the client disconnects
-            # (handled in _unregister_connection method)
-            _log.debug("Backend connection kept alive for reuse (pooled)")
+            # Close backend connection after each request since connection pooling is disabled
+            # This ensures clean state for each request and works around Flask/Werkzeug's
+            # poor HTTP keep-alive support
+            try:
+                if conn and hasattr(conn, 'close'):
+                    conn.close()
+                    _log.debug("Backend connection closed after request")
+            except Exception as e:
+                _log.debug(f"Error closing backend connection: {e}")
 
     def _read_request_body(self) -> bytes:
         """
@@ -1454,11 +1429,13 @@ class RequestForwarder(BaseHTTPRequestHandler):
                 self.close_connection = True
 
         finally:
-            # DO NOT close backend connection - it's pooled and reused per client
-            # Backend connections are closed only when the client disconnects
-            # (handled in _unregister_connection method)
+            # Close backend connection after each request since connection pooling is disabled
             if conn:
-                _log.debug(f"Backend connection kept alive in pool for client {client_info}")
+                try:
+                    conn.close()
+                    _log.debug(f"Backend connection closed after request for client {client_info}")
+                except Exception as e:
+                    _log.debug(f"Error closing backend connection for client {client_info}: {e}")
 
     def do_GET(self):
         """Handle HTTP GET requests by forwarding to backend server."""
