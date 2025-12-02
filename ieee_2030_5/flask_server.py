@@ -1707,8 +1707,13 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
 
     @app.route("/admin/message-bus")
     def admin_message_bus():
-        """GridAPPS-D message bus traffic monitoring dashboard."""
+        """GridAPPS-D message bus traffic monitoring dashboard (legacy)."""
         return render_template("admin/message_bus.html", current_time=datetime.now().isoformat())
+
+    @app.route("/admin/message-bus-v2")
+    def admin_message_bus_v2():
+        """GridAPPS-D message bus monitor with direct WebSocket connection and plotting."""
+        return render_template("admin/message_bus_v2.html", current_time=datetime.now().isoformat())
 
     @app.route("/api/message-bus/events")
     def api_message_bus_events():
@@ -1834,6 +1839,87 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             _log.error(f"Error toggling message monitoring: {e}")
             return Response(
                 json.dumps({"error": str(e), "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    @app.route("/api/devices")
+    def api_devices():
+        """Get list of all devices with metadata for the message bus monitor."""
+        try:
+            from ieee_2030_5.adapters import Adapter
+
+            devices = []
+            # Get all end devices from the adapter
+            end_devices = Adapter.get_list(m.EndDeviceList)
+            if end_devices:
+                for ed in end_devices.EndDevice or []:
+                    device_info = {
+                        "href": ed.href,
+                        "lfdi": getattr(ed, "lFDI", None),
+                        "sfdi": getattr(ed, "sFDI", None),
+                        "enabled": getattr(ed, "enabled", True),
+                    }
+                    # Try to get device info if available
+                    if ed.DeviceInformationLink:
+                        try:
+                            di = Adapter.get_single(ed.DeviceInformationLink.href)
+                            if di:
+                                device_info["mfModel"] = getattr(di, "mfModel", None)
+                                device_info["mfSerNum"] = getattr(di, "mfSerNum", None)
+                        except Exception:
+                            pass
+                    devices.append(device_info)
+
+            return Response(
+                json.dumps({"devices": devices, "count": len(devices), "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+            )
+        except Exception as e:
+            _log.error(f"Error getting devices: {e}")
+            return Response(
+                json.dumps({"error": str(e), "devices": [], "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    @app.route("/api/gridappsd/config")
+    def api_gridappsd_config():
+        """Get GridAPPS-D connection configuration for the frontend."""
+        try:
+            # Get config from server_config if available
+            config = {
+                "host": "localhost",
+                "stomp_port": 61613,
+                "websocket_port": 61614,
+                "username": "system",
+                "output_topic": "/topic/goss.gridappsd.IEEE_2030_5.output",
+            }
+
+            if server_config and hasattr(server_config, "gridappsd"):
+                gappsd = server_config.gridappsd
+                config["host"] = getattr(gappsd, "address", "localhost")
+                config["stomp_port"] = getattr(gappsd, "port", 61613)
+                config["username"] = getattr(gappsd, "username", "system")
+                if hasattr(gappsd, "publish_topic"):
+                    config["output_topic"] = gappsd.publish_topic
+
+            # If GridAPPS-D is on localhost but browser is accessing via external IP,
+            # suggest using the same host the browser used to access this page
+            if config["host"] == "localhost":
+                request_host = request.host.split(":")[0]  # Remove port if present
+                if request_host not in ("localhost", "127.0.0.1"):
+                    config["host"] = request_host
+                    config["note"] = f"Using browser host {request_host} instead of localhost for WebSocket"
+
+            return Response(
+                json.dumps(config),
+                mimetype="application/json",
+            )
+        except Exception as e:
+            _log.error(f"Error getting GridAPPS-D config: {e}")
+            return Response(
+                json.dumps({"error": str(e)}),
                 mimetype="application/json",
                 status=500,
             )

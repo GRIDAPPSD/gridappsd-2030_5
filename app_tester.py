@@ -164,7 +164,9 @@ def _main():
     gapps.connect()
 
     app_2030_5 = IEEE2030_5(gapps)
-    gapps.subscribe("/topic/goss.gridappsd.IEEE_2030_5.output", app_2030_5)
+    output_topic = topics.application_output_topic(application_id="IEEE_2030_5")
+    gapps.subscribe(output_topic, app_2030_5)
+    #gapps.subscribe("/topic/goss.gridappsd.IEEE_2030_5.output", app_2030_5)
 
     while True:
         time.sleep(0.1)

@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridAPPS-D Message Bus Monitor</title>
+    <!-- STOMP.js for WebSocket/STOMP communication -->
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <!-- Chart.js for plotting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a2e;
+            color: #eee;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: #16213e;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-header a {
+            color: #4ecca3;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid #4ecca3;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #4ecca3;
+        }
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 1200px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        .panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #0f3460;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .panel-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .connection-config {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .config-group label {
+            font-size: 12px;
+            color: #aaa;
+        }
+        input, select {
+            background: #0f3460;
+            color: white;
+            border: 1px solid #4ecca3;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4ecca3;
+            box-shadow: 0 0 5px rgba(78, 204, 163, 0.3);
+        }
+        .btn {
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #3db892;
+        }
+        .btn.danger {
+            background: #e94560;
+            color: white;
+        }
+        .btn.danger:hover {
+            background: #d13a52;
+        }
+        .btn.secondary {
+            background: #0f3460;
+            color: #4ecca3;
+            border: 1px solid #4ecca3;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        .status-indicator.connected {
+            background: rgba(78, 204, 163, 0.2);
+            color: #4ecca3;
+        }
+        .status-indicator.disconnected {
+            background: rgba(233, 69, 96, 0.2);
+            color: #e94560;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        .status-indicator.connected .status-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .message-list {
+            height: 400px;
+            overflow-y: auto;
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 11px;
+        }
+        .message-item {
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            background: rgba(78, 204, 163, 0.1);
+            border-left: 3px solid #4ecca3;
+            border-radius: 0 4px 4px 0;
+        }
+        .message-item.command {
+            border-left-color: #e94560;
+            background: rgba(233, 69, 96, 0.1);
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 10px;
+            color: #888;
+        }
+        .message-content {
+            color: #ddd;
+            word-break: break-all;
+        }
+        .message-content .highlight {
+            color: #4ecca3;
+            font-weight: bold;
+        }
+        .chart-container {
+            height: 300px;
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .device-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .device-chip {
+            padding: 5px 12px;
+            background: #0f3460;
+            border: 1px solid #4ecca3;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .device-chip:hover, .device-chip.selected {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .stat-box {
+            background: #0f3460;
+            padding: 12px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .stat-label {
+            font-size: 10px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .topic-input {
+            flex: 1;
+            min-width: 250px;
+        }
+        .diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-top: 10px;
+        }
+        .diff-table th, .diff-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #0f3460;
+        }
+        .diff-table th {
+            background: #0f3460;
+            color: #4ecca3;
+        }
+        .diff-table tr:hover {
+            background: rgba(78, 204, 163, 0.1);
+        }
+        .value-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .value-change .arrow {
+            font-size: 14px;
+        }
+        .value-change .arrow.up { color: #4ecca3; }
+        .value-change .arrow.down { color: #e94560; }
+        .topic-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .topic-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #0f3460;
+            border: 1px solid #4ecca3;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+        .topic-tag .topic-name {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .topic-tag .remove-btn {
+            background: none;
+            border: none;
+            color: #e94560;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0;
+            line-height: 1;
+        }
+        .topic-tag .remove-btn:hover {
+            color: #ff6b6b;
+        }
+        .topic-tag.plotting {
+            border-color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+        .topic-tag .plot-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 0;
+        }
+        .common-topics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">&larr; Back to Admin Home</a>
+            <div class="status-indicator disconnected" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span id="statusText">Disconnected</span>
+            </div>
+        </div>
+
+        <div class="header">
+            <h1>GridAPPS-D Message Bus Monitor</h1>
+            <p>Direct WebSocket connection to GridAPPS-D for real-time DER control monitoring</p>
+        </div>
+
+        <!-- Connection Configuration Panel -->
+        <div class="panel" style="margin-bottom: 20px;">
+            <div class="panel-header">
+                <span class="panel-title">Connection Configuration</span>
+            </div>
+            <div class="connection-config">
+                <div class="config-group">
+                    <label>GridAPPS-D Host</label>
+                    <input type="text" id="gridappsdHost" value="localhost" placeholder="localhost">
+                </div>
+                <div class="config-group">
+                    <label>WebSocket Port</label>
+                    <input type="number" id="gridappsdPort" value="61614" placeholder="61614">
+                </div>
+                <div class="config-group">
+                    <label>Username</label>
+                    <input type="text" id="gridappsdUser" value="system" placeholder="system">
+                </div>
+                <div class="config-group">
+                    <label>Password</label>
+                    <input type="password" id="gridappsdPass" value="manager" placeholder="manager">
+                </div>
+            </div>
+            <div class="controls-row">
+                <div class="config-group" style="min-width: 150px;">
+                    <label>Connection Mode</label>
+                    <select id="connectionMode" onchange="updateConnectionMode()">
+                        <option value="websocket">Direct WebSocket</option>
+                        <option value="sse">Backend SSE</option>
+                    </select>
+                </div>
+                <input type="text" id="subscribeTopic" class="topic-input"
+                       value="/topic/goss.gridappsd.IEEE_2030_5.output"
+                       placeholder="Topic to subscribe...">
+                <button class="btn" id="connectBtn" onclick="toggleConnection()">Connect</button>
+                <button class="btn secondary" onclick="addSubscription()">Add Topic</button>
+                <button class="btn secondary" onclick="sendTestMessage()">Test Msg</button>
+                <button class="btn danger" onclick="clearMessages()">Clear Messages</button>
+            </div>
+            <div id="activeSubscriptions" style="margin-top: 10px; font-size: 11px; color: #888;">
+                Active subscriptions: <span id="subList">None</span>
+            </div>
+            <div id="connectionModeInfo" style="margin-top: 5px; font-size: 10px; color: #4ecca3;">
+                Direct WebSocket: Connects to GridAPPS-D directly (requires port 61614 accessible)
+            </div>
+        </div>
+
+        <!-- Topic Management Panel -->
+        <div class="panel" style="margin-bottom: 20px;">
+            <div class="panel-header">
+                <span class="panel-title">Topic Subscriptions</span>
+                <button class="btn secondary" onclick="showAddTopicDialog()">+ Add Topic</button>
+            </div>
+            <div id="topicList" class="topic-list">
+                <!-- Topics will be added here dynamically -->
+            </div>
+            <div class="common-topics" style="margin-top: 10px;">
+                <span style="font-size: 11px; color: #888;">Quick add: </span>
+                <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
+                        onclick="quickAddTopic('/topic/goss.gridappsd.IEEE_2030_5.output')">IEEE 2030.5 Output</button>
+                <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
+                        onclick="quickAddTopic('/topic/goss.gridappsd.simulation.output.>')">Simulation Output</button>
+                <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
+                        onclick="quickAddTopic('/topic/goss.gridappsd.simulation.input.>')">Simulation Input</button>
+                <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
+                        onclick="quickAddTopic('/topic/goss.gridappsd.>')">/topic/goss.gridappsd.></button>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-value" id="totalMessages">0</div>
+                <div class="stat-label">Total Messages</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="commandCount">0</div>
+                <div class="stat-label">Commands</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="deviceCount">0</div>
+                <div class="stat-label">Devices Seen</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="msgPerSec">0.0</div>
+                <div class="stat-label">Msg/sec</div>
+            </div>
+        </div>
+
+        <div class="grid-layout">
+            <!-- Left Panel: Messages -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Message Stream</span>
+                    <select id="messageFilter" onchange="filterMessages()">
+                        <option value="all">All Messages</option>
+                        <option value="command">Commands Only</option>
+                        <option value="update">Updates Only</option>
+                    </select>
+                </div>
+                <div class="message-list" id="messageList">
+                    <div style="color: #888; text-align: center; padding: 50px;">
+                        Connect to GridAPPS-D to see messages...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Chart & Analysis -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Device Values</span>
+                    <select id="attributeFilter" onchange="updateChart()">
+                        <option value="value" selected>value (W)</option>
+                        <option value="opModTargetW">opModTargetW</option>
+                        <option value="opModTargetVar">opModTargetVar</option>
+                        <option value="opModMaxLimW">opModMaxLimW</option>
+                        <option value="opModConnect">opModConnect</option>
+                        <option value="opModEnergize">opModEnergize</option>
+                    </select>
+                </div>
+                <div class="device-selector" id="deviceSelector">
+                    <!-- Device chips will be added dynamically -->
+                </div>
+                <div class="chart-container">
+                    <canvas id="valueChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Difference Details Panel -->
+        <div class="panel" style="margin-top: 20px;">
+            <div class="panel-header">
+                <span class="panel-title">Recent DER Control Changes</span>
+            </div>
+            <table class="diff-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Device</th>
+                        <th>Attribute</th>
+                        <th>Value</th>
+                        <th>Direction</th>
+                    </tr>
+                </thead>
+                <tbody id="diffTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #888;">No data yet</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let stompClient = null;
+        let eventSource = null;  // For SSE mode
+        let connectionMode = 'websocket';  // 'websocket' or 'sse'
+        let connected = false;
+        let messages = [];
+        let subscriptions = [];
+        let deviceData = {};  // { deviceId: { attribute: [{ timestamp, value }] } }
+        let seenDevices = new Set();
+        let selectedDevices = new Set();
+        let messageCount = 0;
+        let commandCount = 0;
+        let startTime = null;
+        let chart = null;
+        let diffHistory = [];
+
+        // Connection mode management
+        function updateConnectionMode() {
+            connectionMode = document.getElementById('connectionMode').value;
+            const modeInfo = document.getElementById('connectionModeInfo');
+            if (connectionMode === 'websocket') {
+                modeInfo.textContent = 'Direct WebSocket: Connects to GridAPPS-D directly (requires port 61614 accessible)';
+            } else {
+                modeInfo.textContent = 'Backend SSE: Uses server backend to proxy GridAPPS-D messages (works when WebSocket blocked)';
+            }
+            // Disconnect if connected when mode changes
+            if (connected) {
+                disconnect();
+            }
+        }
+
+        // Send a test message to verify connection
+        function sendTestMessage() {
+            // Use the device dictionary format that matches actual incoming data
+            const testBody = {
+                '_TEST-DEVICE-001': {
+                    identifier: null,
+                    mRID: '_TEST-DEVICE-001',
+                    name: 'test_house_1_240v',
+                    timeStamp: Math.floor(Date.now() / 1000),
+                    value: Math.floor(Math.random() * 10000)
+                },
+                '_TEST-DEVICE-002': {
+                    identifier: null,
+                    mRID: '_TEST-DEVICE-002',
+                    name: 'test_house_2_240v',
+                    timeStamp: Math.floor(Date.now() / 1000),
+                    value: Math.floor(Math.random() * 10000)
+                }
+            };
+
+            const testMsg = {
+                timestamp: new Date(),
+                topic: 'TEST',
+                body: testBody,
+                raw: JSON.stringify(testBody)
+            };
+
+            addConnectionLog('Injecting test message for UI verification...');
+
+            // Process this as if it came from the bus
+            messages.push(testMsg);
+            messageCount++;
+            processDeviceDictMessage(testBody, testMsg.timestamp);
+            updateMessageDisplay();
+            updateStats();
+        }
+
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('valueChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'second',
+                                displayFormats: {
+                                    second: 'HH:mm:ss'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                color: '#888'
+                            },
+                            ticks: { color: '#888' },
+                            grid: { color: '#0f3460' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Value',
+                                color: '#888'
+                            },
+                            ticks: { color: '#888' },
+                            grid: { color: '#0f3460' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#ddd' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Connect to GridAPPS-D
+        function toggleConnection() {
+            if (connected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+
+        function connect() {
+            connectionMode = document.getElementById('connectionMode').value;
+
+            if (connectionMode === 'sse') {
+                connectSSE();
+            } else {
+                connectWebSocket();
+            }
+        }
+
+        // Connect via Server-Sent Events (backend proxy)
+        function connectSSE() {
+            addConnectionLog('Connecting via Backend SSE...');
+
+            eventSource = new EventSource('/api/message-bus/events');
+
+            eventSource.onopen = function() {
+                console.log('SSE Connected');
+                addConnectionLog('Connected to backend SSE stream!');
+                connected = true;
+                startTime = Date.now();
+                updateConnectionStatus(true);
+                // Add a virtual subscription entry
+                subscriptions.push({ topic: 'Backend SSE (all topics)', sub: null });
+                updateSubscriptionList();
+                updateTopicList();
+            };
+
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'keepalive') {
+                        return;
+                    }
+
+                    // Convert SSE message format to our format
+                    const msgData = {
+                        timestamp: new Date(data.timestamp),
+                        topic: data.topic || 'unknown',
+                        body: typeof data.message === 'string' ? JSON.parse(data.message) : data.message,
+                        raw: data.message
+                    };
+
+                    handleSSEMessage(msgData);
+                } catch (e) {
+                    console.error('Error parsing SSE message:', e);
+                }
+            };
+
+            eventSource.onerror = function(event) {
+                console.error('SSE Error:', event);
+                addConnectionLog('SSE connection error - will retry...');
+                connected = false;
+                updateConnectionStatus(false);
+            };
+        }
+
+        function handleSSEMessage(msgData) {
+            messageCount++;
+            messages.push(msgData);
+            if (messages.length > 500) {
+                messages = messages.slice(-500);
+            }
+
+            // Process DER control message if applicable
+            if (msgData.body && msgData.body.command === 'update' && msgData.body.input && msgData.body.input.message) {
+                commandCount++;
+                processDERControlMessage(msgData.body.input.message, msgData.timestamp);
+            }
+
+            updateMessageDisplay();
+            updateStats();
+        }
+
+        // Connect via WebSocket directly to GridAPPS-D
+        function connectWebSocket() {
+            const host = document.getElementById('gridappsdHost').value;
+            const port = document.getElementById('gridappsdPort').value;
+            const user = document.getElementById('gridappsdUser').value;
+            const pass = document.getElementById('gridappsdPass').value;
+
+            // ActiveMQ WebSocket endpoint - no path needed for standard STOMP over WebSocket
+            const wsUrl = `ws://${host}:${port}`;
+
+            console.log('Connecting to:', wsUrl);
+            addConnectionLog(`Connecting via WebSocket to ${wsUrl}...`);
+
+            stompClient = new StompJs.Client({
+                brokerURL: wsUrl,
+                connectHeaders: {
+                    login: user,
+                    passcode: pass,
+                    // Request heartbeat - use 0,0 to disable server-side heartbeat requirements
+                    'heart-beat': '0,0'
+                },
+                debug: function(str) {
+                    console.log('STOMP: ' + str);
+                },
+                reconnectDelay: 5000,
+                // Disable heartbeats - ActiveMQ WebSocket may not handle them well
+                heartbeatIncoming: 0,
+                heartbeatOutgoing: 0,
+                // Split large messages (ActiveMQ has maxTextMessageSize=999999)
+                splitLargeFrames: true
+            });
+
+            stompClient.onConnect = function(frame) {
+                console.log('Connected to GridAPPS-D', frame);
+                addConnectionLog('Connected to GridAPPS-D via WebSocket!');
+                connected = true;
+                if (!startTime) startTime = Date.now();
+                updateConnectionStatus(true);
+
+                // Subscribe to default topic
+                const topic = document.getElementById('subscribeTopic').value;
+                if (topic) {
+                    subscribeToTopic(topic);
+                }
+            };
+
+            stompClient.onDisconnect = function(frame) {
+                console.log('Disconnected from GridAPPS-D', frame);
+                // Don't log disconnect if we're auto-reconnecting
+                if (!stompClient || !stompClient.active) {
+                    addConnectionLog('Disconnected from GridAPPS-D');
+                    connected = false;
+                    updateConnectionStatus(false);
+                }
+            };
+
+            stompClient.onStompError = function(frame) {
+                console.error('STOMP error:', frame.headers['message']);
+                console.error('Details:', frame.body);
+                addConnectionLog(`STOMP Error: ${frame.headers['message']} - ${frame.body}`);
+            };
+
+            stompClient.onWebSocketError = function(event) {
+                console.error('WebSocket error:', event);
+                addConnectionLog(`WebSocket Error: ${event.message || 'Connection failed'} - Try Backend SSE mode`);
+            };
+
+            stompClient.onWebSocketClose = function(event) {
+                // Code 1005 means no status - normal during reconnect cycles, suppress it
+                // Code 1000 is normal close
+                if (event.code !== 1005 && event.code !== 1000) {
+                    console.log('WebSocket closed:', event);
+                    addConnectionLog(`WebSocket closed: code=${event.code}, reason=${event.reason || 'none'}`);
+                }
+                // Let STOMP.js handle reconnection automatically
+            };
+
+            stompClient.activate();
+        }
+
+        // Add a log message to the message list for connection debugging
+        function addConnectionLog(message) {
+            const container = document.getElementById('messageList');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'message-item';
+            logEntry.style.borderLeftColor = '#f39c12';
+            logEntry.style.background = 'rgba(243, 156, 18, 0.1)';
+            logEntry.innerHTML = `
+                <div class="message-header">
+                    <span>${new Date().toLocaleTimeString()}</span>
+                    <span>CONNECTION</span>
+                </div>
+                <div class="message-content">${escapeHtml(message)}</div>
+            `;
+            container.appendChild(logEntry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function disconnect() {
+            if (stompClient) {
+                stompClient.deactivate();
+                stompClient = null;
+            }
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            connected = false;
+            subscriptions = [];
+            plottableTopics.clear();
+            updateConnectionStatus(false);
+            updateSubscriptionList();
+            updateTopicList();
+            addConnectionLog('Disconnected');
+        }
+
+        function subscribeToTopic(topic) {
+            // SSE mode doesn't support per-topic subscriptions
+            if (connectionMode === 'sse') {
+                addConnectionLog('SSE mode: Backend handles all subscriptions');
+                return;
+            }
+
+            if (!connected || !stompClient) {
+                alert('Not connected to GridAPPS-D');
+                return;
+            }
+
+            // Check if already subscribed
+            if (subscriptions.find(s => s.topic === topic)) {
+                console.log('Already subscribed to:', topic);
+                addConnectionLog(`Already subscribed to: ${topic}`);
+                return;
+            }
+
+            addConnectionLog(`Subscribing to: ${topic}`);
+
+            const subscription = stompClient.subscribe(topic, function(message) {
+                handleMessage(topic, message);
+            });
+
+            subscriptions.push({ topic: topic, sub: subscription });
+            updateSubscriptionList();
+            updateTopicList();
+            console.log('Subscribed to:', topic);
+            addConnectionLog(`Successfully subscribed to: ${topic}`);
+        }
+
+        function addSubscription() {
+            const topic = document.getElementById('subscribeTopic').value.trim();
+            if (topic) {
+                subscribeToTopic(topic);
+            }
+        }
+
+        function updateConnectionStatus(isConnected) {
+            const statusEl = document.getElementById('connectionStatus');
+            const textEl = document.getElementById('statusText');
+            const btnEl = document.getElementById('connectBtn');
+
+            if (isConnected) {
+                statusEl.className = 'status-indicator connected';
+                textEl.textContent = 'Connected';
+                btnEl.textContent = 'Disconnect';
+                btnEl.classList.add('danger');
+            } else {
+                statusEl.className = 'status-indicator disconnected';
+                textEl.textContent = 'Disconnected';
+                btnEl.textContent = 'Connect';
+                btnEl.classList.remove('danger');
+            }
+        }
+
+        function updateSubscriptionList() {
+            const topics = subscriptions.map(s => s.topic).join(', ') || 'None';
+            document.getElementById('subList').textContent = topics;
+        }
+
+        function handleMessage(topic, message) {
+            messageCount++;
+            const timestamp = new Date();
+
+            let body;
+            try {
+                body = JSON.parse(message.body);
+            } catch (e) {
+                body = { raw: message.body };
+            }
+
+            const msgData = {
+                timestamp: timestamp,
+                topic: topic,
+                body: body,
+                raw: message.body
+            };
+
+            messages.push(msgData);
+            if (messages.length > 500) {
+                messages = messages.slice(-500);
+            }
+
+            // Process message - detect format automatically
+            if (body.command === 'update' && body.input && body.input.message) {
+                // Format 1: DER control with forward_differences/reverse_differences
+                commandCount++;
+                processDERControlMessage(body.input.message, timestamp);
+            } else if (typeof body === 'object' && !Array.isArray(body)) {
+                // Format 2: Device dictionary format { "_MRID": { name, value, timeStamp, ... } }
+                // Check if it looks like device data (has mRID keys starting with _)
+                const keys = Object.keys(body);
+                if (keys.length > 0 && (keys[0].startsWith('_') || body[keys[0]]?.mRID)) {
+                    commandCount++;
+                    processDeviceDictMessage(body, timestamp);
+                }
+            }
+
+            updateMessageDisplay();
+            updateStats();
+        }
+
+        // Process device dictionary format: { "_MRID": { name, value, timeStamp, mRID, ... } }
+        function processDeviceDictMessage(deviceDict, timestamp) {
+            for (const [deviceId, deviceInfo] of Object.entries(deviceDict)) {
+                if (!deviceInfo || typeof deviceInfo !== 'object') continue;
+
+                // Use device's timestamp if available
+                const ts = deviceInfo.timeStamp ? new Date(deviceInfo.timeStamp * 1000) : timestamp;
+                const deviceName = deviceInfo.name || deviceId;
+                const value = deviceInfo.value;
+
+                if (value === undefined || value === null) continue;
+
+                // Track device by name for friendlier display
+                const displayId = deviceName || deviceId;
+                if (!seenDevices.has(displayId)) {
+                    seenDevices.add(displayId);
+                    updateDeviceSelector();
+                }
+
+                // Store data for charting - use 'value' as the attribute
+                if (!deviceData[displayId]) {
+                    deviceData[displayId] = {};
+                }
+                if (!deviceData[displayId]['value']) {
+                    deviceData[displayId]['value'] = [];
+                }
+                deviceData[displayId]['value'].push({
+                    timestamp: ts,
+                    value: value
+                });
+
+                // Keep only last 100 values per device
+                if (deviceData[displayId]['value'].length > 100) {
+                    deviceData[displayId]['value'] = deviceData[displayId]['value'].slice(-100);
+                }
+
+                // Add to diff history
+                diffHistory.unshift({
+                    timestamp: ts,
+                    device: displayId,
+                    attribute: 'value',
+                    value: value,
+                    direction: 'update',
+                    mRID: deviceId
+                });
+            }
+
+            // Trim history
+            if (diffHistory.length > 50) {
+                diffHistory = diffHistory.slice(0, 50);
+            }
+
+            updateDiffTable();
+            updateChart();
+        }
+
+        // Process DER control format with forward_differences/reverse_differences
+        function processDERControlMessage(msg, timestamp) {
+            const ts = msg.timestamp ? new Date(msg.timestamp * 1000) : timestamp;
+
+            // Process forward_differences
+            if (msg.forward_differences) {
+                for (const diff of msg.forward_differences) {
+                    processValueDiff(diff, ts, 'forward');
+                }
+            }
+
+            // Process reverse_differences
+            if (msg.reverse_differences) {
+                for (const diff of msg.reverse_differences) {
+                    processValueDiff(diff, ts, 'reverse');
+                }
+            }
+        }
+
+        function processValueDiff(diff, timestamp, direction) {
+            const deviceId = diff.object;
+            const attribute = diff.attribute ? diff.attribute.split('.').pop() : 'value';  // Get last part of attribute path
+            const value = diff.value;
+
+            // Calculate actual value considering multiplier
+            let actualValue = typeof value === 'object' ? value.value : value;
+            if (value && value.multiplier) {
+                actualValue = value.value * Math.pow(10, value.multiplier);
+            }
+
+            // Track device
+            if (!seenDevices.has(deviceId)) {
+                seenDevices.add(deviceId);
+                updateDeviceSelector();
+            }
+
+            // Store data for charting
+            if (!deviceData[deviceId]) {
+                deviceData[deviceId] = {};
+            }
+            if (!deviceData[deviceId][attribute]) {
+                deviceData[deviceId][attribute] = [];
+            }
+            deviceData[deviceId][attribute].push({
+                timestamp: timestamp,
+                value: actualValue
+            });
+
+            // Keep only last 100 values per device/attribute
+            if (deviceData[deviceId][attribute].length > 100) {
+                deviceData[deviceId][attribute] = deviceData[deviceId][attribute].slice(-100);
+            }
+
+            // Add to diff history
+            diffHistory.unshift({
+                timestamp: timestamp,
+                device: deviceId,
+                attribute: attribute,
+                value: actualValue,
+                direction: direction
+            });
+            if (diffHistory.length > 50) {
+                diffHistory = diffHistory.slice(0, 50);
+            }
+
+            updateDiffTable();
+            updateChart();
+        }
+
+        function updateDeviceSelector() {
+            const container = document.getElementById('deviceSelector');
+            container.innerHTML = '';
+
+            for (const deviceId of seenDevices) {
+                const chip = document.createElement('div');
+                chip.className = 'device-chip' + (selectedDevices.has(deviceId) ? ' selected' : '');
+                chip.textContent = deviceId.substring(0, 20) + (deviceId.length > 20 ? '...' : '');
+                chip.title = deviceId;
+                chip.onclick = () => toggleDeviceSelection(deviceId);
+                container.appendChild(chip);
+            }
+        }
+
+        function toggleDeviceSelection(deviceId) {
+            if (selectedDevices.has(deviceId)) {
+                selectedDevices.delete(deviceId);
+            } else {
+                selectedDevices.add(deviceId);
+            }
+            updateDeviceSelector();
+            updateChart();
+        }
+
+        function updateChart() {
+            if (!chart) return;
+
+            const attribute = document.getElementById('attributeFilter').value;
+            const datasets = [];
+            const colors = ['#4ecca3', '#e94560', '#f39c12', '#3498db', '#9b59b6', '#1abc9c'];
+            let colorIdx = 0;
+
+            // If no devices selected, show all
+            const devicesToShow = selectedDevices.size > 0 ? selectedDevices : seenDevices;
+
+            for (const deviceId of devicesToShow) {
+                if (deviceData[deviceId] && deviceData[deviceId][attribute]) {
+                    const data = deviceData[deviceId][attribute].map(d => ({
+                        x: d.timestamp,
+                        y: d.value
+                    }));
+
+                    datasets.push({
+                        label: deviceId.substring(0, 15),
+                        data: data,
+                        borderColor: colors[colorIdx % colors.length],
+                        backgroundColor: colors[colorIdx % colors.length] + '20',
+                        fill: false,
+                        tension: 0.1
+                    });
+                    colorIdx++;
+                }
+            }
+
+            chart.data.datasets = datasets;
+            chart.update('none');
+        }
+
+        function updateMessageDisplay() {
+            const container = document.getElementById('messageList');
+            const filter = document.getElementById('messageFilter').value;
+
+            let filtered = messages;
+            if (filter === 'command') {
+                filtered = messages.filter(m => m.body.command);
+            } else if (filter === 'update') {
+                filtered = messages.filter(m => m.body.command === 'update');
+            }
+
+            // Show last 50 messages
+            const toShow = filtered.slice(-50);
+
+            container.innerHTML = toShow.map(msg => {
+                const isCommand = msg.body.command === 'update';
+                const timeStr = msg.timestamp.toLocaleTimeString();
+                let content = JSON.stringify(msg.body, null, 2);
+                if (content.length > 500) {
+                    content = content.substring(0, 500) + '...';
+                }
+
+                return `
+                    <div class="message-item ${isCommand ? 'command' : ''}">
+                        <div class="message-header">
+                            <span>${timeStr}</span>
+                            <span>${msg.topic}</span>
+                        </div>
+                        <div class="message-content"><pre style="margin:0;white-space:pre-wrap;">${escapeHtml(content)}</pre></div>
+                    </div>
+                `;
+            }).join('');
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function filterMessages() {
+            updateMessageDisplay();
+        }
+
+        function updateDiffTable() {
+            const tbody = document.getElementById('diffTableBody');
+
+            if (diffHistory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">No data yet</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = diffHistory.slice(0, 20).map(diff => {
+                const timeStr = diff.timestamp.toLocaleTimeString();
+                const arrow = diff.direction === 'forward' ?
+                    '<span class="arrow up">&#x2191;</span>' :
+                    '<span class="arrow down">&#x2193;</span>';
+
+                return `
+                    <tr>
+                        <td>${timeStr}</td>
+                        <td title="${diff.device}">${diff.device.substring(0, 20)}...</td>
+                        <td>${diff.attribute}</td>
+                        <td>${diff.value}</td>
+                        <td><div class="value-change">${arrow} ${diff.direction}</div></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateStats() {
+            document.getElementById('totalMessages').textContent = messageCount;
+            document.getElementById('commandCount').textContent = commandCount;
+            document.getElementById('deviceCount').textContent = seenDevices.size;
+
+            if (startTime) {
+                const elapsed = (Date.now() - startTime) / 1000;
+                const rate = messageCount / Math.max(elapsed, 1);
+                document.getElementById('msgPerSec').textContent = rate.toFixed(1);
+            }
+        }
+
+        function clearMessages() {
+            messages = [];
+            diffHistory = [];
+            messageCount = 0;
+            commandCount = 0;
+            startTime = Date.now();
+            deviceData = {};
+            seenDevices.clear();
+            selectedDevices.clear();
+            updateMessageDisplay();
+            updateDiffTable();
+            updateDeviceSelector();
+            updateStats();
+            if (chart) {
+                chart.data.datasets = [];
+                chart.update();
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Device metadata cache
+        let deviceMetadata = {};
+
+        // Load device metadata from backend
+        async function loadDeviceMetadata() {
+            try {
+                const response = await fetch('/api/devices');
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Loaded device metadata:', data);
+                    // Build lookup by device ID patterns
+                    for (const device of data.devices || []) {
+                        if (device.href) {
+                            // Extract device ID from href (e.g., /edev_53036 -> 53036)
+                            const match = device.href.match(/edev_(\d+)/);
+                            if (match) {
+                                deviceMetadata[match[1]] = device;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Could not load device metadata:', e);
+            }
+        }
+
+        // Load GridAPPS-D configuration from backend
+        async function loadGridAPPSDConfig() {
+            try {
+                const response = await fetch('/api/gridappsd/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    console.log('Loaded GridAPPS-D config:', config);
+
+                    // Update form fields with server config
+                    if (config.host) {
+                        document.getElementById('gridappsdHost').value = config.host;
+                    }
+                    if (config.websocket_port) {
+                        document.getElementById('gridappsdPort').value = config.websocket_port;
+                    }
+                    if (config.username) {
+                        document.getElementById('gridappsdUser').value = config.username;
+                    }
+                    if (config.output_topic) {
+                        document.getElementById('subscribeTopic').value = config.output_topic;
+                    }
+                }
+            } catch (e) {
+                console.log('Could not load GridAPPS-D config:', e);
+            }
+        }
+
+        // Get friendly device name
+        function getDeviceName(deviceId) {
+            // Try to find in metadata
+            for (const key in deviceMetadata) {
+                const device = deviceMetadata[key];
+                // Check various ID patterns
+                if (device.lfdi && deviceId.includes(device.lfdi.substring(0, 8))) {
+                    return device.mfModel || device.href || deviceId;
+                }
+            }
+            // Shorten UUID-style device IDs for display
+            if (deviceId.startsWith('_') && deviceId.length > 30) {
+                return deviceId.substring(0, 20) + '...';
+            }
+            return deviceId;
+        }
+
+        // Topic management - track which topics should be plotted
+        let plottableTopics = new Set();
+
+        // Quick add a common topic
+        function quickAddTopic(topic) {
+            if (!connected) {
+                // Store topic input for when we connect
+                document.getElementById('subscribeTopic').value = topic;
+                alert('Not connected yet. Topic will be subscribed when you connect.');
+                return;
+            }
+            subscribeToTopic(topic);
+            updateTopicList();
+        }
+
+        // Show dialog to add custom topic
+        function showAddTopicDialog() {
+            const topic = prompt('Enter topic to subscribe:', '/topic/goss.gridappsd.');
+            if (topic && topic.trim()) {
+                if (connected) {
+                    subscribeToTopic(topic.trim());
+                } else {
+                    document.getElementById('subscribeTopic').value = topic.trim();
+                }
+                updateTopicList();
+            }
+        }
+
+        // Update the visual list of subscribed topics
+        function updateTopicList() {
+            const container = document.getElementById('topicList');
+
+            if (subscriptions.length === 0) {
+                container.innerHTML = '<span style="color: #888; font-size: 12px;">No active subscriptions. Connect and subscribe to topics.</span>';
+                return;
+            }
+
+            container.innerHTML = subscriptions.map((sub, idx) => {
+                const isPlotting = plottableTopics.has(sub.topic);
+                const plotIcon = isPlotting ? '📊' : '📈';
+                const plotTitle = isPlotting ? 'Disable plotting for this topic' : 'Enable plotting for this topic';
+
+                return `
+                    <div class="topic-tag ${isPlotting ? 'plotting' : ''}">
+                        <span class="topic-name" title="${escapeHtml(sub.topic)}">${escapeHtml(sub.topic)}</span>
+                        <button class="plot-toggle" onclick="toggleTopicPlotting('${escapeHtml(sub.topic)}')" title="${plotTitle}">${plotIcon}</button>
+                        <button class="remove-btn" onclick="removeSubscription(${idx})" title="Unsubscribe">&times;</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Toggle whether a topic's data should be plotted
+        function toggleTopicPlotting(topic) {
+            if (plottableTopics.has(topic)) {
+                plottableTopics.delete(topic);
+            } else {
+                plottableTopics.add(topic);
+            }
+            updateTopicList();
+        }
+
+        // Remove a subscription
+        function removeSubscription(index) {
+            if (index >= 0 && index < subscriptions.length) {
+                const sub = subscriptions[index];
+                try {
+                    sub.sub.unsubscribe();
+                } catch (e) {
+                    console.log('Error unsubscribing:', e);
+                }
+                // Remove from plottable set too
+                plottableTopics.delete(sub.topic);
+                subscriptions.splice(index, 1);
+                updateTopicList();
+                updateSubscriptionList();
+                console.log('Unsubscribed from:', sub.topic);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            initChart();
+            await loadGridAPPSDConfig();
+            await loadDeviceMetadata();
+
+            // Initialize topic list display
+            updateTopicList();
+
+            // Update stats periodically
+            setInterval(updateStats, 1000);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (stompClient) {
+                stompClient.deactivate();
+            }
+        });
+    </script>
+</body>
+</html>
