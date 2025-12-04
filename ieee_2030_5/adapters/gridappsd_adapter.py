@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
 import re
+import time
 from dataclasses import asdict
+from pathlib import Path
+from pprint import pformat
 from threading import RLock, Timer
 
 
@@ -103,7 +107,7 @@ if ENABLED:
         gridappsd_configuration: dict | GridappsdConfiguration
         tls: TLSRepository
 
-        _publish_interval_seconds: int = 3
+        _publish_interval_seconds: int = 30
         _default_pin: str | None = None
         _model_dict_file: str | None = None
         _model_id: str | None = None
@@ -1206,23 +1210,23 @@ if ENABLED:
             return self._devices
 
         def publish_house_aggregates(self):
-            from pprint import pformat
-
             mb = self.get_message_bus()
 
             # Get environment variables needed for topic construction
-            simulation_id = os.environ.get("GRIDAPPSD_SIMULATION_ID")
-            service_name = os.environ.get("GRIDAPPSD_SERVICE_NAME")
+            simulation_id = os.environ.get("GRIDAPPSD_SIMULATION_ID", "")
+            service_name = os.environ.get("GRIDAPPSD_SERVICE_NAME", "IEEE_2030_5")
+
+            # TODO: #25 Once fix goes into the gridappsd package, change to use this
+            #output_topic = topics.service_output_topic(service_id=service_name, simulation_id=simulation_id)
 
             output_topic = topics.application_output_topic(application_id=service_name, simulation_id=simulation_id)
+            print(f"Output topic: {output_topic}")
             # # The output topic goes to the field bus manager regardless of the message_bus_id for some reason.
             # output_topic = topics.field_output_topic(message_bus_id=field_bus)
 
             message = self.get_message_for_bus()
 
             # Write detailed output to file for debugging
-            import datetime
-            from pathlib import Path
 
             debug_file = Path("gridappsd_adapter_output.log")
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

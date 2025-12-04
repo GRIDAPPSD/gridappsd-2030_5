@@ -173,27 +173,12 @@
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 11px;
         }
-        .message-item {
-            padding: 8px 10px;
-            margin-bottom: 8px;
-            background: rgba(78, 204, 163, 0.1);
-            border-left: 3px solid #4ecca3;
-            border-radius: 0 4px 4px 0;
-        }
-        .message-item.command {
-            border-left-color: #e94560;
-            background: rgba(233, 69, 96, 0.1);
-        }
         .message-header {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
             font-size: 10px;
             color: #888;
-        }
-        .message-content {
-            color: #ddd;
-            word-break: break-all;
         }
         .message-content .highlight {
             color: #4ecca3;
@@ -334,6 +319,79 @@
             gap: 5px;
             align-items: center;
         }
+        /* Collapsible panel styles */
+        .panel-header.collapsible {
+            cursor: pointer;
+            user-select: none;
+        }
+        .panel-header.collapsible:hover {
+            background: rgba(78, 204, 163, 0.1);
+            margin: -15px -15px 15px -15px;
+            padding: 15px;
+            border-radius: 8px 8px 0 0;
+        }
+        .panel-header .collapse-icon {
+            transition: transform 0.2s;
+            font-size: 12px;
+        }
+        .panel-header.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+        .panel-content {
+            transition: max-height 0.3s ease-out, opacity 0.2s;
+            overflow: hidden;
+        }
+        .panel-content.collapsed {
+            max-height: 0 !important;
+            opacity: 0;
+            padding: 0;
+        }
+        /* Expandable message styles */
+        .message-item {
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            background: rgba(78, 204, 163, 0.1);
+            border-left: 3px solid #4ecca3;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+        }
+        .message-item:hover {
+            background: rgba(78, 204, 163, 0.15);
+        }
+        .message-item.command {
+            border-left-color: #e94560;
+            background: rgba(233, 69, 96, 0.1);
+        }
+        .message-item.command:hover {
+            background: rgba(233, 69, 96, 0.15);
+        }
+        .message-preview {
+            color: #aaa;
+            font-size: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        .message-content {
+            color: #ddd;
+            word-break: break-all;
+            display: none;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #0f3460;
+        }
+        .message-item.expanded .message-content {
+            display: block;
+        }
+        .message-item.expanded .message-preview {
+            display: none;
+        }
+        .expand-indicator {
+            float: right;
+            color: #4ecca3;
+            font-size: 10px;
+        }
     </style>
 </head>
 <body>
@@ -440,67 +498,90 @@
             </div>
         </div>
 
+        <!-- Device selector (shared by both charts) -->
+        <div class="panel" style="margin-bottom: 20px;">
+            <div class="panel-header">
+                <span class="panel-title">Device Filter</span>
+                <select id="attributeFilter" onchange="updateChart()">
+                    <option value="value" selected>value (W)</option>
+                    <option value="opModTargetW">opModTargetW</option>
+                    <option value="opModTargetVar">opModTargetVar</option>
+                    <option value="opModMaxLimW">opModMaxLimW</option>
+                    <option value="opModConnect">opModConnect</option>
+                    <option value="opModEnergize">opModEnergize</option>
+                </select>
+            </div>
+            <div class="device-selector" id="deviceSelector">
+                <span style="color: #888; font-size: 12px;">Click devices to filter charts (none selected = show all)</span>
+            </div>
+        </div>
+
+        <!-- Two Charts Side by Side -->
         <div class="grid-layout">
-            <!-- Left Panel: Messages -->
+            <!-- Left Chart: Device Timestamp -->
             <div class="panel">
                 <div class="panel-header">
-                    <span class="panel-title">Message Stream</span>
-                    <select id="messageFilter" onchange="filterMessages()">
-                        <option value="all">All Messages</option>
-                        <option value="command">Commands Only</option>
-                        <option value="update">Updates Only</option>
+                    <span class="panel-title">Device Values (Device Timestamp)</span>
+                    <select id="chartXAxisFormat" onchange="updateChartXAxis()" style="padding: 4px 8px; font-size: 11px;">
+                        <option value="time">X-Axis: Time</option>
+                        <option value="epoch">X-Axis: Epoch</option>
                     </select>
                 </div>
+                <div class="chart-container">
+                    <canvas id="valueChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Right Chart: Wallclock Time -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Device Values (Broker Wallclock)</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="wallclockChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Status Panel -->
+        <div class="panel" style="margin-top: 20px;">
+            <div class="panel-header">
+                <span class="panel-title">Device Status (Last Updated Values)</span>
+            </div>
+            <table class="diff-table">
+                <thead>
+                    <tr>
+                        <th>Device Name</th>
+                        <th>Last Value (W)</th>
+                        <th>Last Updated</th>
+                        <th>mRID</th>
+                    </tr>
+                </thead>
+                <tbody id="diffTableBody">
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #888;">No data yet</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Message Stream at bottom (collapsible, starts collapsed) -->
+        <div class="panel" id="messageStreamPanel" style="margin-top: 20px;">
+            <div class="panel-header collapsible collapsed" onclick="togglePanel('messageStreamPanel')">
+                <span class="panel-title"><span class="collapse-icon">&#9660;</span> Message Stream (Raw)</span>
+                <select id="messageFilter" onchange="filterMessages(); event.stopPropagation();" onclick="event.stopPropagation();">
+                    <option value="all">All Messages</option>
+                    <option value="command">Commands Only</option>
+                    <option value="update">Updates Only</option>
+                </select>
+            </div>
+            <div class="panel-content collapsed" id="messageStreamPanel-content">
                 <div class="message-list" id="messageList">
                     <div style="color: #888; text-align: center; padding: 50px;">
                         Connect to GridAPPS-D to see messages...
                     </div>
                 </div>
             </div>
-
-            <!-- Right Panel: Chart & Analysis -->
-            <div class="panel">
-                <div class="panel-header">
-                    <span class="panel-title">Device Values</span>
-                    <select id="attributeFilter" onchange="updateChart()">
-                        <option value="value" selected>value (W)</option>
-                        <option value="opModTargetW">opModTargetW</option>
-                        <option value="opModTargetVar">opModTargetVar</option>
-                        <option value="opModMaxLimW">opModMaxLimW</option>
-                        <option value="opModConnect">opModConnect</option>
-                        <option value="opModEnergize">opModEnergize</option>
-                    </select>
-                </div>
-                <div class="device-selector" id="deviceSelector">
-                    <!-- Device chips will be added dynamically -->
-                </div>
-                <div class="chart-container">
-                    <canvas id="valueChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Difference Details Panel -->
-        <div class="panel" style="margin-top: 20px;">
-            <div class="panel-header">
-                <span class="panel-title">Recent DER Control Changes</span>
-            </div>
-            <table class="diff-table">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Device</th>
-                        <th>Attribute</th>
-                        <th>Value</th>
-                        <th>Direction</th>
-                    </tr>
-                </thead>
-                <tbody id="diffTableBody">
-                    <tr>
-                        <td colspan="5" style="text-align: center; color: #888;">No data yet</td>
-                    </tr>
-                </tbody>
-            </table>
         </div>
     </div>
 
@@ -512,14 +593,33 @@
         let connected = false;
         let messages = [];
         let subscriptions = [];
-        let deviceData = {};  // { deviceId: { attribute: [{ timestamp, value }] } }
+        let deviceData = {};  // { deviceId: { attribute: [{ timestamp, epochSeconds, value }] } }
+        let wallclockData = {};  // { deviceId: [{ timestamp (wallclock), value }] } - uses wallclock time as x-axis
+        let chartXAxisMode = 'time';  // 'time' or 'epoch' for the device timestamp chart
         let seenDevices = new Set();
         let selectedDevices = new Set();
         let messageCount = 0;
         let commandCount = 0;
         let startTime = null;
         let chart = null;
+        let wallclockChart = null;
         let diffHistory = [];
+        let deviceStatus = {};  // { deviceName: { value, timestamp, mRID } } - last known status per device
+
+        // Toggle collapsible panel
+        function togglePanel(panelId) {
+            const panel = document.getElementById(panelId);
+            const header = panel.querySelector('.panel-header');
+            const content = document.getElementById(panelId + '-content');
+
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+        }
+
+        // Toggle individual message expansion
+        function toggleMessage(element) {
+            element.classList.toggle('expanded');
+        }
 
         // Connection mode management
         function updateConnectionMode() {
@@ -573,8 +673,9 @@
             updateStats();
         }
 
-        // Initialize chart
+        // Initialize charts
         function initChart() {
+            // Device values chart (x-axis: device timeStamp)
             const ctx = document.getElementById('valueChart').getContext('2d');
             chart = new Chart(ctx, {
                 type: 'line',
@@ -595,7 +696,52 @@
                             },
                             title: {
                                 display: true,
-                                text: 'Time',
+                                text: 'Device Timestamp',
+                                color: '#888'
+                            },
+                            ticks: { color: '#888' },
+                            grid: { color: '#0f3460' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Value',
+                                color: '#888'
+                            },
+                            ticks: { color: '#888' },
+                            grid: { color: '#0f3460' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#ddd' }
+                        }
+                    }
+                }
+            });
+
+            // Wallclock time chart (x-axis: wallclock time from _metadata)
+            const ctx2 = document.getElementById('wallclockChart').getContext('2d');
+            wallclockChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'second',
+                                displayFormats: {
+                                    second: 'HH:mm:ss'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Broker Wallclock Time',
                                 color: '#888'
                             },
                             ticks: { color: '#888' },
@@ -884,7 +1030,17 @@
 
         function handleMessage(topic, message) {
             messageCount++;
-            const timestamp = new Date();
+
+            // Try to get timestamp from STOMP headers (ActiveMQ provides 'timestamp' in milliseconds)
+            let timestamp = new Date();
+            if (message.headers && message.headers.timestamp) {
+                timestamp = new Date(parseInt(message.headers.timestamp));
+            }
+
+            // Log headers for debugging (first message only)
+            if (messageCount === 1) {
+                console.log('STOMP message headers:', message.headers);
+            }
 
             let body;
             try {
@@ -895,8 +1051,10 @@
 
             const msgData = {
                 timestamp: timestamp,
+                stompTimestamp: message.headers?.timestamp ? parseInt(message.headers.timestamp) : null,
                 topic: topic,
                 body: body,
+                headers: message.headers,
                 raw: message.body
             };
 
@@ -924,13 +1082,17 @@
             updateStats();
         }
 
-        // Process device dictionary format: { "_MRID": { name, value, timeStamp, mRID, ... } }
-        function processDeviceDictMessage(deviceDict, timestamp) {
+        // Process device dictionary format: { "_MRID": { name, value, timeStamp, mRID, ... }, "_metadata": {...} }
+        // wallclockTimestamp comes from STOMP message header (broker timestamp)
+        function processDeviceDictMessage(deviceDict, wallclockTimestamp) {
             for (const [deviceId, deviceInfo] of Object.entries(deviceDict)) {
+                // Skip _metadata entry
+                if (deviceId === '_metadata') continue;
                 if (!deviceInfo || typeof deviceInfo !== 'object') continue;
 
-                // Use device's timestamp if available
-                const ts = deviceInfo.timeStamp ? new Date(deviceInfo.timeStamp * 1000) : timestamp;
+                // Use device's timestamp for the first chart
+                const epochSeconds = deviceInfo.timeStamp || Math.floor(wallclockTimestamp.getTime() / 1000);
+                const ts = new Date(epochSeconds * 1000);
                 const deviceName = deviceInfo.name || deviceId;
                 const value = deviceInfo.value;
 
@@ -943,7 +1105,7 @@
                     updateDeviceSelector();
                 }
 
-                // Store data for charting - use 'value' as the attribute
+                // Store data for first chart (device timestamp as x-axis)
                 if (!deviceData[displayId]) {
                     deviceData[displayId] = {};
                 }
@@ -952,6 +1114,7 @@
                 }
                 deviceData[displayId]['value'].push({
                     timestamp: ts,
+                    epochSeconds: epochSeconds,
                     value: value
                 });
 
@@ -960,24 +1123,32 @@
                     deviceData[displayId]['value'] = deviceData[displayId]['value'].slice(-100);
                 }
 
-                // Add to diff history
-                diffHistory.unshift({
-                    timestamp: ts,
-                    device: displayId,
-                    attribute: 'value',
-                    value: value,
-                    direction: 'update',
-                    mRID: deviceId
+                // Store data for wallclock chart (uses STOMP header timestamp as x-axis)
+                if (!wallclockData[displayId]) {
+                    wallclockData[displayId] = [];
+                }
+                wallclockData[displayId].push({
+                    timestamp: wallclockTimestamp,
+                    value: value
                 });
+
+                // Keep only last 100 values per device
+                if (wallclockData[displayId].length > 100) {
+                    wallclockData[displayId] = wallclockData[displayId].slice(-100);
+                }
+
+                // Update device status (last known value per device)
+                deviceStatus[displayId] = {
+                    value: value,
+                    timestamp: ts,
+                    epochSeconds: epochSeconds,
+                    mRID: deviceId
+                };
             }
 
-            // Trim history
-            if (diffHistory.length > 50) {
-                diffHistory = diffHistory.slice(0, 50);
-            }
-
-            updateDiffTable();
+            updateDeviceStatusTable();
             updateChart();
+            updateWallclockChart();
         }
 
         // Process DER control format with forward_differences/reverse_differences
@@ -1071,12 +1242,14 @@
             }
             updateDeviceSelector();
             updateChart();
+            updateWallclockChart();
         }
 
         function updateChart() {
             if (!chart) return;
 
             const attribute = document.getElementById('attributeFilter').value;
+            const useEpoch = chartXAxisMode === 'epoch';
             const datasets = [];
             const colors = ['#4ecca3', '#e94560', '#f39c12', '#3498db', '#9b59b6', '#1abc9c'];
             let colorIdx = 0;
@@ -1087,7 +1260,7 @@
             for (const deviceId of devicesToShow) {
                 if (deviceData[deviceId] && deviceData[deviceId][attribute]) {
                     const data = deviceData[deviceId][attribute].map(d => ({
-                        x: d.timestamp,
+                        x: useEpoch ? d.epochSeconds : d.timestamp,
                         y: d.value
                     }));
 
@@ -1105,6 +1278,58 @@
 
             chart.data.datasets = datasets;
             chart.update('none');
+        }
+
+        // Toggle chart X-axis between time and epoch
+        function updateChartXAxis() {
+            const select = document.getElementById('chartXAxisFormat');
+            chartXAxisMode = select.value;
+
+            // Update chart scale type
+            if (chart) {
+                if (chartXAxisMode === 'epoch') {
+                    chart.options.scales.x.type = 'linear';
+                    chart.options.scales.x.title.text = 'Device Timestamp (epoch seconds)';
+                } else {
+                    chart.options.scales.x.type = 'time';
+                    chart.options.scales.x.title.text = 'Device Timestamp';
+                }
+                updateChart();
+            }
+        }
+
+        // Update wallclock chart (shows data plotted against wallclock time from _metadata)
+        function updateWallclockChart() {
+            if (!wallclockChart) return;
+
+            const datasets = [];
+            const colors = ['#f39c12', '#e74c3c', '#9b59b6', '#1abc9c', '#3498db', '#4ecca3'];
+            let colorIdx = 0;
+
+            // If no devices selected, show all
+            const devicesToShow = selectedDevices.size > 0 ? selectedDevices : seenDevices;
+
+            for (const deviceId of devicesToShow) {
+                if (wallclockData[deviceId] && wallclockData[deviceId].length > 0) {
+                    const data = wallclockData[deviceId].map(d => ({
+                        x: d.timestamp,
+                        y: d.value
+                    }));
+
+                    datasets.push({
+                        label: deviceId.substring(0, 15),
+                        data: data,
+                        borderColor: colors[colorIdx % colors.length],
+                        backgroundColor: colors[colorIdx % colors.length] + '20',
+                        fill: false,
+                        tension: 0.1
+                    });
+                    colorIdx++;
+                }
+            }
+
+            wallclockChart.data.datasets = datasets;
+            wallclockChart.update('none');
         }
 
         function updateMessageDisplay() {
@@ -1125,16 +1350,21 @@
                 const isCommand = msg.body.command === 'update';
                 const timeStr = msg.timestamp.toLocaleTimeString();
                 let content = JSON.stringify(msg.body, null, 2);
-                if (content.length > 500) {
-                    content = content.substring(0, 500) + '...';
+
+                // Create a short preview (first 80 chars of raw JSON)
+                let preview = JSON.stringify(msg.body).substring(0, 80);
+                if (JSON.stringify(msg.body).length > 80) {
+                    preview += '...';
                 }
 
                 return `
-                    <div class="message-item ${isCommand ? 'command' : ''}">
+                    <div class="message-item ${isCommand ? 'command' : ''}" onclick="toggleMessage(this)">
                         <div class="message-header">
                             <span>${timeStr}</span>
+                            <span class="expand-indicator">click to expand</span>
                             <span>${msg.topic}</span>
                         </div>
+                        <div class="message-preview">${escapeHtml(preview)}</div>
                         <div class="message-content"><pre style="margin:0;white-space:pre-wrap;">${escapeHtml(content)}</pre></div>
                     </div>
                 `;
@@ -1147,27 +1377,29 @@
             updateMessageDisplay();
         }
 
-        function updateDiffTable() {
+        function updateDeviceStatusTable() {
             const tbody = document.getElementById('diffTableBody');
+            const deviceNames = Object.keys(deviceStatus);
 
-            if (diffHistory.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">No data yet</td></tr>';
+            if (deviceNames.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #888;">No data yet</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = diffHistory.slice(0, 20).map(diff => {
-                const timeStr = diff.timestamp.toLocaleTimeString();
-                const arrow = diff.direction === 'forward' ?
-                    '<span class="arrow up">&#x2191;</span>' :
-                    '<span class="arrow down">&#x2193;</span>';
+            // Sort by device name
+            deviceNames.sort();
+
+            tbody.innerHTML = deviceNames.map(deviceName => {
+                const status = deviceStatus[deviceName];
+                const timeStr = status.timestamp.toLocaleTimeString();
+                const shortMRID = status.mRID.length > 20 ? status.mRID.substring(0, 8) + '...' : status.mRID;
 
                 return `
                     <tr>
+                        <td title="${deviceName}">${deviceName}</td>
+                        <td>${status.value.toLocaleString()}</td>
                         <td>${timeStr}</td>
-                        <td title="${diff.device}">${diff.device.substring(0, 20)}...</td>
-                        <td>${diff.attribute}</td>
-                        <td>${diff.value}</td>
-                        <td><div class="value-change">${arrow} ${diff.direction}</div></td>
+                        <td title="${status.mRID}">${shortMRID}</td>
                     </tr>
                 `;
             }).join('');
@@ -1188,19 +1420,25 @@
         function clearMessages() {
             messages = [];
             diffHistory = [];
+            deviceStatus = {};
             messageCount = 0;
             commandCount = 0;
             startTime = Date.now();
             deviceData = {};
+            wallclockData = {};
             seenDevices.clear();
             selectedDevices.clear();
             updateMessageDisplay();
-            updateDiffTable();
+            updateDeviceStatusTable();
             updateDeviceSelector();
             updateStats();
             if (chart) {
                 chart.data.datasets = [];
                 chart.update();
+            }
+            if (wallclockChart) {
+                wallclockChart.data.datasets = [];
+                wallclockChart.update();
             }
         }
 
