@@ -70,7 +70,7 @@ try:
     from cimgraph.databases import ConnectionParameters
     from cimgraph.databases.gridappsd import GridappsdConnection
     from cimgraph.models import FeederModel
-    from gridappsd import GridAPPSD
+    from gridappsd import DifferenceBuilder, GridAPPSD
     from gridappsd.field_interface.agents.agents import GridAPPSDMessageBus
     from gridappsd.field_interface.interfaces import FieldMessageBus
 
@@ -1244,3 +1244,59 @@ if ENABLED:
 
             _log.debug("Output: %s\n%s", output_topic, pformat(message, 2))
             mb.send(topic=output_topic, message=message)
+
+            # Send DER control commands back to the service
+            if message:
+                self._send_der_controls(message, simulation_id, service_name)
+
+        def _send_der_controls(self, message: dict, simulation_id: str, service_name: str):
+            """Send DER control commands to devices.
+
+            This method takes the device values from the message and sends them
+            as DER control commands to the IEEE 2030.5 service.
+
+            Args:
+                message: The device data message containing mRID, name, and value for each device
+                simulation_id: GridAPPS-D simulation ID
+                service_name: IEEE 2030.5 service name
+            """
+            try:
+                send_topic = topics.application_input_topic(
+                    application_id=service_name, simulation_id=simulation_id
+                )
+
+                builder = DifferenceBuilder()
+
+                for device_id, device_info in message.items():
+                    if not isinstance(device_info, dict):
+                        continue
+                    if "mRID" not in device_info:
+                        continue
+
+                    # Use the actual value from the device
+                    value = device_info.get("value")
+                    if value is None:
+                        continue
+
+                    builder.add_difference(
+                        object_id=device_info["mRID"],
+                        attribute="DERControl.DERControlBase.opModTargetW",
+                        forward_value=dict(multiplier=1, value=int(value)),
+                        reverse_value=dict(multiplier=1, value=int(value)),
+                    )
+
+                    _log.debug(
+                        "DER control: %s (%s) -> opModTargetW=%d",
+                        device_info.get("name", "unknown"),
+                        device_info["mRID"],
+                        value,
+                    )
+
+                control_message = builder.get_message()
+                _log.info("Sending DER controls to topic: %s", send_topic)
+                _log.debug("DER control message: %s", pformat(control_message))
+
+                self.gapps.send(send_topic, control_message)
+
+            except Exception as e:
+                _log.error("Failed to send DER controls: %s", e, exc_info=True)

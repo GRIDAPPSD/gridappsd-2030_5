@@ -319,6 +319,231 @@
             gap: 5px;
             align-items: center;
         }
+        /* Dynamic extractor styles */
+        .extractor-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .extractor-item {
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 12px;
+            border-left: 3px solid #4ecca3;
+        }
+        .extractor-item.disabled {
+            opacity: 0.5;
+            border-left-color: #666;
+        }
+        .extractor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .extractor-name {
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .extractor-controls {
+            display: flex;
+            gap: 5px;
+        }
+        .extractor-controls button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 6px;
+        }
+        .extractor-details {
+            font-size: 11px;
+            color: #aaa;
+            font-family: 'Consolas', monospace;
+        }
+        .extractor-details code {
+            background: rgba(78, 204, 163, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #4ecca3;
+        }
+        .extractor-stats {
+            margin-top: 8px;
+            font-size: 10px;
+            color: #888;
+        }
+        .extractor-form {
+            background: #0a1628;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        .extractor-form .form-row {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .extractor-form label {
+            font-size: 12px;
+            color: #aaa;
+        }
+        .extractor-form input, .extractor-form select, .extractor-form textarea {
+            width: 100%;
+        }
+        .extractor-form textarea {
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            min-height: 60px;
+            resize: vertical;
+        }
+        .jq-help {
+            font-size: 10px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .jq-help code {
+            background: rgba(78, 204, 163, 0.1);
+            padding: 1px 4px;
+            border-radius: 2px;
+            color: #4ecca3;
+        }
+        .preset-btns {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .preset-btn {
+            padding: 4px 8px !important;
+            font-size: 10px !important;
+        }
+        .dynamic-chart-container {
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 15px;
+        }
+        .dynamic-charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 15px;
+        }
+        .dynamic-chart-panel {
+            background: #16213e;
+            border-radius: 6px;
+            padding: 12px;
+            border: 1px solid #0f3460;
+        }
+        .dynamic-chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .dynamic-chart-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .chart-height-300 {
+            height: 250px;
+        }
+        /* Value display styles */
+        .value-display {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 10px;
+        }
+        .value-card {
+            background: #0f3460;
+            border-radius: 8px;
+            padding: 15px 20px;
+            min-width: 150px;
+            text-align: center;
+            border: 1px solid #1a3a5c;
+        }
+        .value-card-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .value-card-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .value-card-time {
+            font-size: 9px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .gauge-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .gauge-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .gauge-label {
+            font-size: 14px;
+            color: #888;
+            margin-left: 10px;
+        }
+        .data-table-container {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        .data-table th, .data-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #0f3460;
+        }
+        .data-table th {
+            background: #0a1628;
+            color: #4ecca3;
+            position: sticky;
+            top: 0;
+        }
+        .data-table tr:hover {
+            background: rgba(78, 204, 163, 0.1);
+        }
+        .status-dot-connected {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ecca3;
+            margin-right: 6px;
+        }
+        .status-dot-disconnected {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e94560;
+            margin-right: 6px;
+        }
+        .topic-tag.saved-only {
+            opacity: 0.6;
+            border-style: dashed;
+        }
         /* Collapsible panel styles */
         .panel-header.collapsible {
             cursor: pointer;
@@ -470,11 +695,102 @@
                 <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
                         onclick="quickAddTopic('/topic/goss.gridappsd.IEEE_2030_5.output')">IEEE 2030.5 Output</button>
                 <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
+                        onclick="quickAddTopic('/topic/goss.gridappsd.IEEE_2030_5_proxy.output')">Proxy Status</button>
+                <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
                         onclick="quickAddTopic('/topic/goss.gridappsd.simulation.output.>')">Simulation Output</button>
                 <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
                         onclick="quickAddTopic('/topic/goss.gridappsd.simulation.input.>')">Simulation Input</button>
                 <button class="btn secondary" style="padding: 4px 8px; font-size: 10px;"
                         onclick="quickAddTopic('/topic/goss.gridappsd.>')">/topic/goss.gridappsd.></button>
+            </div>
+        </div>
+
+        <!-- Dynamic Data Extractor Panel -->
+        <div class="panel" id="extractorPanel" style="margin-bottom: 20px;">
+            <div class="panel-header collapsible" onclick="togglePanel('extractorPanel')">
+                <span class="panel-title"><span class="collapse-icon">&#9660;</span> Dynamic Data Extractors</span>
+                <button class="btn secondary" onclick="event.stopPropagation(); showExtractorForm()">+ Add Extractor</button>
+            </div>
+            <div class="panel-content" id="extractorPanel-content">
+                <!-- Extractor form (hidden by default) -->
+                <div id="extractorFormContainer" style="display: none;">
+                    <div class="extractor-form">
+                        <div style="margin-bottom: 10px;">
+                            <span style="font-size: 11px; color: #888;">Presets: </span>
+                            <div class="preset-btns">
+                                <button class="btn secondary preset-btn" onclick="loadPreset('ieee2030_5_devices')">IEEE 2030.5 Devices</button>
+                                <button class="btn secondary preset-btn" onclick="loadPreset('proxy_connections')">Proxy Connections (Table)</button>
+                                <button class="btn secondary preset-btn" onclick="loadPreset('proxy_connected_count')">Connected Count (Gauge)</button>
+                                <button class="btn secondary preset-btn" onclick="loadPreset('simulation_output')">Simulation Output</button>
+                                <button class="btn secondary preset-btn" onclick="loadPreset('custom')">Custom</button>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <label>Name:</label>
+                            <input type="text" id="extractorName" placeholder="e.g., Device Power">
+                        </div>
+                        <div class="form-row">
+                            <label>Topic Filter:</label>
+                            <input type="text" id="extractorTopic" placeholder="e.g., /topic/goss.gridappsd.IEEE_2030_5 (regex)">
+                        </div>
+                        <div class="form-row">
+                            <label>Series Key:</label>
+                            <input type="text" id="extractorSeriesKey" placeholder="jq expression for series name, e.g., .name or keys[]">
+                        </div>
+                        <div class="form-row">
+                            <label>X Value (Time):</label>
+                            <input type="text" id="extractorXValue" placeholder="jq expression for X value, e.g., .timeStamp or $now">
+                        </div>
+                        <div class="form-row">
+                            <label>Y Value:</label>
+                            <input type="text" id="extractorYValue" placeholder="jq expression for Y value, e.g., .value">
+                        </div>
+                        <div class="form-row">
+                            <label>Iterator:</label>
+                            <input type="text" id="extractorIterator" placeholder="jq expression to iterate over, e.g., to_entries[] or . (for single)">
+                        </div>
+                        <div class="form-row">
+                            <label>Display Type:</label>
+                            <select id="extractorChartType">
+                                <option value="line">Line Chart</option>
+                                <option value="scatter">Scatter Plot</option>
+                                <option value="bar">Bar Chart</option>
+                                <option value="table">Data Table</option>
+                                <option value="value">Single Value Display</option>
+                                <option value="gauge">Gauge (count)</option>
+                            </select>
+                        </div>
+                        <div class="form-row" style="flex-direction: row; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="extractorSnapshotMode" style="width: auto;">
+                            <label for="extractorSnapshotMode" style="min-width: auto;">Snapshot Mode</label>
+                            <span style="font-size: 11px; color: #888;">(Replace data each message - use for status displays)</span>
+                        </div>
+                        <div class="jq-help">
+                            <strong>jq-lite syntax:</strong><br>
+                            <code>.field</code> - access field |
+                            <code>.field.subfield</code> - nested access |
+                            <code>keys[]</code> - iterate keys |
+                            <code>to_entries[]</code> - iterate {key, value} pairs |
+                            <code>.[].field</code> - map over array |
+                            <code>$now</code> - current wallclock time |
+                            <code>$stompTs</code> - STOMP header timestamp
+                        </div>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn" onclick="saveExtractor()">Save Extractor</button>
+                            <button class="btn secondary" onclick="hideExtractorForm()">Cancel</button>
+                            <button class="btn secondary" onclick="testExtractor()">Test on Last Message</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- List of configured extractors -->
+                <div id="extractorList" class="extractor-list">
+                    <span style="color: #888; font-size: 12px;">No extractors configured. Add one to start plotting custom data.</span>
+                </div>
+
+                <!-- Dynamic charts will be rendered here -->
+                <div id="dynamicChartsContainer" class="dynamic-charts-grid" style="margin-top: 15px;">
+                </div>
             </div>
         </div>
 
@@ -606,6 +922,954 @@
         let diffHistory = [];
         let deviceStatus = {};  // { deviceName: { value, timestamp, mRID } } - last known status per device
 
+        // ========================================
+        // Dynamic Data Extractor System
+        // ========================================
+
+        // Configured extractors
+        let extractors = [];  // Array of extractor configs
+        let extractorData = {};  // { extractorId: { seriesName: [{ x, y }] } }
+        let dynamicCharts = {};  // { extractorId: Chart instance }
+        let editingExtractorId = null;
+
+        // Preset configurations
+        const extractorPresets = {
+            'ieee2030_5_devices': {
+                name: 'IEEE 2030.5 Device Values',
+                topicFilter: 'IEEE_2030_5\\.output',
+                iterator: 'to_entries[] | select(.key != "_metadata")',
+                seriesKey: '.value.name // .key',
+                xValue: '.value.timeStamp | . * 1000 | todate',
+                yValue: '.value.value',
+                chartType: 'line',
+                snapshotMode: false
+            },
+            'proxy_connections': {
+                name: 'Proxy Client Connections',
+                topicFilter: 'IEEE_2030_5_proxy\\.output',
+                iterator: '.connections | to_entries[]',
+                seriesKey: '.value.lfdi[0:16]',
+                xValue: '$stompTs',
+                yValue: '(.value.disconnect_time == null) | if . then 1 else 0 end',
+                chartType: 'table',
+                snapshotMode: true  // Replace data each message (status snapshot)
+            },
+            'proxy_connected_count': {
+                name: 'Connected Clients',
+                topicFilter: 'IEEE_2030_5_proxy\\.output',
+                iterator: '.connections | to_entries[]',
+                seriesKey: '.value.lfdi[0:16]',
+                xValue: '$stompTs',
+                yValue: '(.value.disconnect_time == null) | if . then 1 else 0 end',
+                chartType: 'gauge',
+                snapshotMode: true  // Replace data each message (status snapshot)
+            },
+            'simulation_output': {
+                name: 'Simulation Output',
+                topicFilter: 'simulation\\.output',
+                iterator: '.message.measurements | to_entries[]',
+                seriesKey: '.key[0:20]',
+                xValue: '$stompTs',
+                yValue: '.value.magnitude // .value',
+                chartType: 'line',
+                snapshotMode: false
+            },
+            'custom': {
+                name: '',
+                topicFilter: '',
+                iterator: '.',
+                seriesKey: '"value"',
+                xValue: '$stompTs',
+                yValue: '.value',
+                chartType: 'line',
+                snapshotMode: false
+            }
+        };
+
+        /**
+         * jq-lite: A minimal jq-like expression evaluator for JavaScript
+         * Supports: .field, .field.subfield, .[index], keys, to_entries, select(), //, |, special vars
+         */
+        class JqLite {
+            constructor(expr) {
+                this.expr = expr.trim();
+            }
+
+            /**
+             * Evaluate the expression against data with context variables
+             * @param {*} data - The JSON data to query
+             * @param {Object} ctx - Context variables like $now, $stompTs
+             * @returns {*} - The result (may be single value or array)
+             */
+            evaluate(data, ctx = {}) {
+                try {
+                    return this._evalPipeline(this.expr, data, ctx);
+                } catch (e) {
+                    console.debug('jq-lite eval error:', e.message, 'expr:', this.expr);
+                    return undefined;
+                }
+            }
+
+            _evalPipeline(expr, data, ctx) {
+                // Split by pipe, respecting parentheses
+                const parts = this._splitPipe(expr);
+                let result = data;
+
+                for (const part of parts) {
+                    result = this._evalExpr(part.trim(), result, ctx);
+                    if (result === undefined) return undefined;
+                }
+
+                return result;
+            }
+
+            _splitPipe(expr) {
+                const parts = [];
+                let current = '';
+                let depth = 0;
+                let inString = false;
+                let stringChar = '';
+
+                for (let i = 0; i < expr.length; i++) {
+                    const ch = expr[i];
+
+                    if (!inString && (ch === '"' || ch === "'")) {
+                        inString = true;
+                        stringChar = ch;
+                    } else if (inString && ch === stringChar && expr[i-1] !== '\\') {
+                        inString = false;
+                    }
+
+                    if (!inString) {
+                        if (ch === '(' || ch === '[' || ch === '{') depth++;
+                        else if (ch === ')' || ch === ']' || ch === '}') depth--;
+                        else if (ch === '|' && depth === 0) {
+                            parts.push(current);
+                            current = '';
+                            continue;
+                        }
+                    }
+
+                    current += ch;
+                }
+
+                if (current.trim()) parts.push(current);
+                return parts;
+            }
+
+            _evalExpr(expr, data, ctx) {
+                expr = expr.trim();
+
+                // Handle // (alternative operator)
+                if (expr.includes(' // ')) {
+                    const [left, right] = expr.split(' // ', 2);
+                    const leftVal = this._evalExpr(left.trim(), data, ctx);
+                    if (leftVal !== undefined && leftVal !== null) return leftVal;
+                    return this._evalExpr(right.trim(), data, ctx);
+                }
+
+                // Handle select()
+                const selectMatch = expr.match(/^select\((.+)\)$/);
+                if (selectMatch) {
+                    const condition = this._evalExpr(selectMatch[1], data, ctx);
+                    return condition ? data : undefined;
+                }
+
+                // Handle if-then-else
+                const ifMatch = expr.match(/^if\s+(.+?)\s+then\s+(.+?)\s+else\s+(.+?)\s+end$/);
+                if (ifMatch) {
+                    const cond = this._evalExpr(ifMatch[1], data, ctx);
+                    return cond ? this._evalExpr(ifMatch[2], data, ctx) : this._evalExpr(ifMatch[3], data, ctx);
+                }
+
+                // Handle parentheses FIRST (before comparisons)
+                if (expr.startsWith('(') && expr.endsWith(')')) {
+                    return this._evalExpr(expr.slice(1, -1), data, ctx);
+                }
+
+                // Handle comparison operators
+                if (expr.includes(' == ')) {
+                    const [left, right] = expr.split(' == ', 2);
+                    return this._evalExpr(left.trim(), data, ctx) === this._evalExpr(right.trim(), data, ctx);
+                }
+                if (expr.includes(' != ')) {
+                    const [left, right] = expr.split(' != ', 2);
+                    return this._evalExpr(left.trim(), data, ctx) !== this._evalExpr(right.trim(), data, ctx);
+                }
+
+                // Handle special variables
+                if (expr === '$now') return ctx.now || new Date();
+                if (expr === '$stompTs') return ctx.stompTs || new Date();
+                if (expr === 'null') return null;
+
+                // Handle string literals
+                if ((expr.startsWith('"') && expr.endsWith('"')) ||
+                    (expr.startsWith("'") && expr.endsWith("'"))) {
+                    return expr.slice(1, -1);
+                }
+
+                // Handle numeric literals
+                if (/^-?\d+(\.\d+)?$/.test(expr)) {
+                    return parseFloat(expr);
+                }
+
+                // Handle .field access chain
+                if (expr.startsWith('.')) {
+                    return this._evalDotAccess(expr.slice(1), data, ctx);
+                }
+
+                // Handle keys
+                if (expr === 'keys' || expr === 'keys[]') {
+                    if (typeof data !== 'object' || data === null) return [];
+                    const k = Object.keys(data);
+                    return expr.endsWith('[]') ? k : k;
+                }
+
+                // Handle to_entries
+                if (expr === 'to_entries' || expr === 'to_entries[]') {
+                    if (typeof data !== 'object' || data === null) return [];
+                    const entries = Object.entries(data).map(([k, v]) => ({ key: k, value: v }));
+                    return expr.endsWith('[]') ? entries : entries;
+                }
+
+                // Handle length
+                if (expr === 'length') {
+                    if (Array.isArray(data)) return data.length;
+                    if (typeof data === 'object' && data !== null) return Object.keys(data).length;
+                    if (typeof data === 'string') return data.length;
+                    return 0;
+                }
+
+                // Handle todate (epoch seconds to date)
+                if (expr === 'todate') {
+                    if (typeof data === 'number') {
+                        return new Date(data);
+                    }
+                    return data;
+                }
+
+                // Handle array index [n]
+                const indexMatch = expr.match(/^\[(\d+)\]$/);
+                if (indexMatch) {
+                    const idx = parseInt(indexMatch[1]);
+                    return Array.isArray(data) ? data[idx] : undefined;
+                }
+
+                // Handle string slice [start:end]
+                const sliceMatch = expr.match(/^\[(\d*):(\d*)\]$/);
+                if (sliceMatch) {
+                    const start = sliceMatch[1] ? parseInt(sliceMatch[1]) : 0;
+                    const end = sliceMatch[2] ? parseInt(sliceMatch[2]) : undefined;
+                    if (typeof data === 'string' || Array.isArray(data)) {
+                        return data.slice(start, end);
+                    }
+                    return data;
+                }
+
+                // Handle .[] (iterate array)
+                if (expr === '.[]') {
+                    if (Array.isArray(data)) return data;
+                    if (typeof data === 'object' && data !== null) return Object.values(data);
+                    return [data];
+                }
+
+                // Handle . (identity)
+                if (expr === '.') return data;
+
+                // Arithmetic: * for multiplication
+                if (expr.includes(' * ')) {
+                    const [left, right] = expr.split(' * ', 2);
+                    const l = this._evalExpr(left.trim(), data, ctx);
+                    const r = this._evalExpr(right.trim(), data, ctx);
+                    return (typeof l === 'number' && typeof r === 'number') ? l * r : undefined;
+                }
+
+                return undefined;
+            }
+
+            _evalDotAccess(path, data, ctx) {
+                if (!path) return data;
+
+                // Handle array iteration: [].field
+                if (path.startsWith('[].')) {
+                    const rest = path.slice(3);
+                    if (Array.isArray(data)) {
+                        return data.map(item => this._evalDotAccess(rest, item, ctx));
+                    }
+                    if (typeof data === 'object' && data !== null) {
+                        return Object.values(data).map(item => this._evalDotAccess(rest, item, ctx));
+                    }
+                    return undefined;
+                }
+
+                // Handle slice like [0:16]
+                const sliceMatch = path.match(/^\[(\d*):(\d*)\](.*)$/);
+                if (sliceMatch) {
+                    const start = sliceMatch[1] ? parseInt(sliceMatch[1]) : 0;
+                    const end = sliceMatch[2] ? parseInt(sliceMatch[2]) : undefined;
+                    const rest = sliceMatch[3];
+                    if (typeof data === 'string' || Array.isArray(data)) {
+                        const sliced = data.slice(start, end);
+                        return rest ? this._evalDotAccess(rest.replace(/^\./, ''), sliced, ctx) : sliced;
+                    }
+                    return data;
+                }
+
+                // Handle field.subfield
+                const dotPos = path.indexOf('.');
+                const bracketPos = path.indexOf('[');
+
+                let field, rest;
+
+                if (dotPos === -1 && bracketPos === -1) {
+                    field = path;
+                    rest = '';
+                } else if (bracketPos !== -1 && (dotPos === -1 || bracketPos < dotPos)) {
+                    field = path.slice(0, bracketPos);
+                    rest = path.slice(bracketPos);
+                } else {
+                    field = path.slice(0, dotPos);
+                    rest = path.slice(dotPos + 1);
+                }
+
+                if (!field) {
+                    return this._evalDotAccess(rest, data, ctx);
+                }
+
+                if (typeof data !== 'object' || data === null) return undefined;
+
+                const value = data[field];
+                if (rest) {
+                    return this._evalDotAccess(rest, value, ctx);
+                }
+                return value;
+            }
+        }
+
+        /**
+         * Evaluate a jq-lite expression and handle iteration
+         */
+        function jqEval(expr, data, ctx = {}) {
+            const jq = new JqLite(expr);
+            return jq.evaluate(data, ctx);
+        }
+
+        /**
+         * Process a message through an extractor
+         */
+        function processMessageWithExtractor(extractor, message, stompTs) {
+            const ctx = {
+                now: new Date(),
+                stompTs: stompTs || new Date()
+            };
+
+            try {
+                // Check topic filter
+                if (extractor.topicFilter) {
+                    const topicRegex = new RegExp(extractor.topicFilter);
+                    if (!topicRegex.test(message.topic)) {
+                        // Debug: log first topic mismatch per extractor
+                        if (!extractor._topicMismatchLog) {
+                            console.debug('Extractor', extractor.name, 'topic filter', extractor.topicFilter, 'did not match:', message.topic);
+                            extractor._topicMismatchLog = true;
+                        }
+                        return [];
+                    }
+                }
+
+                const body = message.body;
+                const results = [];
+
+                // Get items to iterate over
+                let items = jqEval(extractor.iterator, body, ctx);
+
+                // Handle single item vs array
+                if (!Array.isArray(items)) {
+                    items = items !== undefined ? [items] : [];
+                }
+
+                for (const item of items) {
+                    // Skip undefined items (filtered out by select)
+                    if (item === undefined) continue;
+
+                    const seriesKey = jqEval(extractor.seriesKey, item, ctx);
+                    const xValue = jqEval(extractor.xValue, item, ctx);
+                    const yValue = jqEval(extractor.yValue, item, ctx);
+
+                    if (seriesKey !== undefined && yValue !== undefined) {
+                        results.push({
+                            series: String(seriesKey),
+                            x: xValue instanceof Date ? xValue : (typeof xValue === 'number' ? new Date(xValue) : new Date()),
+                            y: typeof yValue === 'number' ? yValue : parseFloat(yValue) || 0
+                        });
+                    }
+                }
+
+                return results;
+            } catch (e) {
+                console.error('Extractor error:', e, 'extractor:', extractor.name);
+                return [];
+            }
+        }
+
+        // Show extractor form
+        function showExtractorForm() {
+            document.getElementById('extractorFormContainer').style.display = 'block';
+            editingExtractorId = null;
+            clearExtractorForm();
+        }
+
+        function hideExtractorForm() {
+            document.getElementById('extractorFormContainer').style.display = 'none';
+            editingExtractorId = null;
+        }
+
+        function clearExtractorForm() {
+            document.getElementById('extractorName').value = '';
+            document.getElementById('extractorTopic').value = '';
+            document.getElementById('extractorSeriesKey').value = '';
+            document.getElementById('extractorXValue').value = '$stompTs';
+            document.getElementById('extractorYValue').value = '';
+            document.getElementById('extractorIterator').value = '.';
+            document.getElementById('extractorChartType').value = 'line';
+            document.getElementById('extractorSnapshotMode').checked = false;
+        }
+
+        function loadPreset(presetName) {
+            const preset = extractorPresets[presetName];
+            if (!preset) return;
+
+            document.getElementById('extractorName').value = preset.name;
+            document.getElementById('extractorTopic').value = preset.topicFilter;
+            document.getElementById('extractorSeriesKey').value = preset.seriesKey;
+            document.getElementById('extractorXValue').value = preset.xValue;
+            document.getElementById('extractorYValue').value = preset.yValue;
+            document.getElementById('extractorIterator').value = preset.iterator;
+            document.getElementById('extractorChartType').value = preset.chartType;
+            document.getElementById('extractorSnapshotMode').checked = preset.snapshotMode || false;
+        }
+
+        function saveExtractor() {
+            const config = {
+                id: editingExtractorId || 'ext_' + Date.now(),
+                name: document.getElementById('extractorName').value || 'Unnamed Extractor',
+                topicFilter: document.getElementById('extractorTopic').value,
+                seriesKey: document.getElementById('extractorSeriesKey').value || '.key',
+                xValue: document.getElementById('extractorXValue').value || '$stompTs',
+                yValue: document.getElementById('extractorYValue').value || '.value',
+                iterator: document.getElementById('extractorIterator').value || '.',
+                chartType: document.getElementById('extractorChartType').value || 'line',
+                snapshotMode: document.getElementById('extractorSnapshotMode').checked,
+                enabled: true,
+                dataCount: 0
+            };
+
+            if (editingExtractorId) {
+                // Update existing
+                const idx = extractors.findIndex(e => e.id === editingExtractorId);
+                if (idx >= 0) extractors[idx] = config;
+            } else {
+                // Add new
+                extractors.push(config);
+            }
+
+            // Initialize data storage for this extractor
+            extractorData[config.id] = {};
+
+            hideExtractorForm();
+            updateExtractorList();
+            createDynamicChart(config);
+            saveExtractorsToStorage();
+        }
+
+        function testExtractor() {
+            // Find last message that matches topic filter
+            const topicFilter = document.getElementById('extractorTopic').value;
+            const regex = topicFilter ? new RegExp(topicFilter) : null;
+
+            const testMsg = messages.slice().reverse().find(m => !regex || regex.test(m.topic));
+
+            if (!testMsg) {
+                alert('No matching messages found. Connect and receive some messages first.');
+                return;
+            }
+
+            const testConfig = {
+                name: 'Test',
+                topicFilter: topicFilter,
+                seriesKey: document.getElementById('extractorSeriesKey').value || '.key',
+                xValue: document.getElementById('extractorXValue').value || '$stompTs',
+                yValue: document.getElementById('extractorYValue').value || '.value',
+                iterator: document.getElementById('extractorIterator').value || '.'
+            };
+
+            const results = processMessageWithExtractor(testConfig, testMsg, testMsg.timestamp);
+
+            // Also log to console for debugging
+            console.log('Test extractor - Message body:', testMsg.body);
+            console.log('Test extractor - Results:', results);
+
+            if (results.length === 0) {
+                // Try to show intermediate results for debugging
+                const ctx = { now: new Date(), stompTs: testMsg.timestamp };
+                let debugInfo = 'Iterator result: ';
+                try {
+                    const items = jqEval(testConfig.iterator, testMsg.body, ctx);
+                    debugInfo += JSON.stringify(items, null, 2).slice(0, 300);
+                } catch (e) {
+                    debugInfo += 'Error: ' + e.message;
+                }
+
+                alert('No data extracted. Check your expressions.\n\n' + debugInfo + '\n\nMessage body:\n' +
+                      JSON.stringify(testMsg.body, null, 2).slice(0, 400));
+            } else {
+                alert('Extracted ' + results.length + ' data points:\n\n' +
+                      results.slice(0, 5).map(r =>
+                          `Series: ${r.series}, X: ${r.x.toISOString()}, Y: ${r.y}`
+                      ).join('\n') +
+                      (results.length > 5 ? '\n... and ' + (results.length - 5) + ' more' : ''));
+            }
+        }
+
+        function updateExtractorList() {
+            const container = document.getElementById('extractorList');
+
+            if (extractors.length === 0) {
+                container.innerHTML = '<span style="color: #888; font-size: 12px;">No extractors configured. Add one to start plotting custom data.</span>';
+                return;
+            }
+
+            container.innerHTML = extractors.map(ext => `
+                <div class="extractor-item ${ext.enabled ? '' : 'disabled'}">
+                    <div class="extractor-header">
+                        <span class="extractor-name">${escapeHtml(ext.name)}</span>
+                        <div class="extractor-controls">
+                            <button onclick="toggleExtractor('${ext.id}')" title="${ext.enabled ? 'Disable' : 'Enable'}">${ext.enabled ? '⏸' : '▶'}</button>
+                            <button onclick="editExtractor('${ext.id}')" title="Edit">✏️</button>
+                            <button onclick="deleteExtractor('${ext.id}')" title="Delete" style="color: #e94560;">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="extractor-details">
+                        Topic: <code>${escapeHtml(ext.topicFilter) || '(all)'}</code><br>
+                        Iterator: <code>${escapeHtml(ext.iterator)}</code><br>
+                        Y: <code>${escapeHtml(ext.yValue)}</code>
+                    </div>
+                    <div class="extractor-stats">
+                        Points collected: ${ext.dataCount || 0}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleExtractor(id) {
+            const ext = extractors.find(e => e.id === id);
+            if (ext) {
+                ext.enabled = !ext.enabled;
+                updateExtractorList();
+                saveExtractorsToStorage();
+            }
+        }
+
+        function editExtractor(id) {
+            const ext = extractors.find(e => e.id === id);
+            if (!ext) return;
+
+            editingExtractorId = id;
+            document.getElementById('extractorName').value = ext.name;
+            document.getElementById('extractorTopic').value = ext.topicFilter;
+            document.getElementById('extractorSeriesKey').value = ext.seriesKey;
+            document.getElementById('extractorXValue').value = ext.xValue;
+            document.getElementById('extractorYValue').value = ext.yValue;
+            document.getElementById('extractorIterator').value = ext.iterator;
+            document.getElementById('extractorChartType').value = ext.chartType;
+            document.getElementById('extractorSnapshotMode').checked = ext.snapshotMode || false;
+            document.getElementById('extractorFormContainer').style.display = 'block';
+        }
+
+        function deleteExtractor(id) {
+            if (!confirm('Delete this extractor?')) return;
+
+            extractors = extractors.filter(e => e.id !== id);
+            delete extractorData[id];
+
+            // Remove chart
+            if (dynamicCharts[id]) {
+                dynamicCharts[id].destroy();
+                delete dynamicCharts[id];
+            }
+
+            const chartEl = document.getElementById('chart_' + id);
+            if (chartEl) chartEl.parentElement.remove();
+
+            updateExtractorList();
+            saveExtractorsToStorage();
+        }
+
+        function createDynamicChart(extractor) {
+            const container = document.getElementById('dynamicChartsContainer');
+            const displayType = extractor.chartType || 'line';
+
+            // Remove existing panel if present
+            let existingPanel = document.getElementById('chartPanel_' + extractor.id);
+            if (existingPanel) {
+                existingPanel.remove();
+            }
+            if (dynamicCharts[extractor.id]) {
+                dynamicCharts[extractor.id].destroy();
+                delete dynamicCharts[extractor.id];
+            }
+
+            // Create panel
+            const chartPanel = document.createElement('div');
+            chartPanel.id = 'chartPanel_' + extractor.id;
+            chartPanel.className = 'dynamic-chart-panel';
+
+            // Different content based on display type
+            if (displayType === 'table') {
+                chartPanel.innerHTML = `
+                    <div class="dynamic-chart-header">
+                        <span class="dynamic-chart-title">${escapeHtml(extractor.name)}</span>
+                        <button class="btn secondary" style="padding: 2px 8px; font-size: 10px;"
+                                onclick="clearExtractorData('${extractor.id}')">Clear</button>
+                    </div>
+                    <div class="data-table-container" id="display_${extractor.id}">
+                        <table class="data-table">
+                            <thead><tr><th>Series</th><th>Value</th><th>Last Updated</th></tr></thead>
+                            <tbody id="tableBody_${extractor.id}">
+                                <tr><td colspan="3" style="text-align: center; color: #888;">No data yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (displayType === 'value') {
+                chartPanel.innerHTML = `
+                    <div class="dynamic-chart-header">
+                        <span class="dynamic-chart-title">${escapeHtml(extractor.name)}</span>
+                        <button class="btn secondary" style="padding: 2px 8px; font-size: 10px;"
+                                onclick="clearExtractorData('${extractor.id}')">Clear</button>
+                    </div>
+                    <div class="value-display" id="display_${extractor.id}">
+                        <div style="color: #888; font-size: 12px;">No data yet</div>
+                    </div>
+                `;
+            } else if (displayType === 'gauge') {
+                chartPanel.innerHTML = `
+                    <div class="dynamic-chart-header">
+                        <span class="dynamic-chart-title">${escapeHtml(extractor.name)}</span>
+                        <button class="btn secondary" style="padding: 2px 8px; font-size: 10px;"
+                                onclick="clearExtractorData('${extractor.id}')">Clear</button>
+                    </div>
+                    <div class="gauge-display" id="display_${extractor.id}">
+                        <span class="gauge-value">0</span>
+                        <span class="gauge-label">items</span>
+                    </div>
+                `;
+            } else {
+                // Chart types (line, scatter, bar)
+                chartPanel.innerHTML = `
+                    <div class="dynamic-chart-header">
+                        <span class="dynamic-chart-title">${escapeHtml(extractor.name)}</span>
+                        <button class="btn secondary" style="padding: 2px 8px; font-size: 10px;"
+                                onclick="clearExtractorData('${extractor.id}')">Clear</button>
+                    </div>
+                    <div class="chart-height-300">
+                        <canvas id="chart_${extractor.id}"></canvas>
+                    </div>
+                `;
+            }
+
+            container.appendChild(chartPanel);
+
+            // Create Chart.js instance only for chart types
+            if (['line', 'scatter', 'bar'].includes(displayType)) {
+                const ctx = document.getElementById('chart_' + extractor.id).getContext('2d');
+                const chartConfig = {
+                    type: displayType,
+                    data: { datasets: [] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'second',
+                                    displayFormats: { second: 'HH:mm:ss' }
+                                },
+                                title: { display: true, text: 'Time', color: '#888' },
+                                ticks: { color: '#888' },
+                                grid: { color: '#0f3460' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Value', color: '#888' },
+                                ticks: { color: '#888' },
+                                grid: { color: '#0f3460' }
+                            }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#ddd' } }
+                        }
+                    }
+                };
+                dynamicCharts[extractor.id] = new Chart(ctx, chartConfig);
+            }
+        }
+
+        function clearExtractorData(id) {
+            extractorData[id] = {};
+            const ext = extractors.find(e => e.id === id);
+            if (ext) ext.dataCount = 0;
+            updateDynamicDisplay(id);
+            updateExtractorList();
+        }
+
+        function updateDynamicDisplay(extractorId) {
+            const extractor = extractors.find(e => e.id === extractorId);
+            if (!extractor) return;
+
+            const displayType = extractor.chartType || 'line';
+            const data = extractorData[extractorId] || {};
+
+            if (displayType === 'table') {
+                updateTableDisplay(extractorId, data);
+            } else if (displayType === 'value') {
+                updateValueDisplay(extractorId, data);
+            } else if (displayType === 'gauge') {
+                updateGaugeDisplay(extractorId, data);
+            } else {
+                updateChartDisplay(extractorId, data);
+            }
+        }
+
+        function updateTableDisplay(extractorId, data) {
+            const tbody = document.getElementById('tableBody_' + extractorId);
+            if (!tbody) return;
+
+            const entries = Object.entries(data);
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #888;">No data yet</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = entries.map(([seriesName, points]) => {
+                const lastPoint = points[points.length - 1];
+                const timeStr = lastPoint ? lastPoint.x.toLocaleTimeString() : '-';
+                const value = lastPoint ? lastPoint.y : '-';
+                const isConnected = value === 1 || value === true;
+                const statusDot = typeof value === 'number' && (value === 0 || value === 1)
+                    ? `<span class="status-dot-${isConnected ? 'connected' : 'disconnected'}"></span>`
+                    : '';
+
+                return `
+                    <tr>
+                        <td title="${escapeHtml(seriesName)}">${escapeHtml(seriesName.substring(0, 30))}</td>
+                        <td>${statusDot}${typeof value === 'number' ? value.toLocaleString() : value}</td>
+                        <td>${timeStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateValueDisplay(extractorId, data) {
+            const container = document.getElementById('display_' + extractorId);
+            if (!container) return;
+
+            const entries = Object.entries(data);
+            if (entries.length === 0) {
+                container.innerHTML = '<div style="color: #888; font-size: 12px;">No data yet</div>';
+                return;
+            }
+
+            container.innerHTML = entries.map(([seriesName, points]) => {
+                const lastPoint = points[points.length - 1];
+                const timeStr = lastPoint ? lastPoint.x.toLocaleTimeString() : '-';
+                const value = lastPoint ? lastPoint.y : '-';
+
+                return `
+                    <div class="value-card">
+                        <div class="value-card-label" title="${escapeHtml(seriesName)}">${escapeHtml(seriesName.substring(0, 20))}</div>
+                        <div class="value-card-value">${typeof value === 'number' ? value.toLocaleString() : value}</div>
+                        <div class="value-card-time">${timeStr}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateGaugeDisplay(extractorId, data) {
+            const container = document.getElementById('display_' + extractorId);
+            if (!container) return;
+
+            const entries = Object.entries(data);
+            const count = entries.length;
+
+            // For gauge, also count "connected" items (value === 1)
+            let connectedCount = 0;
+            for (const [, points] of entries) {
+                if (points.length > 0 && points[points.length - 1].y === 1) {
+                    connectedCount++;
+                }
+            }
+
+            container.innerHTML = `
+                <span class="gauge-value">${connectedCount}</span>
+                <span class="gauge-label">/ ${count} connected</span>
+            `;
+        }
+
+        function updateChartDisplay(extractorId, data) {
+            const chart = dynamicCharts[extractorId];
+            if (!chart) return;
+
+            const colors = ['#4ecca3', '#e94560', '#f39c12', '#3498db', '#9b59b6', '#1abc9c', '#e74c3c', '#2ecc71'];
+            let colorIdx = 0;
+
+            const datasets = Object.entries(data).map(([seriesName, points]) => ({
+                label: seriesName,
+                data: points.map(p => ({ x: p.x, y: p.y })),
+                borderColor: colors[colorIdx++ % colors.length],
+                backgroundColor: colors[(colorIdx - 1) % colors.length] + '20',
+                fill: false,
+                tension: 0.1
+            }));
+
+            chart.data.datasets = datasets;
+            chart.update('none');
+        }
+
+        // Backwards compatibility alias
+        function updateDynamicChart(extractorId) {
+            updateDynamicDisplay(extractorId);
+        }
+
+        function processMessageWithAllExtractors(message, stompTs) {
+            // Debug: log extractor count on first message
+            if (messageCount === 1) {
+                console.log('Processing with', extractors.length, 'extractors');
+            }
+
+            for (const extractor of extractors) {
+                if (!extractor.enabled) continue;
+
+                const results = processMessageWithExtractor(extractor, message, stompTs);
+
+                // Debug: log first successful extraction per extractor
+                if (results.length > 0 && !extractor._firstLog) {
+                    console.log('Extractor', extractor.name, 'matched topic:', message.topic, 'results:', results.length);
+                    extractor._firstLog = true;
+                }
+
+                if (results.length > 0) {
+                    // Snapshot mode: replace all data with current message data
+                    if (extractor.snapshotMode) {
+                        extractorData[extractor.id] = {};
+                        for (const result of results) {
+                            extractorData[extractor.id][result.series] = [{ x: result.x, y: result.y }];
+                        }
+                    } else {
+                        // Normal mode: accumulate data over time
+                        if (!extractorData[extractor.id]) {
+                            extractorData[extractor.id] = {};
+                        }
+
+                        for (const result of results) {
+                            if (!extractorData[extractor.id][result.series]) {
+                                extractorData[extractor.id][result.series] = [];
+                            }
+                            extractorData[extractor.id][result.series].push({ x: result.x, y: result.y });
+
+                            // Limit data points per series
+                            if (extractorData[extractor.id][result.series].length > 100) {
+                                extractorData[extractor.id][result.series] =
+                                    extractorData[extractor.id][result.series].slice(-100);
+                            }
+                        }
+                    }
+
+                    extractor.dataCount = (extractor.dataCount || 0) + results.length;
+                    updateDynamicChart(extractor.id);
+                }
+            }
+
+            // Update extractor stats display periodically
+            if (messageCount % 10 === 0) {
+                updateExtractorList();
+            }
+        }
+
+        // Save/Load extractors to localStorage
+        function saveExtractorsToStorage() {
+            try {
+                localStorage.setItem('gridappsd_extractors', JSON.stringify(extractors));
+            } catch (e) {
+                console.warn('Could not save extractors to localStorage:', e);
+            }
+        }
+
+        function loadExtractorsFromStorage() {
+            try {
+                const saved = localStorage.getItem('gridappsd_extractors');
+                if (saved) {
+                    extractors = JSON.parse(saved);
+                    for (const ext of extractors) {
+                        ext.dataCount = 0;
+                        extractorData[ext.id] = {};
+                        createDynamicChart(ext);
+                    }
+                    updateExtractorList();
+                }
+            } catch (e) {
+                console.warn('Could not load extractors from localStorage:', e);
+            }
+        }
+
+        // Save/Load topics to localStorage
+        let savedTopics = [];  // Topics to subscribe to on connect
+
+        function saveTopicsToStorage() {
+            try {
+                localStorage.setItem('gridappsd_topics', JSON.stringify(savedTopics));
+            } catch (e) {
+                console.warn('Could not save topics to localStorage:', e);
+            }
+        }
+
+        function loadTopicsFromStorage() {
+            try {
+                const saved = localStorage.getItem('gridappsd_topics');
+                if (saved) {
+                    savedTopics = JSON.parse(saved);
+                    updateSavedTopicsList();
+                }
+            } catch (e) {
+                console.warn('Could not load topics from localStorage:', e);
+            }
+        }
+
+        function addSavedTopic(topic) {
+            if (!topic || savedTopics.includes(topic)) return;
+            savedTopics.push(topic);
+            saveTopicsToStorage();
+            updateSavedTopicsList();
+        }
+
+        function removeSavedTopic(topic) {
+            savedTopics = savedTopics.filter(t => t !== topic);
+            saveTopicsToStorage();
+            updateSavedTopicsList();
+        }
+
+        function updateSavedTopicsList() {
+            // Update topic list UI to show saved topics
+            updateTopicList();
+        }
+
+        // Subscribe to all saved topics (called after connection)
+        function subscribeToSavedTopics() {
+            for (const topic of savedTopics) {
+                subscribeToTopic(topic);
+            }
+        }
+
         // Toggle collapsible panel
         function togglePanel(panelId) {
             const panel = document.getElementById(panelId);
@@ -669,6 +1933,10 @@
             messages.push(testMsg);
             messageCount++;
             processDeviceDictMessage(testBody, testMsg.timestamp);
+
+            // Process through dynamic extractors
+            processMessageWithAllExtractors(testMsg, testMsg.timestamp);
+
             updateMessageDisplay();
             updateStats();
         }
@@ -846,6 +2114,9 @@
                 processDERControlMessage(msgData.body.input.message, msgData.timestamp);
             }
 
+            // Process through dynamic extractors
+            processMessageWithAllExtractors(msgData, msgData.timestamp);
+
             updateMessageDisplay();
             updateStats();
         }
@@ -889,9 +2160,12 @@
                 if (!startTime) startTime = Date.now();
                 updateConnectionStatus(true);
 
-                // Subscribe to default topic
+                // Subscribe to all saved topics
+                subscribeToSavedTopics();
+
+                // Also subscribe to the topic in the input field if not already saved
                 const topic = document.getElementById('subscribeTopic').value;
-                if (topic) {
+                if (topic && !savedTopics.includes(topic)) {
                     subscribeToTopic(topic);
                 }
             };
@@ -966,7 +2240,7 @@
             addConnectionLog('Disconnected');
         }
 
-        function subscribeToTopic(topic) {
+        function subscribeToTopic(topic, saveToStorage = true) {
             // SSE mode doesn't support per-topic subscriptions
             if (connectionMode === 'sse') {
                 addConnectionLog('SSE mode: Backend handles all subscriptions');
@@ -974,7 +2248,11 @@
             }
 
             if (!connected || !stompClient) {
-                alert('Not connected to GridAPPS-D');
+                // Not connected - just save the topic for later
+                if (saveToStorage) {
+                    addSavedTopic(topic);
+                    addConnectionLog(`Topic saved for subscription on connect: ${topic}`);
+                }
                 return;
             }
 
@@ -992,6 +2270,12 @@
             });
 
             subscriptions.push({ topic: topic, sub: subscription });
+
+            // Save to localStorage for persistence
+            if (saveToStorage) {
+                addSavedTopic(topic);
+            }
+
             updateSubscriptionList();
             updateTopicList();
             console.log('Subscribed to:', topic);
@@ -1077,6 +2361,9 @@
                     processDeviceDictMessage(body, timestamp);
                 }
             }
+
+            // Process through dynamic extractors
+            processMessageWithAllExtractors(msgData, timestamp);
 
             updateMessageDisplay();
             updateStats();
@@ -1440,6 +2727,13 @@
                 wallclockChart.data.datasets = [];
                 wallclockChart.update();
             }
+            // Clear dynamic extractor data
+            for (const ext of extractors) {
+                ext.dataCount = 0;
+                extractorData[ext.id] = {};
+                updateDynamicChart(ext.id);
+            }
+            updateExtractorList();
         }
 
         function escapeHtml(text) {
@@ -1550,24 +2844,43 @@
         function updateTopicList() {
             const container = document.getElementById('topicList');
 
-            if (subscriptions.length === 0) {
-                container.innerHTML = '<span style="color: #888; font-size: 12px;">No active subscriptions. Connect and subscribe to topics.</span>';
+            // Combine active subscriptions with saved topics (for display when disconnected)
+            const activeTopics = subscriptions.map(s => s.topic);
+            const allTopics = [...new Set([...activeTopics, ...savedTopics])];
+
+            if (allTopics.length === 0) {
+                container.innerHTML = '<span style="color: #888; font-size: 12px;">No topics configured. Add topics to subscribe on connect.</span>';
                 return;
             }
 
-            container.innerHTML = subscriptions.map((sub, idx) => {
-                const isPlotting = plottableTopics.has(sub.topic);
+            container.innerHTML = allTopics.map((topic) => {
+                const isActive = activeTopics.includes(topic);
+                const isSaved = savedTopics.includes(topic);
+                const subIndex = subscriptions.findIndex(s => s.topic === topic);
+                const isPlotting = plottableTopics.has(topic);
                 const plotIcon = isPlotting ? '📊' : '📈';
                 const plotTitle = isPlotting ? 'Disable plotting for this topic' : 'Enable plotting for this topic';
 
+                // Show different styling for saved-but-not-active topics
+                const statusClass = isActive ? '' : 'saved-only';
+                const statusIcon = isActive ? '🟢' : '⏸️';
+                const statusTitle = isActive ? 'Active' : 'Saved (will subscribe on connect)';
+
                 return `
-                    <div class="topic-tag ${isPlotting ? 'plotting' : ''}">
-                        <span class="topic-name" title="${escapeHtml(sub.topic)}">${escapeHtml(sub.topic)}</span>
-                        <button class="plot-toggle" onclick="toggleTopicPlotting('${escapeHtml(sub.topic)}')" title="${plotTitle}">${plotIcon}</button>
-                        <button class="remove-btn" onclick="removeSubscription(${idx})" title="Unsubscribe">&times;</button>
+                    <div class="topic-tag ${isPlotting ? 'plotting' : ''} ${statusClass}" title="${statusTitle}">
+                        <span style="font-size: 10px;">${statusIcon}</span>
+                        <span class="topic-name" title="${escapeHtml(topic)}">${escapeHtml(topic)}</span>
+                        ${isActive ? `<button class="plot-toggle" onclick="toggleTopicPlotting('${escapeHtml(topic)}')" title="${plotTitle}">${plotIcon}</button>` : ''}
+                        <button class="remove-btn" onclick="${isActive ? `removeSubscription(${subIndex})` : `removeSavedTopicOnly('${escapeHtml(topic)}')`}" title="Remove">&times;</button>
                     </div>
                 `;
             }).join('');
+        }
+
+        // Remove a saved topic without unsubscribing (for when not connected)
+        function removeSavedTopicOnly(topic) {
+            removeSavedTopic(topic);
+            updateTopicList();
         }
 
         // Toggle whether a topic's data should be plotted
@@ -1591,6 +2904,8 @@
                 }
                 // Remove from plottable set too
                 plottableTopics.delete(sub.topic);
+                // Remove from saved topics (persistence)
+                removeSavedTopic(sub.topic);
                 subscriptions.splice(index, 1);
                 updateTopicList();
                 updateSubscriptionList();
@@ -1604,11 +2919,23 @@
             await loadGridAPPSDConfig();
             await loadDeviceMetadata();
 
+            // Load saved topics from localStorage
+            loadTopicsFromStorage();
+
             // Initialize topic list display
             updateTopicList();
 
+            // Load saved extractors
+            loadExtractorsFromStorage();
+
             // Update stats periodically
             setInterval(updateStats, 1000);
+
+            // Auto-connect to GridAPPS-D
+            setTimeout(() => {
+                addConnectionLog('Auto-connecting to GridAPPS-D...');
+                connect();
+            }, 500);
         });
 
         // Cleanup on page unload

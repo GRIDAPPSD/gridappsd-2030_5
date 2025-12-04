@@ -49,6 +49,181 @@ import yaml
 from ieee_2030_5.certs import TLSRepository, lfdi_from_fingerprint, sfdi_from_lfdi
 from ieee_2030_5.config import ServerConfiguration
 
+# Global connection status tracker for publishing to GridAPPS-D
+_connection_status_lock = threading.Lock()
+_connection_status = {}  # {lfdi: {"client_address": (ip, port), "connect_time": datetime_str, "disconnect_time": None or datetime_str}}
+_stomp_publisher = None  # Will be set when proxy starts if GridAPPS-D is configured
+
+
+def _track_connection(lfdi: str, client_address: tuple, connected: bool):
+    """
+    Track client connection/disconnection for publishing to GridAPPS-D.
+
+    Args:
+        lfdi: Client identifier (LFDI or IP-based)
+        client_address: Tuple of (ip, port)
+        connected: True for connect, False for disconnect
+    """
+    from datetime import datetime
+
+    with _connection_status_lock:
+        now = datetime.now().isoformat()
+
+        if connected:
+            _connection_status[lfdi] = {
+                "client_address": f"{client_address[0]}:{client_address[1]}",
+                "connect_time": now,
+                "disconnect_time": None,
+                "lfdi": lfdi
+            }
+            _log.debug(f"Tracked connection for {lfdi[:16]}... from {client_address}")
+        else:
+            if lfdi in _connection_status:
+                _connection_status[lfdi]["disconnect_time"] = now
+                _log.debug(f"Tracked disconnection for {lfdi[:16]}...")
+
+    # Immediately publish connection status on connect/disconnect
+    if _stomp_publisher:
+        _stomp_publisher.publish_now()
+
+
+def _get_connection_status_snapshot() -> dict:
+    """
+    Get a snapshot of all connection statuses for publishing.
+
+    Returns:
+        Dictionary with connection status for all tracked clients
+    """
+    with _connection_status_lock:
+        return {
+            "timestamp": time.time(),
+            "connections": dict(_connection_status)
+        }
+
+
+class GridAPPSDConnectionPublisher:
+    """
+    Publishes proxy client connection status to GridAPPS-D message bus.
+
+    Publishes connection/disconnection events every minute to:
+    /topic/goss.gridappsd.IEEE_2030_5_proxy.output
+    """
+
+    PUBLISH_TOPIC = "/topic/goss.gridappsd.IEEE_2030_5_proxy.output"
+    PUBLISH_INTERVAL = 60  # seconds
+
+    def __init__(self, gridappsd_address: str = "localhost", gridappsd_port: int = 61613,
+                 username: str = "system", password: str = "manager"):
+        """
+        Initialize the publisher.
+
+        Args:
+            gridappsd_address: GridAPPS-D STOMP broker address
+            gridappsd_port: GridAPPS-D STOMP broker port
+            username: STOMP username
+            password: STOMP password
+        """
+        self.gridappsd_address = gridappsd_address
+        self.gridappsd_port = gridappsd_port
+        self.username = username
+        self.password = password
+        self._stomp_conn = None
+        self._running = False
+        self._publish_thread = None
+
+    def start(self):
+        """Start the publisher thread."""
+        if self._running:
+            return
+
+        self._running = True
+        self._publish_thread = threading.Thread(target=self._publish_loop, daemon=True)
+        self._publish_thread.start()
+        _log.info(f"GridAPPS-D connection publisher started, publishing to {self.PUBLISH_TOPIC} every {self.PUBLISH_INTERVAL}s")
+
+    def stop(self):
+        """Stop the publisher thread."""
+        self._running = False
+        if self._stomp_conn:
+            try:
+                self._stomp_conn.disconnect()
+            except Exception as e:
+                _log.debug(f"Error disconnecting STOMP: {e}")
+        _log.info("GridAPPS-D connection publisher stopped")
+
+    def _connect_stomp(self) -> bool:
+        """Connect to STOMP broker."""
+        try:
+            import stomp
+
+            self._stomp_conn = stomp.Connection([(self.gridappsd_address, self.gridappsd_port)])
+            self._stomp_conn.connect(self.username, self.password, wait=True)
+            _log.debug(f"Connected to GridAPPS-D STOMP at {self.gridappsd_address}:{self.gridappsd_port}")
+            return True
+        except ImportError:
+            _log.warning("stomp-py not installed, cannot publish to GridAPPS-D")
+            return False
+        except Exception as e:
+            _log.warning(f"Failed to connect to GridAPPS-D STOMP: {e}")
+            return False
+
+    def _publish_loop(self):
+        """Main publish loop - runs every minute."""
+        import json
+
+        while self._running:
+            try:
+                # Ensure connected
+                if not self._stomp_conn or not self._stomp_conn.is_connected():
+                    if not self._connect_stomp():
+                        time.sleep(self.PUBLISH_INTERVAL)
+                        continue
+
+                # Get connection status snapshot
+                status = _get_connection_status_snapshot()
+
+                # Publish to topic
+                message = json.dumps(status)
+                self._stomp_conn.send(
+                    destination=self.PUBLISH_TOPIC,
+                    body=message,
+                    content_type="application/json"
+                )
+                _log.debug(f"Published connection status: {len(status['connections'])} clients tracked")
+
+            except Exception as e:
+                _log.warning(f"Error publishing connection status: {e}")
+                self._stomp_conn = None  # Force reconnect on next iteration
+
+            # Wait for next publish interval
+            time.sleep(self.PUBLISH_INTERVAL)
+
+    def publish_now(self):
+        """Immediately publish connection status (called on new connections)."""
+        import json
+
+        try:
+            # Ensure connected
+            if not self._stomp_conn or not self._stomp_conn.is_connected():
+                if not self._connect_stomp():
+                    _log.warning("Cannot publish immediately - not connected to GridAPPS-D")
+                    return
+
+            # Get connection status snapshot
+            status = _get_connection_status_snapshot()
+
+            # Publish to topic
+            message = json.dumps(status)
+            self._stomp_conn.send(
+                destination=self.PUBLISH_TOPIC,
+                body=message,
+                content_type="application/json"
+            )
+            _log.info(f"Published connection status immediately: {len(status['connections'])} clients tracked")
+
+        except Exception as e:
+            _log.warning(f"Error publishing connection status immediately: {e}")
+
 
 # Create a custom formatter that includes file name and line number
 class DetailedFormatter(logging.Formatter):
@@ -521,6 +696,9 @@ class RequestForwarder(BaseHTTPRequestHandler):
             }
         _log.info(f"Registered connection for client {lfdi[:16]}... from {self.client_address}")
 
+        # Track for GridAPPS-D publishing
+        _track_connection(lfdi, self.client_address, connected=True)
+
     def _update_activity(self, lfdi: str):
         """
         Update last activity timestamp for this client connection.
@@ -554,6 +732,9 @@ class RequestForwarder(BaseHTTPRequestHandler):
                     _log.debug(f"Closed backend connection for {lfdi[:16]}...")
                 except Exception as e:
                     _log.warning(f"Error closing backend connection: {e}")
+
+        # Track disconnection for GridAPPS-D publishing
+        _track_connection(lfdi, self.client_address, connected=False)
 
     def handle(self):
         """
@@ -1664,7 +1845,9 @@ class ProxyServer(ThreadingHTTPServer):
 
 
 def start_proxy(
-    server_address: tuple[str, int], tls_repo: TLSRepository, proxy_target: tuple[str, int], config: ServerConfiguration
+    server_address: tuple[str, int], tls_repo: TLSRepository, proxy_target: tuple[str, int], config: ServerConfiguration,
+    gridappsd_address: str | None = None, gridappsd_port: int = 61613,
+    gridappsd_username: str = "system", gridappsd_password: str = "manager"
 ):
     """
     Start the proxy server with SSL/TLS configuration.
@@ -1679,6 +1862,10 @@ def start_proxy(
         tls_repo (TLSRepository): Certificate repository containing CA, server certs
         proxy_target (Tuple[str, int]): Backend server address (host, port)
         config (ServerConfiguration): Configuration including lfdi_mode setting
+        gridappsd_address (str | None): GridAPPS-D STOMP broker address for publishing connection status
+        gridappsd_port (int): GridAPPS-D STOMP broker port (default: 61613)
+        gridappsd_username (str): GridAPPS-D STOMP username (default: "system")
+        gridappsd_password (str): GridAPPS-D STOMP password (default: "manager")
 
     The function configures:
     - TLS server context requiring client certificates
@@ -1686,6 +1873,7 @@ def start_proxy(
     - Permissive cipher suites for compatibility
     - LFDI calculation method based on config.lfdi_mode
     - Graceful shutdown handling
+    - GridAPPS-D connection status publisher (if gridappsd_address is provided)
 
     LFDI Calculation Modes:
     - lfdi_mode_from_file: Uses SHA256 of combined certificate file content
@@ -1697,6 +1885,8 @@ def start_proxy(
     - Requires client certificates (CERT_REQUIRED)
     - Runs until KeyboardInterrupt or fatal error
     """
+    global _stomp_publisher
+
     _log.info(f"Serving proxy at {server_address} -> {proxy_target}")
     try:
         _log.debug(f"Creating ProxyServer instance at {server_address}")
@@ -1755,6 +1945,19 @@ def start_proxy(
         _log.debug("Wrapping server socket with SSL")
         httpd.socket = sslctx.wrap_socket(httpd.socket, server_side=True)
 
+        # Start GridAPPS-D connection status publisher if configured
+        if gridappsd_address:
+            _stomp_publisher = GridAPPSDConnectionPublisher(
+                gridappsd_address=gridappsd_address,
+                gridappsd_port=gridappsd_port,
+                username=gridappsd_username,
+                password=gridappsd_password
+            )
+            _stomp_publisher.start()
+            _log.info(f"GridAPPS-D connection publisher configured for {gridappsd_address}:{gridappsd_port}")
+        else:
+            _log.debug("GridAPPS-D connection publishing not configured")
+
         _log.info("Proxy server started successfully")
         _log.debug("Entering serve_forever() loop")
         httpd.serve_forever()
@@ -1764,6 +1967,10 @@ def start_proxy(
     except Exception as e:
         _log.error(f"Proxy server error: {e}", exc_info=True)
     finally:
+        # Stop GridAPPS-D publisher
+        if _stomp_publisher:
+            _stomp_publisher.stop()
+
         _log.debug("Closing server")
         httpd.server_close()
         _log.info("Proxy server shut down")
@@ -1942,11 +2149,36 @@ def _main():
         _log.debug(f"Proxy host tuple: {proxy_host}")
         _log.debug(f"Server host tuple: {server_host}")
 
+        # Get GridAPPS-D config from the gridappsd section if present
+        gridappsd_address = None
+        gridappsd_port = 61613
+        gridappsd_username = "system"
+        gridappsd_password = "manager"
+
+        if hasattr(config, 'gridappsd') and config.gridappsd:
+            gridappsd_cfg = config.gridappsd
+            # Handle both dict and GridappsdConfiguration object
+            if hasattr(gridappsd_cfg, 'address'):
+                gridappsd_address = gridappsd_cfg.address
+                gridappsd_port = gridappsd_cfg.port
+                gridappsd_username = gridappsd_cfg.username
+                gridappsd_password = gridappsd_cfg.password
+            else:
+                gridappsd_address = gridappsd_cfg.get('address', 'localhost')
+                gridappsd_port = gridappsd_cfg.get('port', 61613)
+                gridappsd_username = gridappsd_cfg.get('username', 'system')
+                gridappsd_password = gridappsd_cfg.get('password', 'manager')
+            _log.info(f"GridAPPS-D publishing enabled: {gridappsd_address}:{gridappsd_port}")
+
         start_proxy(
             server_address=(proxy_host[0], int(proxy_host[1])),
             tls_repo=tls_repo,
             proxy_target=(server_host[0], int(server_host[1])),
             config=config,
+            gridappsd_address=gridappsd_address,
+            gridappsd_port=gridappsd_port,
+            gridappsd_username=gridappsd_username,
+            gridappsd_password=gridappsd_password,
         )
 
     except Exception as e:
