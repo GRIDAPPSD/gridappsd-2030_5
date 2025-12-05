@@ -1248,7 +1248,13 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         """List all DERs."""
         start = int(request.args.get("s", 0))
         limit = int(request.args.get("l", 100))
-        ders = adpt.DERAdapter.fetch_all(m.DERList(), start=start, limit=limit)
+        # Get DERs from the adapter using the correct list URI
+        ders_list = adpt.DERAdapter.get_list(hrefs.RootURLs.DEFAULT_DER_ROOT)
+        # Create a DERList wrapper for template compatibility
+        ders = m.DERList()
+        ders.DER = ders_list[start:start+limit] if ders_list else []
+        ders.all = len(ders_list) if ders_list else 0
+        ders.results = len(ders.DER)
         return render_template("admin/der-list.html", ders=ders)
 
     @app.route("/admin/der/add", methods=["GET", "POST"])
@@ -1263,19 +1269,19 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             if current_program:
                 der.CurrentDERProgramLink = m.CurrentDERProgramLink(href=current_program)
 
-            # Add the DER
-            der = adpt.DERAdapter.add(der)
+            # Add the DER using append
+            adpt.DERAdapter.append(hrefs.RootURLs.DEFAULT_DER_ROOT, der)
 
             return redirect(url_for("admin_der_list"))
 
         # GET: Show form
         end_devices = adpt.EndDeviceAdapter.fetch_all(m.EndDeviceList())
-        programs = adpt.DERProgramAdapter.fetch_all(m.DERProgramList())
+        programs_list = adpt.DERProgramAdapter.get_list(hrefs.RootURLs.DEFAULT_DERP_ROOT)
         return render_template(
             "admin/der-form.html",
             der=None,
             end_devices=end_devices.EndDevice if end_devices.EndDevice else [],
-            programs=programs.DERProgram if programs.DERProgram else [],
+            programs=programs_list if programs_list else [],
             capability=None,
             settings=None
         )
@@ -1283,7 +1289,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
     @app.route("/admin/der/<int:der_id>")
     def admin_der_detail(der_id: int):
         """View DER details."""
-        der = adpt.DERAdapter.fetch(der_id)
+        der = adpt.DERAdapter.get(hrefs.RootURLs.DEFAULT_DER_ROOT, der_id)
         return render_template("admin/der-detail.html", der=der, der_id=der_id)
 
     @app.route("/admin/der/<int:der_id>/edit", methods=["GET", "POST"])
@@ -1291,7 +1297,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         """Edit an existing DER."""
         if request.method == "POST":
             # Get existing DER
-            der = adpt.DERAdapter.fetch(der_id)
+            der = adpt.DERAdapter.get(hrefs.RootURLs.DEFAULT_DER_ROOT, der_id)
 
             # Update current program if provided
             current_program = request.form.get("current_program")
@@ -1301,19 +1307,19 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                 der.CurrentDERProgramLink = None
 
             # Save the DER
-            adpt.DERAdapter.put(der_id, der)
+            adpt.DERAdapter.put(hrefs.RootURLs.DEFAULT_DER_ROOT, der_id, der)
 
             return redirect(url_for("admin_der_list"))
 
         # GET: Show form with existing data
-        der = adpt.DERAdapter.fetch(der_id)
+        der = adpt.DERAdapter.get(hrefs.RootURLs.DEFAULT_DER_ROOT, der_id)
         end_devices = adpt.EndDeviceAdapter.fetch_all(m.EndDeviceList())
-        programs = adpt.DERProgramAdapter.fetch_all(m.DERProgramList())
+        programs_list = adpt.DERProgramAdapter.get_list(hrefs.RootURLs.DEFAULT_DERP_ROOT)
         return render_template(
             "admin/der-form.html",
             der=der,
             end_devices=end_devices.EndDevice if end_devices.EndDevice else [],
-            programs=programs.DERProgram if programs.DERProgram else [],
+            programs=programs_list if programs_list else [],
             capability=None,
             settings=None
         )
@@ -1337,7 +1343,13 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         """List all DER Controls."""
         start = int(request.args.get("s", 0))
         limit = int(request.args.get("l", 100))
-        controls = adpt.DERControlAdapter.fetch_all(m.DERControlList(), start=start, limit=limit)
+        # Get DER Controls from the adapter using the correct list URI
+        controls_list = adpt.DERControlAdapter.get_list(hrefs.DEFAULT_CONTROL_ROOT)
+        # Create a DERControlList wrapper for template compatibility
+        controls = m.DERControlList()
+        controls.DERControl = controls_list[start:start+limit] if controls_list else []
+        controls.all = len(controls_list) if controls_list else 0
+        controls.results = len(controls.DERControl)
         return render_template("admin/controls-list.html", controls=controls)
 
     @app.route("/admin/controls/add", methods=["GET", "POST"])
@@ -1396,7 +1408,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                 control.DERControlBase.opModEnergize = op_mod_energize == "true"
 
             # Add the control
-            control = adpt.DERControlAdapter.add(control)
+            adpt.DERControlAdapter.append(hrefs.DEFAULT_CONTROL_ROOT, control)
 
             return redirect(url_for("admin_control_list"))
 
@@ -1408,7 +1420,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         """Edit an existing DER Control."""
         if request.method == "POST":
             # Get existing control
-            control = adpt.DERControlAdapter.fetch(control_id)
+            control = adpt.DERControlAdapter.get(hrefs.DEFAULT_CONTROL_ROOT, control_id)
 
             # Update fields
             control.description = request.form.get("description", control.description)
@@ -1438,12 +1450,12 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                 control.DERControlBase.setMaxVar = m.ReactivePower(multiplier=0, value=int(set_max_var))
 
             # Save
-            adpt.DERControlAdapter.put(control_id, control)
+            adpt.DERControlAdapter.put(hrefs.DEFAULT_CONTROL_ROOT, control_id, control)
 
             return redirect(url_for("admin_control_list"))
 
         # GET: Show form with existing data
-        control = adpt.DERControlAdapter.fetch(control_id)
+        control = adpt.DERControlAdapter.get(hrefs.DEFAULT_CONTROL_ROOT, control_id)
 
         # Convert timestamp to datetime string for form
         start_time = None
@@ -1469,7 +1481,13 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         """List all DER Curves."""
         start = int(request.args.get("s", 0))
         limit = int(request.args.get("l", 100))
-        curves = adpt.DERCurveAdapter.fetch_all(m.DERCurveList(), start=start, limit=limit)
+        # Get DER Curves from the adapter using the correct list URI
+        curves_list = adpt.DERCurveAdapter.get_list(hrefs.RootURLs.DEFAULT_CURVE_ROOT)
+        # Create a DERCurveList wrapper for template compatibility
+        curves = m.DERCurveList()
+        curves.DERCurve = curves_list[start:start+limit] if curves_list else []
+        curves.all = len(curves_list) if curves_list else 0
+        curves.results = len(curves.DERCurve)
         return render_template("admin/curves-list.html", curves=curves)
 
     @app.route("/admin/curves/add", methods=["GET", "POST"])
@@ -1526,7 +1544,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                 curve.yMultiplier = int(y_mult)
 
             # Add the curve
-            curve = adpt.DERCurveAdapter.add(curve)
+            adpt.DERCurveAdapter.append(hrefs.RootURLs.DEFAULT_CURVE_ROOT, curve)
 
             return redirect(url_for("admin_curve_list"))
 
@@ -1538,7 +1556,7 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
         """Edit an existing DER Curve."""
         if request.method == "POST":
             # Get existing curve
-            curve = adpt.DERCurveAdapter.fetch(curve_id)
+            curve = adpt.DERCurveAdapter.get(hrefs.RootURLs.DEFAULT_CURVE_ROOT, curve_id)
 
             # Update fields
             curve.description = request.form.get("description", curve.description)
@@ -1572,12 +1590,12 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
                 curve.rampDecTms = int(ramp_dec)
 
             # Save
-            adpt.DERCurveAdapter.put(curve_id, curve)
+            adpt.DERCurveAdapter.put(hrefs.RootURLs.DEFAULT_CURVE_ROOT, curve_id, curve)
 
             return redirect(url_for("admin_curve_list"))
 
         # GET: Show form with existing data
-        curve = adpt.DERCurveAdapter.fetch(curve_id)
+        curve = adpt.DERCurveAdapter.get(hrefs.RootURLs.DEFAULT_CURVE_ROOT, curve_id)
         return render_template("admin/curve-form.html", curve=curve)
 
     @app.route("/admin/curves/save", methods=["POST"])
