@@ -13,10 +13,23 @@ from .message_bus_monitor import (
     patch_gridappsd_adapter,
 )
 
+from .der_status_monitor import (
+    DERStatusMonitor,
+    DERStatusEvent,
+    get_der_status_monitor,
+    log_der_status_update,
+    log_der_operation,
+)
+
 __all__ = [
     "MessageBusMonitor",
     "MessageEvent",
     "get_message_monitor",
     "log_gridappsd_message",
     "patch_gridappsd_adapter",
+    "DERStatusMonitor",
+    "DERStatusEvent",
+    "get_der_status_monitor",
+    "log_der_status_update",
+    "log_der_operation",
 ]

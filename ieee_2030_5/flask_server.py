@@ -1725,13 +1725,8 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
 
     @app.route("/admin/message-bus")
     def admin_message_bus():
-        """GridAPPS-D message bus traffic monitoring dashboard (legacy)."""
-        return render_template("admin/message_bus.html", current_time=datetime.now().isoformat())
-
-    @app.route("/admin/message-bus-v2")
-    def admin_message_bus_v2():
         """GridAPPS-D message bus monitor with direct WebSocket connection and plotting."""
-        return render_template("admin/message_bus_v2.html", current_time=datetime.now().isoformat())
+        return render_template("admin/message_bus.html", current_time=datetime.now().isoformat())
 
     @app.route("/api/message-bus/events")
     def api_message_bus_events():
@@ -1938,6 +1933,131 @@ def __build_app__(config: ServerConfiguration, tlsrepo: TLSRepository) -> Flask:
             _log.error(f"Error getting GridAPPS-D config: {e}")
             return Response(
                 json.dumps({"error": str(e)}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    # DER Status Monitoring Routes
+    @app.route("/admin/der-status")
+    def admin_der_status():
+        """DER status monitoring dashboard showing client status updates."""
+        return render_template("admin/der_status.html", current_time=datetime.now().isoformat())
+
+    @app.route("/api/der-status/events")
+    def api_der_status_events():
+        """Get recent DER status update events."""
+        try:
+            from ieee_2030_5.monitoring import get_der_status_monitor
+
+            count = request.args.get("count", 100, type=int)
+            client_filter = request.args.get("client", None)
+            type_filter = request.args.get("type", None)
+            operation_filter = request.args.get("operation", None)  # GET, PUT, POST, READ, WRITE
+
+            monitor = get_der_status_monitor()
+
+            if client_filter or type_filter or operation_filter:
+                events = monitor.search_events(
+                    client_filter=client_filter,
+                    type_filter=type_filter,
+                    operation_filter=operation_filter,
+                    count=count,
+                )
+            else:
+                events = monitor.get_recent_events(count)
+
+            return Response(
+                json.dumps([e.to_dict() for e in events], indent=2, default=str),
+                mimetype="application/json",
+            )
+        except Exception as e:
+            _log.error(f"Error getting DER status events: {e}")
+            return Response(
+                json.dumps({"error": str(e), "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    @app.route("/api/der-status/stats")
+    def api_der_status_stats():
+        """Get DER status monitoring statistics."""
+        try:
+            from ieee_2030_5.monitoring import get_der_status_monitor
+
+            monitor = get_der_status_monitor()
+            stats = monitor.get_stats()
+            _log.debug(f"DER status stats: total={stats.get('total_operations')}, events={stats.get('event_count')}")
+            return Response(json.dumps(stats, indent=2, default=str), mimetype="application/json")
+        except Exception as e:
+            _log.error(f"Error getting DER status stats: {e}")
+            return Response(
+                json.dumps({"error": str(e), "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    @app.route("/api/der-status/latest")
+    def api_der_status_latest():
+        """Get the latest status for each client."""
+        try:
+            from ieee_2030_5.monitoring import get_der_status_monitor
+
+            monitor = get_der_status_monitor()
+            latest = monitor.get_latest_by_client()
+            return Response(json.dumps(latest, indent=2, default=str), mimetype="application/json")
+        except Exception as e:
+            _log.error(f"Error getting latest DER status: {e}")
+            return Response(
+                json.dumps({"error": str(e), "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    @app.route("/api/der-status/clear", methods=["POST"])
+    def api_der_status_clear():
+        """Clear DER status event history."""
+        try:
+            from ieee_2030_5.monitoring import get_der_status_monitor
+
+            monitor = get_der_status_monitor()
+            monitor.clear_events()
+            return Response(
+                json.dumps(
+                    {"success": True, "message": "DER status history cleared", "timestamp": datetime.now().isoformat()}
+                ),
+                mimetype="application/json",
+            )
+        except Exception as e:
+            _log.error(f"Error clearing DER status: {e}")
+            return Response(
+                json.dumps({"error": str(e), "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+                status=500,
+            )
+
+    @app.route("/api/der-status/toggle", methods=["POST"])
+    def api_der_status_toggle():
+        """Toggle DER status monitoring on/off."""
+        try:
+            from ieee_2030_5.monitoring import get_der_status_monitor
+
+            monitor = get_der_status_monitor()
+
+            if monitor.is_enabled():
+                monitor.disable()
+                status = "disabled"
+            else:
+                monitor.enable()
+                status = "enabled"
+
+            return Response(
+                json.dumps({"success": True, "status": status, "timestamp": datetime.now().isoformat()}),
+                mimetype="application/json",
+            )
+        except Exception as e:
+            _log.error(f"Error toggling DER status monitoring: {e}")
+            return Response(
+                json.dumps({"error": str(e), "timestamp": datetime.now().isoformat()}),
                 mimetype="application/json",
                 status=500,
             )

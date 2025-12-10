@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DER Status Monitor</title>
+    <style>
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .nav-header {
+            background: #444;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .nav-header a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-header a:hover {
+            text-decoration: underline;
+        }
+        .header {
+            background: linear-gradient(135deg, #2d664a 0%, #1a3322 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .controls {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .btn {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn:hover {
+            background: #357abd;
+        }
+        .btn.danger {
+            background: #e74c3c;
+        }
+        .btn.danger:hover {
+            background: #c0392b;
+        }
+        .btn.success {
+            background: #27ae60;
+        }
+        .btn.success:hover {
+            background: #219a52;
+        }
+        input[type="text"] {
+            background: #404040;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        select {
+            background: #404040;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .stats {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #27ae60;
+        }
+        .stat-value.reads { color: #3498db; }
+        .stat-value.writes { color: #e67e22; }
+        .stat-label {
+            font-size: 11px;
+            color: #ccc;
+            margin-top: 5px;
+        }
+        .columns-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .column {
+            background: #2d2d2d;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .column-header {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #444;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .column-header.reads {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+        .column-header.writes {
+            color: #e67e22;
+            border-bottom-color: #e67e22;
+        }
+        .event-container {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 8px;
+            height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .event {
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            border-left: 3px solid #27ae60;
+            background: rgba(39, 174, 96, 0.1);
+            border-radius: 3px;
+            word-wrap: break-word;
+        }
+        .event.GET {
+            border-left-color: #3498db;
+            background: rgba(52, 152, 219, 0.1);
+        }
+        .event.PUT, .event.POST {
+            border-left-color: #e67e22;
+            background: rgba(230, 126, 34, 0.1);
+        }
+        .event.DERStatus { border-left-color: #27ae60; }
+        .event.DERSettings { border-left-color: #3498db; }
+        .event.DERCapability { border-left-color: #9b59b6; }
+        .event.DERAvailability { border-left-color: #f39c12; }
+        .event.DefaultDERControl { border-left-color: #e74c3c; }
+        .event.DERControl { border-left-color: #e74c3c; }
+        .event.DERProgram { border-left-color: #1abc9c; }
+        .event.DERControlList { border-left-color: #1abc9c; }
+        .event-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .event-timestamp {
+            color: #888;
+        }
+        .event-client {
+            color: #f39c12;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .event-path {
+            color: #3498db;
+        }
+        .event-type {
+            font-weight: bold;
+        }
+        .event-type.DERStatus { color: #27ae60; }
+        .event-type.DERSettings { color: #3498db; }
+        .event-type.DERCapability { color: #9b59b6; }
+        .event-type.DERAvailability { color: #f39c12; }
+        .event-type.DefaultDERControl { color: #e74c3c; }
+        .event-type.DERControl { color: #e74c3c; }
+        .event-type.DERProgram { color: #1abc9c; }
+        .event-type.DERControlList { color: #1abc9c; }
+        .event-operation {
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+        .event-operation.GET {
+            background: #3498db;
+            color: white;
+        }
+        .event-operation.PUT, .event-operation.POST {
+            background: #e67e22;
+            color: white;
+        }
+        .event-data {
+            margin-top: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+        .event-data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 5px;
+        }
+        .data-item {
+            display: flex;
+            gap: 5px;
+        }
+        .data-key {
+            color: #9b59b6;
+        }
+        .data-value {
+            color: #2ecc71;
+        }
+        .event-full-content {
+            display: none;
+            margin-top: 8px;
+        }
+        .event-full-content.visible {
+            display: block;
+        }
+        .event-xml-label {
+            color: #888;
+            font-size: 9px;
+            margin: 8px 0 4px 0;
+        }
+        .event-xml-inline {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 9px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .event-xml {
+            margin-top: 5px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 9px;
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+        .event-xml.visible {
+            display: block;
+        }
+        .toggle-xml {
+            font-size: 9px;
+            padding: 2px 6px;
+            background: #555;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .toggle-xml:hover {
+            background: #666;
+        }
+        .pin-btn {
+            font-size: 9px;
+            padding: 2px 6px;
+            background: #555;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            border-radius: 3px;
+            margin-left: 3px;
+        }
+        .pin-btn:hover {
+            background: #666;
+        }
+        .pin-btn.pinned {
+            background: #e67e22;
+            color: white;
+        }
+        .event.pinned {
+            border: 2px solid #e67e22;
+            background: rgba(230, 126, 34, 0.15);
+        }
+        .event.pinned .event-xml {
+            display: block;
+            max-height: 400px;
+        }
+        .event.pinned .event-data {
+            max-height: none;
+        }
+        .event-data-full {
+            margin-top: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .pinned-indicator {
+            color: #e67e22;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+        .no-events {
+            text-align: center;
+            color: #888;
+            margin: 50px 0;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-indicator.enabled {
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.disabled {
+            background: #e74c3c;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .latest-container {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .client-card {
+            background: #2d2d2d;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .client-header {
+            font-size: 14px;
+            font-weight: bold;
+            color: #f39c12;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #444;
+        }
+        .client-paths {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+        }
+        .path-item {
+            background: #1e1e1e;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        .path-name {
+            color: #3498db;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+        .path-time {
+            color: #888;
+            font-size: 10px;
+            margin-bottom: 8px;
+        }
+        .path-data {
+            font-size: 10px;
+        }
+        .path-item.pinned {
+            border: 2px solid #e67e22;
+            background: rgba(230, 126, 34, 0.15);
+        }
+        .path-item .pin-btn {
+            margin-top: 8px;
+        }
+        .path-item .path-xml {
+            margin-top: 8px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 9px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        .path-item .path-xml.visible {
+            display: block;
+        }
+        .path-item.pinned .path-xml {
+            display: block;
+            max-height: 400px;
+        }
+        .path-item .path-full-content {
+            display: none;
+            margin-top: 8px;
+        }
+        .path-item .path-full-content.visible {
+            display: block;
+        }
+        .path-item .path-data-expanded {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 9px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+        }
+        .path-item .path-xml-label {
+            color: #888;
+            font-size: 9px;
+            margin-bottom: 4px;
+        }
+        .path-item .path-xml-inline {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 9px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .path-item .path-data-full {
+            margin-top: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .tab-section {
+            margin-top: 20px;
+        }
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #2d2d2d;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            font-size: 12px;
+        }
+        .tab.active {
+            background: #444;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/admin/">← Back to Admin Home</a>
+        </div>
+        <div class="header">
+            <h1>DER Status Monitor</h1>
+            <p>Real-time monitoring of client DER operations (GET reads / PUT-POST writes)</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <span class="status-indicator" id="monitorStatus"></span>
+                <span id="monitorText">Monitoring Enabled</span>
+            </div>
+
+            <div class="control-group">
+                <button class="btn success" id="toggleMonitoring" onclick="toggleMonitoring()">Pause</button>
+                <button class="btn" onclick="clearEvents()">Clear</button>
+                <button class="btn" onclick="exportEvents()">Export</button>
+                <button class="btn" onclick="refreshData()">Refresh</button>
+                <button class="btn" onclick="clearPins()" title="Unpin all pinned cards">Clear Pins (<span id="pinCount">0</span>)</button>
+            </div>
+
+            <div class="control-group">
+                <input type="text" id="clientFilter" placeholder="Filter by client LFDI..." onkeyup="applyFilters()">
+                <select id="typeFilter" onchange="applyFilters()">
+                    <option value="">All Types</option>
+                    <option value="DERStatus">DERStatus</option>
+                    <option value="DERSettings">DERSettings</option>
+                    <option value="DERCapability">DERCapability</option>
+                    <option value="DERAvailability">DERAvailability</option>
+                    <option value="DefaultDERControl">DefaultDERControl</option>
+                    <option value="DERControl">DERControl</option>
+                    <option value="DERProgram">DERProgram</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <button class="btn" onclick="toggleAutoRefresh()">Auto-refresh: <span id="autoRefreshStatus">ON</span></button>
+            </div>
+        </div>
+
+        <div class="stats" id="eventStats">
+            <div class="stat-item">
+                <div class="stat-value" id="totalOps">0</div>
+                <div class="stat-label">Total Operations</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value reads" id="totalReads">0</div>
+                <div class="stat-label">GET (Reads)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value writes" id="totalWrites">0</div>
+                <div class="stat-label">PUT/POST (Writes)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="derStatusCount">0</div>
+                <div class="stat-label">DERStatus</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="derSettingsCount">0</div>
+                <div class="stat-label">DERSettings</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="derCapabilityCount">0</div>
+                <div class="stat-label">DERCapability</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="derAvailabilityCount">0</div>
+                <div class="stat-label">DERAvailability</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" style="color: #e74c3c;" id="defaultDERControlCount">0</div>
+                <div class="stat-label">DefaultDERControl</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" style="color: #e74c3c;" id="derControlCount">0</div>
+                <div class="stat-label">DERControl</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="uniqueClients">0</div>
+                <div class="stat-label">Unique Clients</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="opsPerMinute">0.0</div>
+                <div class="stat-label">Ops/Minute</div>
+            </div>
+        </div>
+
+        <div class="columns-container">
+            <div class="column">
+                <div class="column-header reads">
+                    GET (Reads) - Client requesting data from server
+                </div>
+                <div class="event-container" id="readEventsContainer">
+                    <div class="no-events">
+                        Waiting for GET requests...
+                    </div>
+                </div>
+            </div>
+            <div class="column">
+                <div class="column-header writes">
+                    PUT/POST (Writes) - Client sending data to server
+                </div>
+                <div class="event-container" id="writeEventsContainer">
+                    <div class="no-events">
+                        Waiting for PUT/POST requests...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-section">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('latest')">Latest by Client</button>
+            </div>
+
+            <div id="latestTab" class="tab-content active">
+                <div class="latest-container" id="latestContainer">
+                    <div class="no-events">
+                        No client status data available yet.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allEvents = [];
+        let readEvents = [];
+        let writeEvents = [];
+        let autoRefresh = true;
+        let refreshInterval = null;
+        let monitoringEnabled = true;
+        let pinnedEvents = new Set();  // Track pinned event IDs
+        let expandedPaths = new Set();  // Track expanded Full Data in per-client section
+
+        function initialize() {
+            refreshData();
+            refreshInterval = setInterval(refreshData, 3000);
+        }
+
+        function refreshData() {
+            fetchEvents();
+            fetchStats();
+            fetchLatest();
+        }
+
+        function fetchEvents() {
+            const clientFilter = document.getElementById('clientFilter').value;
+            const typeFilter = document.getElementById('typeFilter').value;
+
+            let url = '/api/der-status/events?count=200';
+            if (clientFilter) url += `&client=${encodeURIComponent(clientFilter)}`;
+            if (typeFilter) url += `&type=${encodeURIComponent(typeFilter)}`;
+
+            console.log('Fetching events from:', url);
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Received events:', data.length, 'events');
+                    if (Array.isArray(data)) {
+                        allEvents = data;
+                        separateEvents();
+                        renderEvents();
+                    }
+                })
+                .catch(error => console.error('Error fetching events:', error));
+        }
+
+        function separateEvents() {
+            // Filter by type if specified (client-side backup filter)
+            const typeFilter = document.getElementById('typeFilter').value;
+            let filteredEvents = allEvents;
+
+            if (typeFilter) {
+                filteredEvents = allEvents.filter(e => e.resource_type === typeFilter);
+                console.log('Type filter:', typeFilter, '- Filtered to', filteredEvents.length, 'events');
+            }
+
+            readEvents = filteredEvents.filter(e => e.operation === 'GET');
+            writeEvents = filteredEvents.filter(e => e.operation === 'PUT' || e.operation === 'POST');
+            console.log('Separated into', readEvents.length, 'reads and', writeEvents.length, 'writes');
+        }
+
+        function fetchStats() {
+            fetch('/api/der-status/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) {
+                        document.getElementById('totalOps').textContent = data.total_operations || 0;
+                        document.getElementById('totalReads').textContent = data.reads || 0;
+                        document.getElementById('totalWrites').textContent = data.writes || 0;
+                        document.getElementById('derStatusCount').textContent = data.by_resource_type?.DERStatus || 0;
+                        document.getElementById('derSettingsCount').textContent = data.by_resource_type?.DERSettings || 0;
+                        document.getElementById('derCapabilityCount').textContent = data.by_resource_type?.DERCapability || 0;
+                        document.getElementById('derAvailabilityCount').textContent = data.by_resource_type?.DERAvailability || 0;
+                        document.getElementById('defaultDERControlCount').textContent = data.by_resource_type?.DefaultDERControl || 0;
+                        document.getElementById('derControlCount').textContent = data.by_resource_type?.DERControl || 0;
+                        document.getElementById('uniqueClients').textContent = data.unique_clients || 0;
+                        document.getElementById('opsPerMinute').textContent = (data.operations_per_minute || 0).toFixed(1);
+
+                        monitoringEnabled = data.enabled;
+                        updateMonitorStatus();
+                    }
+                })
+                .catch(error => console.error('Error fetching stats:', error));
+        }
+
+        function fetchLatest() {
+            fetch('/api/der-status/latest')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) {
+                        renderLatest(data);
+                    }
+                })
+                .catch(error => console.error('Error fetching latest:', error));
+        }
+
+        function updateMonitorStatus() {
+            const indicator = document.getElementById('monitorStatus');
+            const text = document.getElementById('monitorText');
+            const btn = document.getElementById('toggleMonitoring');
+
+            if (monitoringEnabled) {
+                indicator.className = 'status-indicator enabled';
+                text.textContent = 'Monitoring Enabled';
+                btn.textContent = 'Pause';
+                btn.className = 'btn success';
+            } else {
+                indicator.className = 'status-indicator disabled';
+                text.textContent = 'Monitoring Disabled';
+                btn.textContent = 'Resume';
+                btn.className = 'btn';
+            }
+        }
+
+        function applyFilters() {
+            fetchEvents();
+        }
+
+        function renderEvents() {
+            renderReadEvents();
+            renderWriteEvents();
+        }
+
+        function sortEventsWithPinnedFirst(events) {
+            // Sort events with pinned ones first, then by timestamp (newest first)
+            return events.slice().sort((a, b) => {
+                const aPinned = pinnedEvents.has(getEventId(a));
+                const bPinned = pinnedEvents.has(getEventId(b));
+                if (aPinned && !bPinned) return -1;
+                if (!aPinned && bPinned) return 1;
+                // Both pinned or both not pinned - sort by timestamp (newest first)
+                return new Date(b.timestamp) - new Date(a.timestamp);
+            });
+        }
+
+        function renderReadEvents() {
+            const container = document.getElementById('readEventsContainer');
+
+            if (readEvents.length === 0) {
+                container.innerHTML = '<div class="no-events">No GET requests yet</div>';
+                return;
+            }
+
+            let html = '';
+            const sortedEvents = sortEventsWithPinnedFirst(readEvents);
+            const displayEvents = sortedEvents.slice(0, 50);
+
+            for (const event of displayEvents) {
+                html += renderEvent(event);
+            }
+
+            container.innerHTML = html;
+            updatePinCount();
+        }
+
+        function renderWriteEvents() {
+            const container = document.getElementById('writeEventsContainer');
+
+            if (writeEvents.length === 0) {
+                container.innerHTML = '<div class="no-events">No PUT/POST requests yet</div>';
+                return;
+            }
+
+            let html = '';
+            const sortedEvents = sortEventsWithPinnedFirst(writeEvents);
+            const displayEvents = sortedEvents.slice(0, 50);
+
+            for (const event of displayEvents) {
+                html += renderEvent(event);
+            }
+
+            container.innerHTML = html;
+            updatePinCount();
+        }
+
+        function getEventId(event) {
+            // Generate a stable ID based on timestamp, client, and path
+            return `event-${event.timestamp.replace(/[:.]/g, '-')}-${event.client_lfdi.substring(0, 8)}-${event.der_path.replace(/[^a-zA-Z0-9]/g, '')}`;
+        }
+
+        function renderEvent(event) {
+            const timestamp = new Date(event.timestamp).toLocaleTimeString();
+            const eventId = getEventId(event);
+            const xmlId = `xml-${eventId}`;
+            const isPinned = pinnedEvents.has(eventId);
+            const shortLfdi = event.client_lfdi.length > 20
+                ? event.client_lfdi.substring(0, 8) + '...' + event.client_lfdi.substring(event.client_lfdi.length - 8)
+                : event.client_lfdi;
+
+            const pinnedClass = isPinned ? 'pinned' : '';
+            const pinBtnClass = isPinned ? 'pin-btn pinned' : 'pin-btn';
+            const pinBtnText = isPinned ? '📌 Unpin' : '📌 Pin';
+            const pinnedIndicator = isPinned ? '<span class="pinned-indicator">📌 PINNED</span>' : '';
+
+            const fullId = `full-${eventId}`;
+            const hasData = event.data && Object.keys(event.data).length > 0;
+            const hasContent = hasData || event.raw_xml;
+
+            return `
+                <div class="event ${event.operation} ${event.resource_type} ${pinnedClass}" id="${eventId}">
+                    <div class="event-header">
+                        <span>
+                            <span class="event-operation ${event.operation}">${event.operation}</span>
+                            <span class="event-timestamp">${timestamp}</span>
+                            ${pinnedIndicator}
+                        </span>
+                        <span>
+                            <span class="event-type ${event.resource_type}">${event.resource_type}</span>
+                        </span>
+                    </div>
+                    <div style="margin: 3px 0; font-size: 10px;">
+                        <span class="event-client" title="${escapeHtml(event.client_lfdi)}">Client: ${escapeHtml(shortLfdi)}</span>
+                    </div>
+                    <div style="font-size: 10px; color: #3498db;">
+                        ${escapeHtml(event.der_path)}
+                    </div>
+                    ${renderCompactData(event.data)}
+                    <div style="margin-top: 5px;">
+                        ${hasContent ? `
+                            <button class="toggle-xml" onclick="toggleFullContent('${fullId}')">Full Data</button>
+                        ` : ''}
+                        <button class="${pinBtnClass}" onclick="togglePin('${eventId}')">${pinBtnText}</button>
+                    </div>
+                    ${hasContent ? `
+                        <div class="event-full-content ${isPinned ? 'visible' : ''}" id="${fullId}">
+                            ${hasData ? `
+                                <div class="event-data-full">${renderAllDataFields(event.data)}</div>
+                            ` : ''}
+                            ${event.raw_xml ? `
+                                <div class="event-xml-label">Raw XML:</div>
+                                <div class="event-xml-inline">${escapeHtml(event.raw_xml)}</div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderCompactData(data) {
+            if (!data || Object.keys(data).length === 0) {
+                return '';
+            }
+            return `
+                <div class="event-data">
+                    <div class="event-data-grid">
+                        ${renderDataFields(data)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderFullData(data) {
+            if (!data || Object.keys(data).length === 0) {
+                return '<div class="event-data-full"><span style="color: #888">No data fields</span></div>';
+            }
+
+            let html = '<div class="event-data-full">';
+            for (const [key, value] of Object.entries(data)) {
+                if (value !== null && value !== undefined) {
+                    const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
+                    html += `
+                        <div class="data-item" style="margin-bottom: 3px;">
+                            <span class="data-key">${escapeHtml(key)}:</span>
+                            <span class="data-value">${escapeHtml(String(displayValue))}</span>
+                        </div>
+                    `;
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function togglePin(eventId) {
+            if (pinnedEvents.has(eventId)) {
+                pinnedEvents.delete(eventId);
+                console.log('Unpinned event:', eventId);
+            } else {
+                pinnedEvents.add(eventId);
+                console.log('Pinned event:', eventId);
+            }
+            updatePinCount();
+            // Re-render to update the display
+            renderEvents();
+        }
+
+        function clearPins() {
+            pinnedEvents.clear();
+            console.log('Cleared all pins');
+            updatePinCount();
+            renderEvents();
+        }
+
+        function updatePinCount() {
+            document.getElementById('pinCount').textContent = pinnedEvents.size;
+        }
+
+        function renderDataFields(data) {
+            if (!data || Object.keys(data).length === 0) {
+                return '<span style="color: #888">No data fields</span>';
+            }
+
+            let html = '';
+            let count = 0;
+            for (const [key, value] of Object.entries(data)) {
+                if (value !== null && value !== undefined && value !== '' && count < 8) {
+                    const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+                    html += `
+                        <div class="data-item">
+                            <span class="data-key">${escapeHtml(key)}:</span>
+                            <span class="data-value">${escapeHtml(String(displayValue).substring(0, 50))}</span>
+                        </div>
+                    `;
+                    count++;
+                }
+            }
+            if (Object.keys(data).length > 8) {
+                html += `<div style="color: #888; font-size: 9px;">... +${Object.keys(data).length - 8} more</div>`;
+            }
+            return html || '<span style="color: #888">No data fields</span>';
+        }
+
+        function getPathId(clientLfdi, path) {
+            // Generate a stable ID for client/path combo
+            return `path-${clientLfdi.substring(0, 12)}-${path.replace(/[^a-zA-Z0-9]/g, '')}`;
+        }
+
+        function renderLatest(data) {
+            const container = document.getElementById('latestContainer');
+
+            if (!data || Object.keys(data).length === 0) {
+                container.innerHTML = '<div class="no-events">No client status data available yet.</div>';
+                return;
+            }
+
+            let html = '';
+
+            for (const [clientLfdi, paths] of Object.entries(data)) {
+                const shortLfdi = clientLfdi.length > 30
+                    ? clientLfdi.substring(0, 12) + '...' + clientLfdi.substring(clientLfdi.length - 12)
+                    : clientLfdi;
+
+                html += `
+                    <div class="client-card">
+                        <div class="client-header" title="${escapeHtml(clientLfdi)}">Client: ${escapeHtml(shortLfdi)}</div>
+                        <div class="client-paths">
+                `;
+
+                for (const [path, event] of Object.entries(paths)) {
+                    const timestamp = new Date(event.timestamp).toLocaleString();
+                    const pathId = getPathId(clientLfdi, path);
+                    const fullId = `full-${pathId}`;
+                    const hasData = event.data && Object.keys(event.data).length > 0;
+                    const hasContent = hasData || event.raw_xml;
+                    const isExpanded = expandedPaths.has(fullId);
+
+                    html += `
+                        <div class="path-item" id="${pathId}">
+                            <div class="path-name">${escapeHtml(path)}</div>
+                            <div class="path-time">Last update: ${timestamp}</div>
+                            <div class="path-data">
+                                <span class="event-type ${event.resource_type}">${event.resource_type}</span>
+                                <span class="event-operation ${event.operation}">${event.operation}</span>
+                            </div>
+                            ${renderDataFieldsCompact(event.data)}
+                            ${hasContent ? `
+                                <div style="margin-top: 5px;">
+                                    <button class="toggle-xml" onclick="toggleFullContent('${fullId}')">Full Data</button>
+                                </div>
+                                <div class="path-full-content ${isExpanded ? 'visible' : ''}" id="${fullId}">
+                                    ${hasData ? `
+                                        <div class="path-data-expanded">${renderAllDataFields(event.data)}</div>
+                                    ` : ''}
+                                    ${event.raw_xml ? `
+                                        <div class="path-xml-label">Raw XML:</div>
+                                        <div class="path-xml-inline">${escapeHtml(event.raw_xml)}</div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function renderPathDataFull(data) {
+            if (!data || Object.keys(data).length === 0) {
+                return '<div class="path-data-full"><span style="color: #888">No data fields</span></div>';
+            }
+
+            let html = '<div class="path-data-full">';
+            for (const [key, value] of Object.entries(data)) {
+                if (value !== null && value !== undefined) {
+                    const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
+                    html += `
+                        <div class="data-item" style="margin-bottom: 3px;">
+                            <span class="data-key">${escapeHtml(key)}:</span>
+                            <span class="data-value">${escapeHtml(String(displayValue))}</span>
+                        </div>
+                    `;
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function togglePathPin(pathId) {
+            if (pinnedPaths.has(pathId)) {
+                pinnedPaths.delete(pathId);
+                console.log('Unpinned path:', pathId);
+            } else {
+                pinnedPaths.add(pathId);
+                console.log('Pinned path:', pathId);
+            }
+            updatePinCount();
+            // Re-fetch and render to update the display
+            fetchLatest();
+        }
+
+        function renderDataFieldsCompact(data) {
+            if (!data || Object.keys(data).length === 0) {
+                return '';
+            }
+
+            let html = '<div style="margin-top: 5px; font-size: 9px;">';
+            let count = 0;
+            for (const [key, value] of Object.entries(data)) {
+                if (value !== null && value !== undefined && value !== '' && count < 4) {
+                    // For objects, just show "{...}" in compact view
+                    const displayValue = typeof value === 'object' ? '{...}' : String(value).substring(0, 30);
+                    html += `<div class="data-item"><span class="data-key">${escapeHtml(key)}:</span> <span class="data-value">${escapeHtml(displayValue)}</span></div>`;
+                    count++;
+                }
+            }
+            if (Object.keys(data).length > 4) {
+                html += `<div style="color: #888; font-size: 8px;">... +${Object.keys(data).length - 4} more</div>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function toggleFullContent(contentId) {
+            const contentDiv = document.getElementById(contentId);
+            if (contentDiv) {
+                contentDiv.classList.toggle('visible');
+                // Track expanded state for per-client section paths
+                if (contentId.startsWith('full-path-')) {
+                    if (contentDiv.classList.contains('visible')) {
+                        expandedPaths.add(contentId);
+                    } else {
+                        expandedPaths.delete(contentId);
+                    }
+                }
+            }
+        }
+
+        function toggleXml(eventId) {
+            const xmlDiv = document.getElementById(eventId);
+            if (xmlDiv) {
+                xmlDiv.classList.toggle('visible');
+            }
+        }
+
+        function renderAllDataFields(data) {
+            if (!data || Object.keys(data).length === 0) {
+                return '<span style="color: #888; font-size: 9px;">No data fields</span>';
+            }
+
+            let html = '';
+            let nullCount = 0;
+
+            // Only show non-null fields, count the nulls
+            for (const [key, value] of Object.entries(data)) {
+                if (value === null || value === undefined) {
+                    nullCount++;
+                    continue;
+                }
+
+                if (typeof value === 'object') {
+                    // Nested object - display on its own block
+                    html += `
+                        <div style="margin-bottom: 4px;">
+                            <span class="data-key" style="font-size: 9px;">${escapeHtml(key)}:</span>
+                            <pre style="margin: 2px 0 0 10px; padding: 4px; background: rgba(0,0,0,0.3); border-radius: 3px; font-size: 8px; white-space: pre-wrap; word-break: break-all; color: #2ecc71;">${escapeHtml(JSON.stringify(value, null, 2))}</pre>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="data-item" style="margin-bottom: 2px; font-size: 9px;">
+                            <span class="data-key">${escapeHtml(key)}:</span>
+                            <span class="data-value">${escapeHtml(String(value))}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Show null count at the end if any
+            if (nullCount > 0) {
+                html += `<div style="color: #666; font-size: 8px; margin-top: 5px; font-style: italic;">(${nullCount} null field${nullCount > 1 ? 's' : ''} hidden)</div>`;
+            }
+
+            return html || '<span style="color: #888; font-size: 9px;">No data fields with values</span>';
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        function toggleMonitoring() {
+            fetch('/api/der-status/toggle', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        monitoringEnabled = data.status === 'enabled';
+                        updateMonitorStatus();
+                    }
+                })
+                .catch(error => console.error('Error toggling monitoring:', error));
+        }
+
+        function clearEvents() {
+            console.log('Clear button clicked');
+            if (confirm('Clear all DER status history?')) {
+                console.log('Clearing events...');
+                fetch('/api/der-status/clear', { method: 'POST' })
+                    .then(response => {
+                        console.log('Clear response status:', response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Clear response:', data);
+                        if (data.success) {
+                            allEvents = [];
+                            readEvents = [];
+                            writeEvents = [];
+                            renderEvents();
+                            fetchStats();
+                            fetchLatest();
+                        }
+                    })
+                    .catch(error => console.error('Error clearing events:', error));
+            }
+        }
+
+        function exportEvents() {
+            const dataStr = JSON.stringify(allEvents, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `der-status-events-${new Date().toISOString().slice(0,19)}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            document.getElementById('autoRefreshStatus').textContent = autoRefresh ? 'ON' : 'OFF';
+
+            if (autoRefresh) {
+                refreshInterval = setInterval(refreshData, 3000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        document.addEventListener('DOMContentLoaded', initialize);
+
+        window.addEventListener('beforeunload', function() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

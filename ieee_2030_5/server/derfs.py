@@ -9,6 +9,7 @@ import ieee_2030_5.adapters as adpt
 import ieee_2030_5.hrefs as hrefs
 import ieee_2030_5.models as m
 from ieee_2030_5.data.indexer import get_href
+from ieee_2030_5.monitoring import get_der_status_monitor
 from ieee_2030_5.server.base_request import RequestOp
 from ieee_2030_5.utils import xml_to_dataclass
 
@@ -51,8 +52,8 @@ class DERRequests(RequestOp):
                 hrefs.DER_PROGRAM: m.DERProgram,
             }
 
-            data = request.get_data(as_text=True)
-            data = xml_to_dataclass(data, clstype[parser.at(4)])
+            raw_xml = request.get_data(as_text=True)
+            data = xml_to_dataclass(raw_xml, clstype[parser.at(4)])
 
             _log.debug(f"Parsed DER object type: {type(data)}")
 
@@ -62,6 +63,20 @@ class DERRequests(RequestOp):
             _log.info(f"=== CALLING STORAGE === DER PUT {request.path} {asdict(data)}")
             result = adpt.ListAdapter.set_single(uri=f"{request.path}", obj=data, lfdi=self.lfdi)
             _log.info(f"Storage result - Success: {result.success}, Error: {result.error}")
+
+            # Log to DER status monitor for admin UI visibility
+            try:
+                der_monitor = get_der_status_monitor()
+                update_type = type(data).__name__
+                der_monitor.log_status_update(
+                    client_lfdi=self.lfdi or "unknown",
+                    der_path=request.path,
+                    update_type=update_type,
+                    data=asdict(data),
+                    raw_xml=raw_xml,
+                )
+            except Exception as monitor_err:
+                _log.warning(f"Failed to log to DER status monitor: {monitor_err}")
             rep = adpt.ListAdapter.get_single(uri=f"{request.path}")
             print(f"REP-----------------------: {rep}")
             if not result.success:
@@ -121,6 +136,7 @@ class DERRequests(RequestOp):
             # else:
             #     value = adpt.DERAdapter.fetch_at(int(pth_split[1]))
 
+            # Note: DER monitoring is handled by build_response_from_dataclass in base class
             response = self.build_response_from_dataclass(value)
             _log.info(f"DERRequests GET {request.path} - Status: {response.status_code}")
             return response
@@ -206,6 +222,7 @@ class DERProgramRequests(RequestOp):
 
             _log.debug(f"DERProgramRequests GET response type: {type(retval)}")
 
+            # Note: DER monitoring is handled by build_response_from_dataclass in base class
             response = self.build_response_from_dataclass(retval)
             _log.info(f"DERProgramRequests GET {request.path} - Status: {response.status_code}")
             return response

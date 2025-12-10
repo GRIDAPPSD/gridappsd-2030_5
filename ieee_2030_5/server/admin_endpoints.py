@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import asdict
 from pathlib import Path
 
 from flask import Flask, Response, g, render_template, request
@@ -10,6 +11,7 @@ import ieee_2030_5.models as m
 from ieee_2030_5.certs import TLSRepository
 from ieee_2030_5.config import ServerConfiguration
 from ieee_2030_5.data.indexer import add_href, get_href
+from ieee_2030_5.monitoring import get_der_status_monitor
 from ieee_2030_5.server.server_constructs import create_device_capability
 from ieee_2030_5.utils import dataclass_to_xml, get_lfdi_from_cert, get_sfdi_from_lfdi, xml_to_dataclass
 
@@ -505,9 +507,9 @@ class AdminEndpoints:
         # derp = adpt.DERProgramAdapter.fetch(derp_index)
 
         if request.method in ("PUT", "POST"):
-            data = request.get_data(as_text=True)
+            raw_xml = request.get_data(as_text=True)
             # Retrieve data from xml
-            data = xml_to_dataclass(data)
+            data = xml_to_dataclass(raw_xml)
 
             # If we are retrieving the default instance.
             if isinstance(data, m.DefaultDERControl):
@@ -517,6 +519,20 @@ class AdminEndpoints:
                 if get_href(derp.DefaultDERControlLink.href):
                     status_code = 204
                 add_href(data.href, data)
+
+                # Log DefaultDERControl write to DER status monitor
+                try:
+                    der_monitor = get_der_status_monitor()
+                    der_monitor.log_operation(
+                        client_lfdi="admin",
+                        der_path=data.href,
+                        resource_type="DefaultDERControl",
+                        operation=request.method,
+                        data=asdict(data) if hasattr(data, '__dataclass_fields__') else {},
+                        raw_xml=raw_xml,
+                    )
+                except Exception as monitor_err:
+                    _log.warning(f"Failed to log DefaultDERControl to DER status monitor: {monitor_err}")
 
             elif isinstance(data, m.DERControl):
                 status_code = 201
@@ -542,11 +558,28 @@ class AdminEndpoints:
                 # add_href(derp.DERControlListLink.href, der_cntl_list)
                 adpt.TimeAdapter.add_event(data)
 
+                # Log DERControl write to DER status monitor
+                try:
+                    der_monitor = get_der_status_monitor()
+                    der_monitor.log_operation(
+                        client_lfdi="admin",
+                        der_path=data.href,
+                        resource_type="DERControl",
+                        operation=request.method,
+                        data=asdict(data) if hasattr(data, '__dataclass_fields__') else {},
+                        raw_xml=raw_xml,
+                    )
+                except Exception as monitor_err:
+                    _log.warning(f"Failed to log DERControl to DER status monitor: {monitor_err}")
+
             return Response(headers={"Location": data.href}, status=status_code)
 
     def _admin(self) -> Response:
         arg_path = request.args.get("path")
         device = request.args.get("device")
+
+        if arg_path is None:
+            return Response("Missing 'path' query parameter", status=400)
 
         if arg_path == "/enddevices":
             return Response(dataclass_to_xml(EndDeviceAdapter.fetch_list()))
